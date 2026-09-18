@@ -1,4 +1,4 @@
-// CLIENT.JS - STANDALONE SICURO CONTRO CODEQL SECURITY WARNINGS
+// CLIENT.JS - MODALITÀ DUAL-MODE: LOCALE CON SERVER PYTHON O 100% SERVERLESS CLIENT-SIDE SU GITHUB PAGES
 
 document.addEventListener('DOMContentLoaded', () => {
     const statusPill = document.getElementById('statusPill');
@@ -89,6 +89,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let micDecodeTimer = null;
     let isDecodingBusy = false;
     let liveAccumulatedText = "";
+
+    // DUAL-MODE SERVER CONFIGURATION
+    const isLocalServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const SERVER_API_URL = isLocalServer ? "http://localhost:8000" : "";
 
     // ONNX RUNTIME WEB SESSION & VOCABULARY
     let onnxSession = null;
@@ -216,7 +220,10 @@ document.addEventListener('DOMContentLoaded', () => {
         chunksListContainer.innerHTML = "";
 
         if (audioChunkList.length === 0) {
-            chunksListContainer.innerHTML = `<p class="placeholder-row">Nessun segmento generato. Clicca su '✂️ Spezza Traccia in Segmenti'.</p>`;
+            const p = document.createElement('p');
+            p.className = "placeholder-row";
+            p.textContent = "Nessun segmento generato. Clicca su '✂️ Spezza Traccia in Segmenti'.";
+            chunksListContainer.appendChild(p);
             return;
         }
 
@@ -227,45 +234,81 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const headerDiv = document.createElement('div');
             headerDiv.className = `chunk-card-header`;
-            headerDiv.innerHTML = `<h4>✂️ Segmento #${i + 1} [${formatSecToMin(item.startSec)} - ${formatSecToMin(item.endSec)}]</h4>`;
+            const h4 = document.createElement('h4');
+            h4.textContent = `✂️ Segmento #${i + 1} [${formatSecToMin(item.startSec)} - ${formatSecToMin(item.endSec)}]`;
+            headerDiv.appendChild(h4);
 
             const controlsDiv = document.createElement('div');
             controlsDiv.className = `player-controls inline`;
-            controlsDiv.innerHTML = `
-                <button class="ctrl-btn play" onclick="playChunk(${i})">▶ Riproduci</button>
-                <button class="ctrl-btn pause" onclick="pauseChunk()">⏸ Pausa</button>
-                <button class="ctrl-btn stop" onclick="stopChunk()">⏹ Stop</button>
-            `;
+            const btnPlay = document.createElement('button');
+            btnPlay.className = "ctrl-btn play";
+            btnPlay.textContent = "▶ Riproduci";
+            btnPlay.onclick = () => playChunk(i);
+            const btnPause = document.createElement('button');
+            btnPause.className = "ctrl-btn pause";
+            btnPause.textContent = "⏸ Pausa";
+            btnPause.onclick = () => pauseChunk();
+            const btnStop = document.createElement('button');
+            btnStop.className = "ctrl-btn stop";
+            btnStop.textContent = "⏹ Stop";
+            btnStop.onclick = () => stopChunk();
+            controlsDiv.appendChild(btnPlay);
+            controlsDiv.appendChild(btnPause);
+            controlsDiv.appendChild(btnStop);
             headerDiv.appendChild(controlsDiv);
             card.appendChild(headerDiv);
 
             const canvasRow = document.createElement('div');
             canvasRow.className = `chunk-canvas-row`;
-            canvasRow.innerHTML = `
-                <div class="mini-canvas-block">
-                    <span class="mini-canvas-label">1. FORMA D'ONDA SEGMENTO</span>
-                    <canvas id="chunkWave_${i}" height="70"></canvas>
-                </div>
-                <div class="mini-canvas-block">
-                    <span class="mini-canvas-label">2. SPETTROGRAMMA MEL SEGMENTO</span>
-                    <canvas id="chunkSpec_${i}" height="100"></canvas>
-                </div>
-            `;
+            const block1 = document.createElement('div');
+            block1.className = `mini-canvas-block`;
+            block1.innerHTML = `<span class="mini-canvas-label">1. FORMA D'ONDA SEGMENTO</span><canvas id="chunkWave_${i}" height="70"></canvas>`;
+            const block2 = document.createElement('div');
+            block2.className = `mini-canvas-block`;
+            block2.innerHTML = `<span class="mini-canvas-label">2. SPETTROGRAMMA MEL SEGMENTO</span><canvas id="chunkSpec_${i}" height="100"></canvas>`;
+            canvasRow.appendChild(block1);
+            canvasRow.appendChild(block2);
             card.appendChild(canvasRow);
 
             const controlsRow = document.createElement('div');
             controlsRow.className = `chunk-controls-row`;
-            controlsRow.innerHTML = `
-                <div class="input-group">
-                    <label>Marker A (sec):</label>
-                    <input type="number" id="chunkInputA_${i}" value="${item.startSec.toFixed(1)}" step="0.1" class="num-input" onchange="updateChunkBounds(${i})">
-                </div>
-                <div class="input-group">
-                    <label>Marker B (sec):</label>
-                    <input type="number" id="chunkInputB_${i}" value="${item.endSec.toFixed(1)}" step="0.1" class="num-input" onchange="updateChunkBounds(${i})">
-                </div>
-                <button class="ctrl-btn play" onclick="decodeChunkIA(${i})">⚡ Decodifica IA</button>
-            `;
+
+            const grpA = document.createElement('div');
+            grpA.className = "input-group";
+            const lblA = document.createElement('label');
+            lblA.textContent = "Marker A (sec):";
+            const inputA = document.createElement('input');
+            inputA.type = "number";
+            inputA.id = `chunkInputA_${i}`;
+            inputA.value = item.startSec.toFixed(1);
+            inputA.step = "0.1";
+            inputA.className = "num-input";
+            inputA.onchange = () => updateChunkBounds(i);
+            grpA.appendChild(lblA);
+            grpA.appendChild(inputA);
+
+            const grpB = document.createElement('div');
+            grpB.className = "input-group";
+            const lblB = document.createElement('label');
+            lblB.textContent = "Marker B (sec):";
+            const inputB = document.createElement('input');
+            inputB.type = "number";
+            inputB.id = `chunkInputB_${i}`;
+            inputB.value = item.endSec.toFixed(1);
+            inputB.step = "0.1";
+            inputB.className = "num-input";
+            inputB.onchange = () => updateChunkBounds(i);
+            grpB.appendChild(lblB);
+            grpB.appendChild(inputB);
+
+            const btnDec = document.createElement('button');
+            btnDec.className = "ctrl-btn play";
+            btnDec.textContent = "⚡ Decodifica IA";
+            btnDec.onclick = () => decodeChunkIA(i);
+
+            controlsRow.appendChild(grpA);
+            controlsRow.appendChild(grpB);
+            controlsRow.appendChild(btnDec);
             card.appendChild(controlsRow);
 
             const transcriptsRow = document.createElement('div');
@@ -363,6 +406,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const specResult = computeRealMelSpectrogramJS(subPcm, 3200);
                 const results = await onnxSession.run({ input_spectrogram: specResult.tensor });
                 transcript = decodeCtcGreedy(results[Object.keys(results)[0]]);
+            } else if (isLocalServer) {
+                const response = await fetch(`${SERVER_API_URL}/api/decode_region`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: audioPlayer.src, start: item.startSec, end: item.endSec })
+                });
+                const data = await response.json();
+                transcript = data.transcript || "";
             }
 
             if (aiInp) aiInp.value = transcript;
@@ -441,7 +492,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         const overlapCount = Math.floor(micAudioContext.sampleRate * 2.0);
                         micPcmSamples = micPcmSamples.slice(micPcmSamples.length - overlapCount);
 
-                        await processPcmAndRender(samplesToProcess, 3200, true);
+                        const wavBuffer = encodeWAV(samplesToProcess, micAudioContext.sampleRate);
+                        await decodeAudioUniversal(wavBuffer, true);
                         isDecodingBusy = false;
                     }
                 }, 800);
@@ -470,6 +522,77 @@ document.addEventListener('DOMContentLoaded', () => {
             if (micStream) {
                 micStream.getTracks().forEach(track => track.stop());
             }
+        }
+    }
+
+    async function decodeAudioUniversal(arrayBuffer, isLive = false) {
+        try {
+            updateStatus('processing', '⚡ Elaborazione acustica IA in corso...');
+
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 3200 });
+            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            const pcm3200 = audioBuffer.getChannelData(0);
+
+            await processPcmAndRender(pcm3200, 3200, isLive);
+
+            updateStatus('active', 'Decodifica IA Completata!');
+        } catch (error) {
+            console.error('Errore decodifica:', error);
+            if (isLocalServer) {
+                try {
+                    const response = await fetch(`${SERVER_API_URL}/api/decode`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/octet-stream' },
+                        body: arrayBuffer
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success) {
+                            currentData = data;
+                            renderResults(data, isLive);
+                            updateStatus('active', 'Decodifica IA (Server) Completata!');
+                            return;
+                        }
+                    }
+                } catch(e) {}
+            }
+            if (!isLive) {
+                updateStatus('error', `Errore: ${error.message}`);
+                decodedTextBox.textContent = `❌ Errore: ${error.message}`;
+            }
+        }
+    }
+
+    function encodeWAV(samples, sampleRate) {
+        const buffer = new ArrayBuffer(44 + samples.length * 2);
+        const view = new DataView(buffer);
+
+        writeString(view, 0, 'RIFF');
+        view.setUint32(4, 36 + samples.length * 2, true);
+        writeString(view, 8, 'WAVE');
+        writeString(view, 12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * 2, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        writeString(view, 36, 'data');
+        view.setUint32(40, samples.length * 2, true);
+
+        let offset = 44;
+        for (let i = 0; i < samples.length; i++, offset += 2) {
+            const s = Math.max(-1, Math.min(1, samples[i]));
+            view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+        }
+
+        return buffer;
+    }
+
+    function writeString(view, offset, string) {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
         }
     }
 
@@ -585,17 +708,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const arrayBuffer = await file.arrayBuffer();
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 3200 });
-            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-            const pcm3200 = audioBuffer.getChannelData(0);
-
-            await processPcmAndRender(pcm3200, 3200, false);
+            await decodeAudioUniversal(arrayBuffer, false);
 
             if (currentData && currentData.duration) {
                 markerAInput.value = "0.0";
                 markerBInput.value = Math.min(10.0, currentData.duration).toFixed(1);
             }
-            updateStatus('active', 'Decodifica IA Client-Side Completata!');
         } catch (error) {
             console.error('Errore:', error);
             updateStatus('error', `Errore: ${error.message}`);
@@ -860,26 +978,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateStatus('error', 'Errore');
             }
         });
-    }
-
-    function deduplicateLiveTranscript(existingText, newText) {
-        if (!newText || !newText.trim()) return existingText;
-        const cleanNew = newText.trim();
-        if (!existingText || !existingText.trim()) return cleanNew;
-
-        const exWords = existingText.trim().split(/\s+/);
-        const newWords = cleanNew.split(/\s+/);
-
-        const lastWord = exWords[exWords.length - 1];
-        if (newWords[0] === lastWord) {
-            newWords.shift();
-        }
-
-        if (newWords.length > 0) {
-            return (existingText.trim() + " " + newWords.join(" ")).trim();
-        }
-
-        return existingText;
     }
 
     function renderResults(data, isLiveMode = false) {
