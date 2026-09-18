@@ -604,9 +604,14 @@ window.runBatchInferenceForBlock = async function(b) {
         let rawResult = "";
         if (window.aiTrainingState.ortSession) {
             try {
+                const session = window.aiTrainingState.ortSession;
                 const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
                 const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
-                const results = await window.aiTrainingState.ortSession.run({ spectrogram: inputTensor });
+
+                const inputName = (session.inputNames && session.inputNames.length > 0) ? session.inputNames[0] : 'input_spectrogram';
+                const feeds = {};
+                feeds[inputName] = inputTensor;
+                const results = await session.run(feeds);
 
                 const outputKeys = Object.keys(results);
                 const outKey = outputKeys.find(k => k.includes('log') || k.includes('prob') || k.includes('out')) || outputKeys[0];
@@ -2210,9 +2215,14 @@ window.runInferenceOnSegment = async function() {
         let aiResult = "";
         if (window.aiTrainingState.ortSession) {
             try {
+                const session = window.aiTrainingState.ortSession;
                 const melSpec = computeMelSpectrogramJS(audio3200, 3200, 64);
                 const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
-                const results = await window.aiTrainingState.ortSession.run({ spectrogram: inputTensor });
+
+                const inputName = (session.inputNames && session.inputNames.length > 0) ? session.inputNames[0] : 'input_spectrogram';
+                const feeds = {};
+                feeds[inputName] = inputTensor;
+                const results = await session.run(feeds);
 
                 const outputKeys = Object.keys(results);
                 const outKey = outputKeys.find(k => k.includes('log') || k.includes('prob') || k.includes('out')) || outputKeys[0];
