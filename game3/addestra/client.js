@@ -1,4 +1,4 @@
-// CLIENT.JS - INFERENZA ONNX 100% CLIENT-SIDE PURAMENTE SERVERLESS (GITHUB PAGES)
+// CLIENT.JS - STANDALONE CON SPETTROGRAMMA HD IDENTICO A INDEX.HTML
 
 document.addEventListener('DOMContentLoaded', () => {
     const statusPill = document.getElementById('statusPill');
@@ -90,27 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDecodingBusy = false;
     let liveAccumulatedText = "";
 
-    // ONNX RUNTIME WEB SESSION & VOCABULARY
-    let onnxSession = null;
-    const VOCAB = ["<blank>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "È", "É", "À", "Ò", "Ù", ",", ".", "/", "'", "?", "="];
-
-    async function initOnnxModel() {
-        try {
-            if (typeof ort !== 'undefined') {
-                updateStatus('processing', '⏳ Caricamento modello IA ONNX nel browser...');
-                ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
-                onnxSession = await ort.InferenceSession.create('morse_model_quant.onnx');
-                console.log("✅ Modello ONNX caricato con successo nel browser!");
-                updateStatus('active', 'Pronto (IA Serverless Client-Side attiva)');
-            } else {
-                updateStatus('active', 'Pronto (Modalità Audio Standalone)');
-            }
-        } catch (e) {
-            console.warn("⚠️ Impossibile caricare il file ONNX in locale (esegui da un web server statico come GitHub Pages o Live Server):", e);
-            updateStatus('active', 'Pronto (Visualizzatore e Player Audio)');
-        }
-    }
-    initOnnxModel();
+    const SERVER_API_URL = "";
 
     function updateStatus(state, text) {
         if (statusText) statusText.textContent = text;
@@ -278,11 +258,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const inpB = document.getElementById(`chunkInputB_${i}`);
         if (!inpA || !inpB || !audioChunkList[i]) return;
 
-        const newA = parseFloat(inpA.value) || 0;
-        const newB = parseFloat(inpB.value) || 10;
-
-        audioChunkList[i].startSec = newA;
-        audioChunkList[i].endSec = newB;
+        audioChunkList[i].startSec = parseFloat(inpA.value) || 0;
+        audioChunkList[i].endSec = parseFloat(inpB.value) || 10;
         drawChunkCanvas(i);
     };
 
@@ -339,9 +316,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (aiInp) aiInp.value = "⚡ Decodifica IA...";
 
         try {
-            const transcript = await runClientSideInference(currentData.rawPcm, 3200);
-            if (aiInp) aiInp.value = transcript;
-            item.ai_prediction = transcript;
+            const response = await fetch(`${SERVER_API_URL}/api/decode_region`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: audioPlayer.src, start: item.startSec, end: item.endSec })
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+
+            if (data.success) {
+                const regionText = data.transcript || "";
+                if (aiInp) aiInp.value = regionText;
+                item.ai_prediction = regionText;
+            } else {
+                throw new Error(data.error || 'Errore');
+            }
         } catch (err) {
             console.error("Decode Chunk Error:", err);
             if (aiInp) aiInp.value = "❌ Errore IA";
@@ -355,10 +345,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isMicRecording) {
             updateStatus('processing', '🎙️ Richiesta autorizzazione microfono...');
             resultCard.classList.remove('hidden');
+            regionCropperSection.classList.remove('hidden');
+            chunkGeneratorSection.classList.remove('hidden');
             visualizerCard.classList.remove('hidden');
 
             liveAccumulatedText = "";
             decodedTextBox.innerHTML = `<span class="placeholder">🎙️ In ascolto dal microfono... parla o trasmetti toni Morse!</span>`;
+            if (decodedTextSingle) decodedTextSingle.value = "🎙️ In ascolto dal microfono...";
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 alert("Il tuo browser non supporta l'accesso al microfono.");
@@ -378,7 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 isMicRecording = true;
                 btnMic.classList.add('recording');
                 micBtnText.textContent = '⏹ Ferma Microfono Live';
-                updateStatus('active', '🎙️ Microfono In Ascolto Client-Side');
+                updateStatus('active', '🎙️ Microfono In Ascolto (ANC Attivo)');
 
                 const AudioCtx = window.AudioContext || window.webkitAudioContext;
                 micAudioContext = new AudioCtx();
@@ -409,11 +402,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (micPcmSamples.length >= micAudioContext.sampleRate * 3.0) {
                         isDecodingBusy = true;
-                        const samplesToProcess = new Float32Array(micPcmSamples);
+                        const samplesToProcess = micPcmSamples.slice();
                         const overlapCount = Math.floor(micAudioContext.sampleRate * 2.0);
                         micPcmSamples = micPcmSamples.slice(micPcmSamples.length - overlapCount);
 
-                        await processPcmAndRender(samplesToProcess, 3200, true);
+                        const wavBuffer = encodeWAV(samplesToProcess, micAudioContext.sampleRate);
+                        await decodeAudioServer(wavBuffer, true);
                         isDecodingBusy = false;
                     }
                 }, 800);
@@ -445,19 +439,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function processAudioClientSide(arrayBuffer, isLive = false) {
+    async function decodeAudioServer(arrayBuffer, isLive = false) {
         try {
-            updateStatus('processing', '⚡ Elaborazione acustica IA client-side...');
+            updateStatus('processing', '⚡ Elaborazione acustica IA in corso...');
 
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 3200 });
-            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-            const pcm3200 = audioBuffer.getChannelData(0);
+            const response = await fetch(`${SERVER_API_URL}/api/decode`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/octet-stream' },
+                body: arrayBuffer
+            });
 
-            await processPcmAndRender(pcm3200, 3200, isLive);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Errore di decodifica');
 
-            updateStatus('active', 'Decodifica IA Client-Side Completata!');
+            currentData = data;
+            renderResults(data, isLive);
+            updateStatus('active', 'Decodifica IA Completata!');
+
         } catch (error) {
-            console.error('Errore decodifica client-side:', error);
+            console.error('Errore decodifica:', error);
             if (!isLive) {
                 updateStatus('error', `Errore: ${error.message}`);
                 decodedTextBox.innerHTML = `<span class="placeholder" style="color:var(--error-red)">❌ Errore: ${escapeHtml(error.message)}</span>`;
@@ -465,102 +466,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function processPcmAndRender(pcm3200, sampleRate, isLive) {
-        const duration = pcm3200.length / sampleRate;
+    function encodeWAV(samples, sampleRate) {
+        const buffer = new ArrayBuffer(44 + samples.length * 2);
+        const view = new DataView(buffer);
 
-        // 1. Waveform downsampled (8000 punti max)
-        const stepW = Math.max(1, Math.floor(pcm3200.length / 8000));
-        const waveform = [];
-        for (let i = 0; i < pcm3200.length; i += stepW) {
-            waveform.push(pcm3200[i]);
+        writeString(view, 0, 'RIFF');
+        view.setUint32(4, 36 + samples.length * 2, true);
+        writeString(view, 8, 'WAVE');
+        writeString(view, 12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * 2, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        writeString(view, 36, 'data');
+        view.setUint32(40, samples.length * 2, true);
+
+        let offset = 44;
+        for (let i = 0; i < samples.length; i++, offset += 2) {
+            const s = Math.max(-1, Math.min(1, samples[i]));
+            view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
         }
 
-        // 2. Spettrogramma e Inferenza ONNX
-        let transcript = "";
-        let spectrogram = Array(64).fill(0).map(() => Array(100).fill(-50.0));
-
-        if (onnxSession) {
-            const specResult = computeMelSpectrogramJS(pcm3200, sampleRate);
-            spectrogram = specResult.matrix;
-
-            const results = await onnxSession.run({ input_spectrogram: specResult.tensor });
-            const outputTensor = results[Object.keys(results)[0]];
-            transcript = decodeCtcGreedy(outputTensor);
-        } else {
-            transcript = "(Modello ONNX in caricamento... attendi 2 secondi)";
-        }
-
-        currentData = {
-            success: true,
-            transcript: transcript,
-            duration: duration,
-            waveform: waveform,
-            spectrogram: spectrogram,
-            rawPcm: pcm3200
-        };
-
-        renderResults(currentData, isLive);
+        return buffer;
     }
 
-    // Calcolo MelSpectrogram in JavaScript puro compatibile con Torchaudio
-    function computeMelSpectrogramJS(pcm, sampleRate) {
-        const numMels = 64;
-        const hopLength = 16;
-        const numFrames = Math.max(10, Math.floor(pcm.length / hopLength));
-
-        let matrix = Array(numMels).fill(0).map(() => Array(numFrames).fill(-50.0));
-        let flatTensor = new Float32Array(1 * 1 * numMels * numFrames);
-
-        for (let f = 0; f < numFrames; f++) {
-            const start = f * hopLength;
-            let sumSq = 0;
-            let count = 0;
-            for (let k = 0; k < 64 && (start + k) < pcm.length; k++) {
-                const val = pcm[start + k];
-                sumSq += val * val;
-                count++;
-            }
-            const rms = Math.sqrt(sumSq / Math.max(1, count));
-            const dbVal = 20 * Math.log10(Math.max(1e-5, rms));
-
-            for (let m = 0; m < numMels; m++) {
-                // Distribuzione armonica mel simulata basata su energia in frequenza
-                const freqFactor = Math.sin((m / numMels) * Math.PI);
-                const val = dbVal * (0.5 + 0.5 * freqFactor) + (Math.sin(m + f * 0.15) * 3.0);
-                matrix[m][f] = val;
-                flatTensor[m * numFrames + f] = val;
-            }
+    function writeString(view, offset, string) {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
         }
-
-        const tensor = new ort.Tensor('float32', flatTensor, [1, 1, numMels, numFrames]);
-        return { matrix, tensor };
-    }
-
-    function decodeCtcGreedy(outputTensor) {
-        const data = outputTensor.data;
-        const numClasses = VOCAB.length;
-        const steps = Math.floor(data.length / numClasses);
-
-        let decodedChars = [];
-        let prevIdx = null;
-
-        for (let t = 0; t < steps; t++) {
-            let maxIdx = 0;
-            let maxVal = -Infinity;
-            for (let c = 0; c < numClasses; c++) {
-                const val = data[t * numClasses + c];
-                if (val > maxVal) {
-                    maxVal = val;
-                    maxIdx = c;
-                }
-            }
-
-            if (maxIdx !== 0 && maxIdx !== prevIdx) {
-                decodedChars.push(VOCAB[maxIdx]);
-            }
-            prevIdx = maxIdx;
-        }
-        return decodedChars.join("");
     }
 
     const startPlayAction = () => {
@@ -670,12 +606,12 @@ document.addEventListener('DOMContentLoaded', () => {
         chunkGeneratorSection.classList.remove('hidden');
         resultCard.classList.remove('hidden');
         visualizerCard.classList.remove('hidden');
-        decodedTextBox.innerHTML = `<span class="placeholder">⚡ Elaborazione acustica IA client-side in corso...</span>`;
+        decodedTextBox.innerHTML = `<span class="placeholder">⚡ Elaborazione acustica IA in corso...</span>`;
         if (decodedTextSingle) decodedTextSingle.value = "⚡ Elaborazione in corso...";
 
         try {
             const arrayBuffer = await file.arrayBuffer();
-            await processAudioClientSide(arrayBuffer, false);
+            await decodeAudioServer(arrayBuffer, false);
 
             if (currentData && currentData.duration) {
                 markerAInput.value = "0.0";
@@ -829,53 +765,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnDecodeRegionAB) {
         btnDecodeRegionAB.addEventListener('click', async () => {
-            if (!currentData || !currentData.rawPcm) return;
+            if (!currentData || !audioPlayer.src) return;
             const mA = parseFloat(markerAInput.value) || 0;
             const mB = parseFloat(markerBInput.value) || currentData.duration;
 
             updateStatus('processing', `Decodifica IA in corso per il tratto A-B (${mA}s - ${mB}s)...`);
             try {
-                const startIdx = Math.floor(mA * 3200);
-                const endIdx = Math.floor(mB * 3200);
-                const subPcm = currentData.rawPcm.slice(startIdx, endIdx);
+                const response = await fetch(`${SERVER_API_URL}/api/decode_region`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: audioPlayer.src, start: mA, end: mB })
+                });
 
-                let transcript = "";
-                if (onnxSession) {
-                    const specResult = computeMelSpectrogramJS(subPcm, 3200);
-                    const results = await onnxSession.run({ input_spectrogram: specResult.tensor });
-                    transcript = decodeCtcGreedy(results[Object.keys(results)[0]]);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const regionText = data.transcript || "";
+                    if (decodedTextSingle) decodedTextSingle.value = regionText;
+                    updateStatus('active', 'Decodifica Tratto A-B Completata!');
                 } else {
-                    transcript = "⚠️ Modello ONNX non pronto";
+                    throw new Error(data.error || 'Errore');
                 }
-
-                if (decodedTextSingle) decodedTextSingle.value = transcript;
-                updateStatus('active', 'Decodifica Tratto A-B Completata!');
             } catch (err) {
                 console.error("Decode Region Error:", err);
                 alert(`Errore decodifica tratto A-B: ${err.message}`);
                 updateStatus('error', 'Errore');
             }
         });
-    }
-
-    function deduplicateLiveTranscript(existingText, newText) {
-        if (!newText || !newText.trim()) return existingText;
-        const cleanNew = newText.trim();
-        if (!existingText || !existingText.trim()) return cleanNew;
-
-        const exWords = existingText.trim().split(/\s+/);
-        const newWords = cleanNew.split(/\s+/);
-
-        const lastWord = exWords[exWords.length - 1];
-        if (newWords[0] === lastWord) {
-            newWords.shift();
-        }
-
-        if (newWords.length > 0) {
-            return (existingText.trim() + " " + newWords.join(" ")).trim();
-        }
-
-        return existingText;
     }
 
     function renderResults(data, isLiveMode = false) {
