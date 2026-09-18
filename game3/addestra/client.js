@@ -143,6 +143,40 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.files && e.target.files.length > 0) processFile(e.target.files[0]);
     });
 
+    async function processFile(file) {
+        if (isMicRecording) toggleMicrophoneStream();
+
+        updateStatus('processing', `Elaborazione di '${file.name}'...`);
+        if (fileNameDisplay) fileNameDisplay.textContent = file.name;
+        if (fileNameDisplayTab3) fileNameDisplayTab3.textContent = file.name;
+
+        const audioUrl = URL.createObjectURL(file);
+        audioPlayer.src = audioUrl;
+
+        audioSection.classList.remove('hidden');
+        regionCropperSection.classList.remove('hidden');
+        chunkGeneratorSection.classList.remove('hidden');
+        resultCard.classList.remove('hidden');
+        visualizerCard.classList.remove('hidden');
+        decodedTextBox.textContent = "⚡ Elaborazione acustica IA in corso...";
+        if (decodedTextSingle) decodedTextSingle.value = "⚡ Elaborazione in corso...";
+
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            await decodeAudioServer(arrayBuffer, false);
+
+            if (currentData && currentData.duration) {
+                markerAInput.value = "0.0";
+                markerBInput.value = Math.min(10.0, currentData.duration).toFixed(1);
+            }
+        } catch (error) {
+            console.error('Errore:', error);
+            updateStatus('error', `Errore: ${error.message}`);
+            decodedTextBox.textContent = `❌ Errore: ${error.message}`;
+            if (decodedTextSingle) decodedTextSingle.value = `❌ Errore: ${error.message}`;
+        }
+    }
+
     btnClearBtn.addEventListener('click', () => {
         liveAccumulatedText = "";
         decodedTextBox.textContent = "(Testo cancellato)";
