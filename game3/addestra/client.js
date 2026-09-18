@@ -1,4 +1,4 @@
-// CLIENT.JS - 100% PURE CLIENT-SIDE SERVERLESS (GITHUB PAGES / NO LOCAL SERVER)
+// CLIENT.JS - DECODIFICA ibrida smart: server locale (se attivo) o fallback ONNX client-side
 
 document.addEventListener('DOMContentLoaded', () => {
     const statusPill = document.getElementById('statusPill');
@@ -90,6 +90,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDecodingBusy = false;
     let liveAccumulatedText = "";
 
+    // Server API base URL (supporta server locale se attivo)
+    const SERVER_API_URL = "http://localhost:8000";
+
     // ONNX RUNTIME WEB SESSION & VOCABULARY
     let onnxSession = null;
     const VOCAB = ["<blank>", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "È", "É", "À", "Ò", "Ù", ",", ".", "/", "'", "?", "="];
@@ -100,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateStatus('processing', '⏳ Caricamento modello IA ONNX nel browser...');
                 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
                 onnxSession = await ort.InferenceSession.create('morse_model_quant.onnx');
-                updateStatus('active', 'Pronto (IA Serverless Client-Side attiva)');
+                updateStatus('active', 'Pronto (IA Client-Side attiva)');
             } else {
                 updateStatus('active', 'Pronto (Modalità Audio Standalone)');
             }
@@ -525,6 +528,25 @@ document.addEventListener('DOMContentLoaded', () => {
             updateStatus('active', 'Decodifica IA Client-Side Completata!');
         } catch (error) {
             console.error('Errore decodifica client-side:', error);
+
+            // Smart fallback su server locale se attivo (per test in locale)
+            try {
+                const response = await fetch(`${SERVER_API_URL}/api/decode`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/octet-stream' },
+                    body: arrayBuffer
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        currentData = data;
+                        renderResults(data, isLive);
+                        updateStatus('active', 'Decodifica IA (Server) Completata!');
+                        return;
+                    }
+                }
+            } catch(e) {}
+
             if (!isLive) {
                 updateStatus('error', `Errore: ${error.message}`);
                 decodedTextBox.textContent = `❌ Errore: ${error.message}`;
@@ -574,7 +596,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const numFrames = Math.max(10, Math.floor(pcm.length / hopLength));
 
         let matrix = Array(numMels).fill(0).map(() => Array(numFrames).fill(-50.0));
-        let flatTensor = new Float32Array(1 * 1 * numMels * numFrames);
+        let rawData = new Float32Array(numMels * numFrames);
+
+        let sum = 0;
+        let totalElements = numMels * numFrames;
 
         for (let f = 0; f < numFrames; f++) {
             const start = f * hopLength;
@@ -588,18 +613,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 const dbVal = 20 * Math.log10(Math.max(1e-5, Math.abs(binEnergy) / winLength));
                 matrix[m][f] = dbVal;
-                flatTensor[m * numFrames + f] = dbVal;
+                rawData[m * numFrames + f] = dbVal;
+                sum += dbVal;
             }
         }
 
-        const tensor = new ort.Tensor('float32', flatTensor, [1, 1, numMels, numFrames]);
+        const mean = sum / totalElements;
+        let sumSqDiff = 0;
+        for (let i = 0; i < totalElements; i++) {
+            const diff = rawData[i] - mean;
+            sumSqDiff += diff * diff;
+        }
+        const std = Math.sqrt(sumSqDiff / totalElements) + 1e-5;
+
+        let normalizedData = new Float32Array(totalElements);
+        for (let i = 0; i < totalElements; i++) {
+            normalizedData[i] = (rawData[i] - mean) / std;
+        }
+
+        const tensor = new ort.Tensor('float32', normalizedData, [1, 1, numMels, numFrames]);
         return { matrix, tensor };
     }
 
     function decodeCtcGreedy(outputTensor) {
+        if (!outputTensor || !outputTensor.data) return "";
         const data = outputTensor.data;
+        const dims = outputTensor.dims || [1, Math.floor(data.length / VOCAB.length), VOCAB.length];
+
+        let steps = dims.length === 3 ? (dims[0] === 1 ? dims[1] : dims[0]) : Math.floor(data.length / VOCAB.length);
         const numClasses = VOCAB.length;
-        const steps = Math.floor(data.length / numClasses);
 
         let decodedChars = [];
         let prevIdx = null;
@@ -1112,104 +1154,6 @@ document.addEventListener('DOMContentLoaded', () => {
         drawMarkerLines(ctx, canvasWidth, canvasHeight, startTime, endTime, totalDuration);
     }
 
-    function drawMarkerLines(ctx, width, height, startTime, endTime, totalDuration) {
-        const mA = parseFloat(markerAInput.value) || 0;
-        const mB = parseFloat(markerBInput.value) || totalDuration;
-        const visDur = (endTime - startTime) || 1e-5;
-
-        if (mA >= startTime && mA <= endTime) {
-            const xA = ((mA - startTime) / visDur) * width;
-            ctx.strokeStyle = '#2ea043';
-            ctx.lineWidth = 2.5;
-            ctx.beginPath();
-            ctx.moveTo(xA, 0);
-            ctx.lineTo(xA, height);
-            ctx.stroke();
-
-            ctx.fillStyle = '#2ea043';
-            ctx.fillRect(xA - 7, 0, 14, 18);
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 11px "Roboto Mono", monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText('A', xA, 13);
-        }
-
-        if (mB >= startTime && mB <= endTime) {
-            const xB = ((mB - startTime) / visDur) * width;
-            ctx.strokeStyle = '#f0883e';
-            ctx.lineWidth = 2.5;
-            ctx.beginPath();
-            ctx.moveTo(xB, 0);
-            ctx.lineTo(xB, height);
-            ctx.stroke();
-
-            ctx.fillStyle = '#f0883e';
-            ctx.fillRect(xB - 7, 0, 14, 18);
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 11px "Roboto Mono", monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText('B', xB, 13);
-        }
-    }
-
-    function getRGBPalette(val, palette) {
-        const v = Math.max(0, Math.min(1, val));
-        let r, g, b;
-
-        if (palette === 'cyber') {
-            if (v < 0.25) {
-                const t = v / 0.25;
-                r = Math.round(3 + t * 40); g = Math.round(7 + t * 10); b = Math.round(18 + t * 80);
-            } else if (v < 0.55) {
-                const t = (v - 0.25) / 0.30;
-                r = Math.round(43 + t * 120); g = Math.round(17 + t * 20); b = Math.round(98 + t * 90);
-            } else if (v < 0.85) {
-                const t = (v - 0.55) / 0.30;
-                r = Math.round(163 - t * 163); g = Math.round(37 + t * 208); b = Math.round(188 + t * 24);
-            } else {
-                const t = (v - 0.85) / 0.15;
-                r = Math.round(t * 255); g = Math.round(245 + t * 10); b = Math.round(212 + t * 43);
-            }
-        } else if (palette === 'high_contrast') {
-            if (v < 0.35) {
-                return [0, 0, 0];
-            } else {
-                const t = (v - 0.35) / 0.65;
-                r = 255;
-                g = Math.round(215 + t * 40);
-                b = Math.round(t * 255);
-            }
-        } else {
-            if (v < 0.25) {
-                const t = v / 0.25;
-                r = Math.round(15 + t * 65); g = Math.round(10 + t * 10); b = Math.round(40 + t * 80);
-            } else if (v < 0.5) {
-                const t = (v - 0.25) / 0.25;
-                r = Math.round(80 + t * 100); g = Math.round(20 + t * 30); b = Math.round(120 - t * 40);
-            } else if (v < 0.75) {
-                const t = (v - 0.5) / 0.25;
-                r = Math.round(180 + t * 60); g = Math.round(50 + t * 90); b = Math.round(80 - t * 60);
-            } else {
-                const t = (v - 0.75) / 0.25;
-                r = Math.round(240 + t * 15); g = Math.round(140 + t * 115); b = Math.round(20 + t * 200);
-            }
-        }
-
-        return [r, g, b];
-    }
-
-    function formatTime(sec) {
-        const m = Math.floor(sec / 60);
-        const s = Math.floor(sec % 60);
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    }
-
-    function formatSecToMin(sec) {
-        const m = Math.floor(sec / 60);
-        const s = (sec % 60).toFixed(1);
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(4, '0')}`;
-    }
-
     function drawChunkCanvas(i) {
         const item = audioChunkList[i];
         if (!item || !currentData) return;
@@ -1337,6 +1281,104 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fill();
             ctx.shadowBlur = 0;
         }
+    }
+
+    function drawMarkerLines(ctx, width, height, startTime, endTime, totalDuration) {
+        const mA = parseFloat(markerAInput.value) || 0;
+        const mB = parseFloat(markerBInput.value) || totalDuration;
+        const visDur = (endTime - startTime) || 1e-5;
+
+        if (mA >= startTime && mA <= endTime) {
+            const xA = ((mA - startTime) / visDur) * width;
+            ctx.strokeStyle = '#2ea043';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(xA, 0);
+            ctx.lineTo(xA, height);
+            ctx.stroke();
+
+            ctx.fillStyle = '#2ea043';
+            ctx.fillRect(xA - 7, 0, 14, 18);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 11px "Roboto Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('A', xA, 13);
+        }
+
+        if (mB >= startTime && mB <= endTime) {
+            const xB = ((mB - startTime) / visDur) * width;
+            ctx.strokeStyle = '#f0883e';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(xB, 0);
+            ctx.lineTo(xB, height);
+            ctx.stroke();
+
+            ctx.fillStyle = '#f0883e';
+            ctx.fillRect(xB - 7, 0, 14, 18);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 11px "Roboto Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('B', xB, 13);
+        }
+    }
+
+    function getRGBPalette(val, palette) {
+        const v = Math.max(0, Math.min(1, val));
+        let r, g, b;
+
+        if (palette === 'cyber') {
+            if (v < 0.25) {
+                const t = v / 0.25;
+                r = Math.round(3 + t * 40); g = Math.round(7 + t * 10); b = Math.round(18 + t * 80);
+            } else if (v < 0.55) {
+                const t = (v - 0.25) / 0.30;
+                r = Math.round(43 + t * 120); g = Math.round(17 + t * 20); b = Math.round(98 + t * 90);
+            } else if (v < 0.85) {
+                const t = (v - 0.55) / 0.30;
+                r = Math.round(163 - t * 163); g = Math.round(37 + t * 208); b = Math.round(188 + t * 24);
+            } else {
+                const t = (v - 0.85) / 0.15;
+                r = Math.round(t * 255); g = Math.round(245 + t * 10); b = Math.round(212 + t * 43);
+            }
+        } else if (palette === 'high_contrast') {
+            if (v < 0.35) {
+                return [0, 0, 0];
+            } else {
+                const t = (v - 0.35) / 0.65;
+                r = 255;
+                g = Math.round(215 + t * 40);
+                b = Math.round(t * 255);
+            }
+        } else {
+            if (v < 0.25) {
+                const t = v / 0.25;
+                r = Math.round(15 + t * 65); g = Math.round(10 + t * 10); b = Math.round(40 + t * 80);
+            } else if (v < 0.5) {
+                const t = (v - 0.25) / 0.25;
+                r = Math.round(80 + t * 100); g = Math.round(20 + t * 30); b = Math.round(120 - t * 40);
+            } else if (v < 0.75) {
+                const t = (v - 0.5) / 0.25;
+                r = Math.round(180 + t * 60); g = Math.round(50 + t * 90); b = Math.round(80 - t * 60);
+            } else {
+                const t = (v - 0.75) / 0.25;
+                r = Math.round(240 + t * 15); g = Math.round(140 + t * 115); b = Math.round(20 + t * 200);
+            }
+        }
+
+        return [r, g, b];
+    }
+
+    function formatTime(sec) {
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function formatSecToMin(sec) {
+        const m = Math.floor(sec / 60);
+        const s = (sec % 60).toFixed(1);
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(4, '0')}`;
     }
 
     function escapeHtml(str) {
