@@ -635,27 +635,6 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
         sessions.sort((a,b) => (a.ts || 0) - (b.ts || 0));
         sessions = sessions.slice(-35);
     }
-                    const ts = m.ts || (m.date ? (typeof m.date === 'number' ? m.date : new Date(m.date).getTime()) : 0);
-
-                    if (acc >= 0 && wpm > 0) {
-                        sessions.push({ acc, wpm, ts });
-                    }
-                }
-            });
-        }
-
-        // Filtro Giornaliero (Oggi)
-        if (period === 'today') {
-            const todayStart = new Date();
-            todayStart.setHours(0,0,0,0);
-            const todayMs = todayStart.getTime();
-            const todaySessions = sessions.filter(s => s.ts >= todayMs);
-            if (todaySessions.length > 0) sessions = todaySessions;
-        }
-
-        sessions.sort((a,b) => (a.ts || 0) - (b.ts || 0));
-        sessions = sessions.slice(-35);
-    }
 
     const badgeAvgWpm = document.getElementById('badgeAvgWpm');
     const badgePeakWpm = document.getElementById('badgePeakWpm');
