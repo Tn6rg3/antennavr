@@ -550,29 +550,49 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
     const period = periodSel ? periodSel.value : 'history';
 
     // Raccoglie lo storico globale sia da window.userMatchHistory che da historyMatches
-    let allMatches = [];
+    let rawMatches = [];
     if (Array.isArray(historyMatches) && historyMatches.length > 0) {
-        allMatches = historyMatches;
+        rawMatches = [...historyMatches];
     } else if (Array.isArray(window.userMatchHistory) && window.userMatchHistory.length > 0) {
-        allMatches = window.userMatchHistory;
+        rawMatches = [...window.userMatchHistory];
     }
+
+    const getMatchTs = (m) => {
+        if (!m) return 0;
+        if (typeof m.ts === 'number' && m.ts > 0) return m.ts;
+        if (typeof m.date === 'number' && m.date > 0) return m.date;
+        if (typeof m.date === 'string') {
+            const parsed = new Date(m.date).getTime();
+            if (!isNaN(parsed) && parsed > 0) return parsed;
+        }
+        return 0;
+    };
+
+    let allMatches = rawMatches.filter(m => !!m).sort((a,b) => getMatchTs(a) - getMatchTs(b));
 
     let sessions = [];
 
     if (period === 'last_match') {
         // Modalita Ultima Partita: parola per parola dell'ultima partita giocata
         if (allMatches.length > 0) {
-            const lastMatch = allMatches[allMatches.length - 1];
+            const lastMatch = allMatches[allMatches.length - 1]; // L'ULTIMA PARTITA PIU' RECENTE
             const details = (lastMatch ? (lastMatch.details || lastMatch.matchDetails) : []) || [];
-            details.forEach((d, idx) => {
-                const isCorrect = (d.real || "").toUpperCase() === (d.typed || "").toUpperCase() && !d.usedReplay;
-                const wordWpm = d.wpm || lastMatch.wpm || 20;
-                sessions.push({
-                    acc: isCorrect ? 100 : 0,
-                    wpm: wordWpm,
-                    ts: idx + 1
+
+            if (details.length > 0) {
+                details.forEach((d, idx) => {
+                    const isCorrect = (d.real || "").toUpperCase() === (d.typed || "").toUpperCase() && !d.usedReplay;
+                    const wordWpm = d.wpm || lastMatch.wpm || 20;
+                    sessions.push({
+                        acc: isCorrect ? 100 : 0,
+                        wpm: wordWpm,
+                        ts: idx + 1
+                    });
                 });
-            });
+            } else {
+                const matchWpm = lastMatch.wpm || 20;
+                const matchAcc = (typeof lastMatch.score === 'number' && lastMatch.score > 0) ? 85 : 0;
+                sessions.push({ acc: matchAcc, wpm: matchWpm, ts: 1 });
+            }
         }
     } else {
         // Modalita Storico / Giornaliero: Unione completa tra stats.accuracySessions e historyMatches
@@ -594,7 +614,7 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
                     }
 
                     const wpm = m.wpm || (detailsArr[0] ? detailsArr[0].wpm : 20);
-                    const ts = m.ts || (m.date ? (typeof m.date === 'number' ? m.date : new Date(m.date).getTime()) : Date.now());
+                    const ts = getMatchTs(m) || Date.now();
 
                     if (acc >= 0 && wpm > 0) {
                         sessionMap.set(ts, { acc, wpm, ts });
