@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Decodificatore Morse IA - Standalone Serverless (GitHub Pages)</title>
+    <title>Decodificatore Morse IA - Client Standalone (GitHub Pages)</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="styleclient.css">
+    <link rel="alternate icon" href="favicon.svg">
+    <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <!-- ONNX Runtime Web per inferenza IA puramente client-side -->
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -16,32 +15,182 @@
         <header class="app-header">
             <div class="logo-title">
                 <span class="icon">📻</span>
-                <h1>DECODIFICATORE MORSE IA <span class="badge">SERVERLESS GITHUB PAGES</span></h1>
+                <h1>DECODIFICATORE MORSE IA <span class="badge">CLIENT STANDALONE</span></h1>
             </div>
-            <div class="status-pill active" id="statusPill">
-                <span class="dot"></span> <span id="statusText">Pronto per Microfono o File Audio</span>
+            <div class="header-right-controls" style="display: flex; align-items: center; gap: 12px;">
+                <button class="ctrl-btn highlight" id="btnToggleAiDecoding" title="Attiva o disattiva la decodifica IA automatica sui loop A-B">⚡ Decodifica IA: ATTIVA</button>
+                <div class="status-pill" id="statusPill">
+                    <span class="dot"></span> <span id="statusText">In Attesa di File o Microfono</span>
+                </div>
             </div>
         </header>
 
-        <!-- MICROPHONE LIVE STREAM CONTROL -->
-        <section class="mic-section">
-            <div class="mic-card">
-                <button class="mic-btn" id="btnMic">
-                    <span class="mic-icon">🎙️</span> <span id="micBtnText">Attiva Microfono Live (Ascolto dal Vivo)</span>
-                </button>
-                <p class="mic-hint">Ascolta la radio o i toni dal microfono e mostra lo spettrogramma e la decodifica in tempo reale!</p>
-            </div>
-        </section>
+        <!-- NAVIGATION TABS -->
+        <nav class="nav-tabs">
+            <button class="nav-tab-btn active" id="tabBtn1">📻 1. Decodificatore Live & Mic</button>
+            <button class="nav-tab-btn" id="tabBtn2">📂 2. Catalogo Foglio1 (3,208 QSO)</button>
+            <button class="nav-tab-btn" id="tabBtn3">📊 3. Dataset & Editor ADDESTRA</button>
+        </nav>
 
-        <!-- UPLOAD SECTION -->
-        <section class="upload-section">
-            <div class="drop-zone" id="dropZone">
-                <div class="upload-icon">🎵</div>
-                <h3>Trascina un file Audio qui o <span class="browse-btn">Sfoglia</span></h3>
-                <p class="file-types">Formati supportati: <strong>MP3, WAV, OGG, FLAC, M4A, AMR</strong></p>
-                <input type="file" id="fileInput" accept="audio/*" class="file-input">
-            </div>
-        </section>
+        <!-- TAB 1: DECODIFICATORE LIVE E FILE -->
+        <div class="tab-content active" id="tabContent1">
+            <!-- MICROPHONE LIVE STREAM CONTROL -->
+            <section class="mic-section">
+                <div class="mic-card">
+                    <button class="mic-btn" id="btnMic">
+                        <span class="mic-icon">🎙️</span> <span id="micBtnText">Attiva Microfono Live (Ascolto dal Vivo)</span>
+                    </button>
+                    <p class="mic-hint">Ascolta la radio o i toni dal microfono e mostra lo spettrogramma e la decodifica in tempo reale!</p>
+                </div>
+            </section>
+
+            <!-- UPLOAD SECTION -->
+            <section class="upload-section">
+                <div class="drop-zone" id="dropZone">
+                    <div class="upload-icon">🎵</div>
+                    <h3>Trascina un file Audio qui o <span class="browse-btn">Sfoglia</span></h3>
+                    <p class="file-types">Formati supportati: <strong>MP3, WAV, OGG, FLAC, M4A, AMR</strong></p>
+                    <input type="file" id="fileInput" accept="audio/*" class="file-input">
+                </div>
+            </section>
+        </div>
+
+        <!-- TAB 2: CATALOGO FOGLIO1 GOOGLE SHEETS & SPEZZATORE SEGMENTI -->
+        <div class="tab-content" id="tabContent2">
+            <section class="catalog-card">
+                <div class="card-header">
+                    <h2>📂 CATALOGO QSO REAL GOOGLE DRIVE (FOGLIO1 - 3,208 RECORDING)</h2>
+                    <button class="copy-btn" id="btnReloadFoglio1">🔄 Ricarica Catalogo Foglio1</button>
+                </div>
+                <div class="catalog-search-group">
+                    <label for="foglio1SearchInput" class="sr-only">Cerca nel Catalogo Foglio1:</label>
+                    <input type="text" id="foglio1SearchInput" placeholder="🔍 Cerca per Anno, Data, Nominativo, Frequenza, QRS/QRQ (es. '2026', 'ik0xba', 'qrs')..." class="text-input large">
+                </div>
+                <div class="catalog-selector-group">
+                    <label for="foglio1Select" class="sr-only">Seleziona QSO Foglio1:</label>
+                    <select id="foglio1Select" class="select-input large">
+                        <option value="">⏳ Caricamento catalogo Foglio1 da Google Drive...</option>
+                    </select>
+                    <button class="ctrl-btn play" id="btnLoadFoglio1Qso">🌐 Carica QSO Selezionato</button>
+                </div>
+
+                <!-- CONTROLLI PER SPEZZARE LA TRACCIA SELEZIONATA IN SEGMENTI CONTINUI -->
+                <div class="chunk-generator-box hidden" id="chunkGeneratorBox">
+                    <h3>✂️ SPEZZA E ANALIZZA TRACCIA QSO IN SEGMENTI CONTINUI</h3>
+                    <div class="chunk-inputs-bar">
+                        <div class="input-group">
+                            <label for="chunkStepSelect">Passo Taglio (sec):</label>
+                            <select id="chunkStepSelect" class="select-input">
+                                <option value="10">10 Secondi</option>
+                                <option value="15" selected>15 Secondi</option>
+                                <option value="20">20 Secondi</option>
+                                <option value="30">30 Secondi</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="chunkLimitSelect">Numero Tracce:</label>
+                            <select id="chunkLimitSelect" class="select-input">
+                                <option value="10">10 Segmenti</option>
+                                <option value="20">20 Segmenti</option>
+                                <option value="50">50 Segmenti</option>
+                                <option value="all" selected>Tutti i Segmenti</option>
+                            </select>
+                        </div>
+                        <button class="ctrl-btn play" id="btnGenerateChunks">✂️ Spezza Traccia in Segmenti</button>
+                        <button class="ctrl-btn stop" id="btnResetFullTrack" title="Torna alla visualizzazione della traccia intera">🔙 Torna a Traccia Intera</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- CONTENITORE PER L'ELENCO DEI SEGMENTI SPEZZATI CON MINI-CANVAS ED EDITOR -->
+            <div class="chunks-list-container" id="chunksListContainer"></div>
+        </div>
+
+        <!-- TAB 3: GESTIONE & EDITOR DATASET ADDESTRA GOOGLE SHEETS -->
+        <div class="tab-content" id="tabContent3">
+            <section class="dataset-card">
+                <div class="card-header">
+                    <h2>📊 SPETTROGRAMMA, EDITOR TRATTO A-B & DATASET ADDESTRA</h2>
+                    <button class="copy-btn" id="btnSyncAddestra">🔄 Importa / Sincronizza ADDESTRA</button>
+                </div>
+
+                <!-- CONTROLLI REGIONE / LOOP A-B, PLAYER AUDIO E TRASCRIZIONI RAGGRUPPATI -->
+                <div class="region-cropper-box">
+                    <div class="cropper-player-bar">
+                        <span class="file-name" id="fileNameDisplayTab3">Ascolto Audio QSO</span>
+                        <span class="time-display" id="timeDisplayTab3">00:00 / 00:00</span>
+                        <div class="player-controls inline">
+                            <button class="ctrl-btn play" id="btnPlayTab3">▶ Avvia Audio</button>
+                            <button class="ctrl-btn pause" id="btnPauseTab3">⏸ Pausa</button>
+                            <button class="ctrl-btn stop" id="btnStopTab3">⏹ Stop</button>
+                        </div>
+                    </div>
+
+                    <h3>✂️ REGOLAZIONE LOOP A-B SULLO SPETTRO & MODIFICA TRASCRIZIONE</h3>
+                    <p class="mic-hint">💡 Fai clic con il mouse sullo spettrogramma per impostare il Marker A (Inizio), premi Maiusc + Clic per il Marker B (Fine)!</p>
+                    <div class="region-inputs">
+                        <div class="input-group">
+                            <label for="markerAInput">Marker A (Inizio sec):</label>
+                            <button class="small-btn" id="btnNudgeALeftFast" title="Indietro 1.0 sec">◄◄</button>
+                            <button class="small-btn" id="btnNudgeALeft" title="Indietro 0.2 sec">◄ A</button>
+                            <input type="number" id="markerAInput" step="0.1" value="0.0" class="num-input">
+                            <button class="small-btn" id="btnNudgeARight" title="Avanti 0.2 sec">A ►</button>
+                            <button class="small-btn" id="btnNudgeARightFast" title="Avanti 1.0 sec">►►</button>
+                        </div>
+                        <div class="input-group">
+                            <label for="markerBInput">Marker B (Fine sec):</label>
+                            <button class="small-btn" id="btnNudgeBLeftFast" title="Indietro 1.0 sec">◄◄</button>
+                            <button class="small-btn" id="btnNudgeBLeft" title="Indietro 0.2 sec">◄ B</button>
+                            <input type="number" id="markerBInput" step="0.1" value="10.0" class="num-input">
+                            <button class="small-btn" id="btnNudgeBRight" title="Avanti 0.2 sec">B ►</button>
+                            <button class="small-btn" id="btnNudgeBRightFast" title="Avanti 1.0 sec">►►</button>
+                            <button class="small-btn highlight" id="btnNudgeBRightSuper" title="Espandi +5 sec">+5s B</button>
+                        </div>
+                        <div class="zoom-controls">
+                            <button class="ctrl-btn" id="btnZoomInWave" title="Ingrandisci Forma d'Onda">🔍+</button>
+                            <button class="ctrl-btn" id="btnZoomOutWave" title="Rimpicciolisci Forma d'Onda">🔍-</button>
+                            <button class="ctrl-btn" id="btnZoomRegionAB">🔍 Zoom Tratto A-B</button>
+                        </div>
+                        <button class="ctrl-btn" id="btnPlayRegionAB">▶ Riproduci Tratto A-B</button>
+                        <button class="ctrl-btn play" id="btnDecodeRegionAB">⚡ Decodifica Tratto A-B con IA</button>
+                    </div>
+
+                    <div class="save-addestra-box">
+                        <label for="decodedTextSingle">💬 Testo Decodificato dall'IA (In Tempo Reale):</label>
+                        <input type="text" id="decodedTextSingle" class="text-input" placeholder="In attesa dell'elaborazione IA..." readonly>
+                    </div>
+
+                    <div class="save-addestra-box">
+                        <label for="targetTranscriptInput">✏️ Testo Target Verificato da Modificare/Salvare (Sotto la Decodifica IA):</label>
+                        <div class="save-addestra-inputs">
+                            <input type="text" id="targetTranscriptInput" placeholder="Inserisci il testo Morse verificato (es. 'HO MESSO DELLE CASSE DA COMPUTER')" class="text-input">
+                            <button class="ctrl-btn play" id="btnSaveToAddestra">💾 Salva Modifiche / Aggiorna ADDESTRA</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TABELLA SEGMENTI ADDESTRA (ULTIMO ELEMENTO DELLA SCHEDA 3) -->
+                <div class="table-wrapper">
+                    <table class="dataset-table" id="addestraTable">
+                        <thead>
+                            <tr>
+                                <th># ID</th>
+                                <th>File Origine (Foglio1)</th>
+                                <th>Intervallo A-B</th>
+                                <th>Testo Target Verificato</th>
+                                <th>Decodifica IA</th>
+                                <th>Azioni</th>
+                            </tr>
+                        </thead>
+                        <tbody id="addestraTableBody">
+                            <tr>
+                                <td colspan="6" class="placeholder-row">Fai clic su '🔄 Importa / Sincronizza ADDESTRA' per caricare i dati dal Cloud Google Sheets.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
 
         <!-- COMMON AUDIO PLAYER & CONTROLS -->
         <section class="audio-control-card hidden" id="audioSection">
@@ -71,33 +220,33 @@
             </div>
         </section>
 
-        <!-- VISUALIZERS (WAVEFORM & MEL SPECTROGRAM) -->
+        <!-- VISUALIZERS (WAVEFORM INTERA & MEL SPECTROGRAM STRETTO) -->
         <section class="visualizer-card hidden" id="visualizerCard">
             <div class="card-header">
                 <h2>📊 SPETTROGRAMMA E TRACCIA AUDIO IN TEMPO REALE</h2>
                 <div class="visualizer-controls">
                     <div class="control-group">
-                        <label for="contrastSlider">⚡ Contrasto:</label>
+                        <label for="contrastSlider">⚡ Fabbrica Rumore/Contrasto:</label>
                         <input type="range" id="contrastSlider" min="1.0" max="10.0" step="0.1" value="2.2" class="slider">
                         <span class="slider-val" id="contrastVal">2.2x</span>
                     </div>
                     <div class="control-group">
                         <label for="colorPaletteSelect">🎨 Palette:</label>
                         <select id="colorPaletteSelect" class="select-input">
-                            <option value="cyber">Cyber Neon</option>
-                            <option value="magma">Magma</option>
-                            <option value="high_contrast">Alto Contrasto</option>
+                            <option value="cyber">Cyber Neon (Sfondo Nero / Nota Ciano-Oro)</option>
+                            <option value="magma">Magma (Standard)</option>
+                            <option value="high_contrast">Alto Contrasto Bicolore</option>
                         </select>
                     </div>
                     <div class="view-toggle">
-                        <button class="toggle-btn active" id="btnView3s">🌊 3 Sec</button>
-                        <button class="toggle-btn" id="btnViewFull">📜 Intera</button>
+                        <button class="toggle-btn active" id="btnView3s">🌊 Finestra Scorrevole (3 Sec)</button>
+                        <button class="toggle-btn" id="btnViewFull">📜 Vista Intera</button>
                     </div>
                 </div>
             </div>
 
             <div class="canvas-block">
-                <div class="canvas-label">1. FORMA D'ONDA AUDIO</div>
+                <div class="canvas-label">1. FORMA D'ONDA AUDIO COMPLETA (INTERA TRACCIA CON MARKER A E B)</div>
                 <div class="canvas-wrapper">
                     <canvas id="waveformCanvas" height="85"></canvas>
                     <div class="playhead" id="playhead1"></div>
@@ -105,7 +254,7 @@
             </div>
 
             <div class="canvas-block">
-                <div class="canvas-label">2. SPETTROGRAMMA MEL HD</div>
+                <div class="canvas-label">2. SPETTROGRAMMA MEL STRETTO (3 SECONDI IN TEMPO REALE)</div>
                 <div class="canvas-wrapper">
                     <canvas id="spectrogramCanvas" height="140"></canvas>
                     <div class="playhead" id="playhead2"></div>
@@ -114,6 +263,6 @@
         </section>
     </div>
 
-    <script src="appclient.js"></script>
+    <script src="client.js"></script>
 </body>
 </html>
