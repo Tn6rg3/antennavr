@@ -75,27 +75,35 @@ tg.onEvent('viewportChanged', updateViewportHeight);
 window.addEventListener('resize', updateViewportHeight);
 window.addEventListener('focus', updateViewportHeight);
 
-// --- GESTIONE RIPRISTINO APP (PREVIENE APP BLOCCATA) ---
+// --- GESTIONE RIPRISTINO APP (PREVIENE APP BLOCCATA DA BACKGROUND) ---
 const handleAppResume = (forceReconnect = false) => {
-    console.log("App: Ripristino visibilità (force=%o)...", forceReconnect);
+    console.log("App: Ripristino visibilità e risveglio da background (force=%o)...", forceReconnect);
 
-    // Aggiorniamo subito lo stato su Firebase
-    updateAppStatus(true);
-
-    // 1. Forza Firebase a ricollegarsi solo se richiesto (freeze reale)
-    if (window.db && forceReconnect) {
-        window.db.goOffline();
-        setTimeout(() => { if (window.db) window.db.goOnline(); }, 100);
-    } else if (window.db) {
-        window.db.goOnline(); // Riattiva semplicemente se era in sleep
-    }
-
-    // 2. Ripristina l'audio se possibile
+    // 1. Sblocco e ripristino incondizionato di tutti i contesti Web Audio
     if (typeof window.resumeAudioContext === 'function') {
         window.resumeAudioContext();
     }
 
-    // 3. Ricarica dati vitali resettando i listener se siamo fuori da una partita
+    // 2. Sblocco DOM, Tastiera e Input di gioco
+    if (typeof window.initDOMCache === 'function') window.initDOMCache();
+    if (els && els.permanentGameInput) {
+        els.permanentGameInput.disabled = false;
+        els.permanentGameInput.removeAttribute('disabled');
+    }
+    inputActive = true;
+
+    // 3. Ripristino Connessione Firebase
+    if (window.db && forceReconnect) {
+        window.db.goOffline();
+        setTimeout(() => { if (window.db) window.db.goOnline(); }, 100);
+    } else if (window.db) {
+        window.db.goOnline();
+    }
+
+    // Aggiorniamo subito lo stato di presenza su Firebase
+    updateAppStatus(true);
+
+    // 4. Ricarica dati vitali resettando i listener se siamo fuori da una partita
     if (window.myId && window.db && !gameRunning) {
          if (typeof window.listeners !== 'undefined') {
              if (window.listeners.presence) { window.listeners.presence.ref.off(); window.listeners.presence = null; }
@@ -106,12 +114,31 @@ const handleAppResume = (forceReconnect = false) => {
     }
 };
 
+// Listener per eventi del ciclo di vita Telegram WebApp (Sblocco immediato su risveglio)
+if (window.Telegram && window.Telegram.WebApp) {
+    try {
+        window.Telegram.WebApp.onEvent('viewportChanged', (e) => {
+            if (e && e.isStateChanged) handleAppResume(true);
+        });
+        window.Telegram.WebApp.onEvent('activated', () => {
+            handleAppResume(true);
+        });
+    } catch(e) {}
+}
+
+// Sblocco AudioContext al primo tocco sul display
+window.addEventListener('pointerdown', () => {
+    if (typeof window.resumeAudioContext === 'function') {
+        window.resumeAudioContext();
+    }
+}, { passive: true });
+
 // WATCHDOG: Rileva sospensioni profonde (es. schermo spento a lungo)
 let lastWatchdogTick = Date.now();
 setInterval(() => {
     const now = Date.now();
-    if (now - lastWatchdogTick > 10000) { // Salto di 10 secondi
-        console.warn("App: Watchdog rileva risveglio profondo, forzo riconnessione...");
+    if (now - lastWatchdogTick > 8000) { // Salto temporale di 8 secondi
+        console.warn("App: Watchdog rileva risveglio profondo, forzo sblocco audio e riconnessione...");
         handleAppResume(true);
     }
     lastWatchdogTick = now;
@@ -119,7 +146,7 @@ setInterval(() => {
 
 document.addEventListener('visibilitychange', () => {
     const isVisible = !document.hidden;
-    if (isVisible) handleAppResume(false);
+    if (isVisible) handleAppResume(true);
     updateAppStatus(isVisible);
 });
 

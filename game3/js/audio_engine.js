@@ -19,12 +19,20 @@ window.btKeepAliveOsc = null;
 
 window.resumeAudioContext = function() {
     try {
-        if (!window.audioCtx) {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!window.audioCtx || window.audioCtx.state === 'closed') {
             window.audioCtx = new AudioContext({ latencyHint: 'interactive' });
         }
-        if (window.audioCtx.state === 'suspended') window.audioCtx.resume();
+        if (window.audioCtx.state === 'suspended' || window.audioCtx.state === 'interrupted') {
+            window.audioCtx.resume();
+        }
     } catch(e) {}
+
+    if (typeof audioCtx !== 'undefined' && audioCtx) {
+        try {
+            if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') audioCtx.resume();
+        } catch(e) {}
+    }
 };
 
 function initPersistentOscillators() {
