@@ -1061,9 +1061,17 @@ window.playNextWord = function() {
         }
     } else if (window.currentMode === 'daily_challenge') {
         // SFIDA GIORNALIERA: Le prime 20 parole sono garantite per tutti.
-        // Oltre la 20ª parola, prosegue SOLO per chi ha fatto ZERO errori!
+        // Oltre la 20ª parola, prosegue SOLO per chi ha fatto ZERO errori e ZERO ripetizioni!
         if (wordIndex >= 20) {
-            const hasErrors = matchDetailsArray.some(m => !m.correct || m.usedReplay);
+            const hasErrors = matchDetailsArray.some(m => {
+                if (!m) return true;
+                if (m.usedReplay) return true;
+                if (m.correct === false) return true;
+                if (m.points === 0 || m.points === undefined) return true;
+                if (m.real && m.typed && m.real.toUpperCase() !== m.typed.toUpperCase()) return true;
+                return false;
+            });
+
             if (hasErrors) {
                 return window.finishGame();
             } else {
@@ -2076,12 +2084,19 @@ window.handleWordSubmission = function(userWord) {
             window.renderDiffSecure(tdReal, currentWord, userWord);
         }
 
+        const tdWpm = document.createElement('td');
+        tdWpm.style.textAlign = 'center';
+        tdWpm.style.fontWeight = 'bold';
+        tdWpm.style.color = '#ff9800';
+        tdWpm.style.fontSize = '0.85em';
+        tdWpm.textContent = `${activeWpmForThisWord} WPM`;
+
         const tdPoints = document.createElement('td');
         tdPoints.style.textAlign = 'center';
         tdPoints.style.color = scoreColor;
         tdPoints.style.fontWeight = 'bold';
         tdPoints.innerHTML = (window.currentMode === 'chars' ? points : (usedReplay ? '0' : (points > 0 ? "+"+points : points))) + (window.isPerfectionRetry ? " 🔄" : "");
-        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
+        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdWpm); tr.appendChild(tdPoints);
         if (els.tableBody) { els.tableBody.appendChild(tr); els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight; }
     }
 
@@ -2279,8 +2294,19 @@ document.addEventListener('visibilitychange', () => {
                     typed: "TIMEOUT (SCHERMO)",
                     points: 0,
                     wpm: currentWpm,
-                    ms: 0
+                    ms: 0,
+                    correct: false,
+                    usedReplay: false
                 });
+
+                if (window.currentMode === 'daily_challenge' && wordIndex >= 20) {
+                    showToast("❌ Timeout oltre la 20ª parola! La tua Sfida Giornaliera si conclude qui.");
+                    if (nextWordTimeout) clearTimeout(nextWordTimeout);
+                    setTimeout(() => {
+                        window.finishGame();
+                    }, 1200);
+                    return;
+                }
 
                 if (els.tableBody) {
                     const tr = document.createElement('tr');

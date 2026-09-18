@@ -328,8 +328,10 @@ window.loadAdvancedStats = function() {
         db.ref(`users/${myId}/history`).limitToLast(35).once('value').then(histSnap => {
             const historyData = histSnap.val() ? Object.values(histSnap.val()) : [];
             window.renderAccuracyTrend(stats.accuracySessions || {}, historyData);
+            window.renderGamePhaseAnalysis(historyData);
         }).catch(() => {
             window.renderAccuracyTrend(stats.accuracySessions || {}, []);
+            window.renderGamePhaseAnalysis([]);
         });
 
         // 0b. MIGLIORAMENTO MIRATO
@@ -544,53 +546,79 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
     canvas.height = height * dpr;
     ctx.scale(dpr, dpr);
 
+    const periodSel = document.getElementById('chartPeriodSelect');
+    const period = periodSel ? periodSel.value : 'history';
+
     let sessions = [];
 
-    // 1. Parsing da stats.accuracySessions
-    if (trendData && typeof trendData === 'object') {
-        Object.values(trendData).forEach(s => {
-            if (s) {
-                let acc = -1;
-                if (typeof s.acc === 'number') acc = s.acc;
-                else if (s.sum && s.total) acc = Math.round((s.sum / s.total) * 100);
-
-                let wpm = s.wpm || s.speed || 20;
-                let ts = s.ts || 0;
-
-                if (acc >= 0 && acc <= 100) {
-                    sessions.push({ acc, wpm, ts });
-                }
-            }
+    if (period === 'last_match' && Array.isArray(historyMatches) && historyMatches.length > 0) {
+        // Modalita Ultima Partita (Parola per Parola)
+        const lastMatch = historyMatches[historyMatches.length - 1];
+        const details = (lastMatch ? (lastMatch.details || lastMatch.matchDetails) : []) || [];
+        details.forEach((d, idx) => {
+            const isCorrect = (d.real || "").toUpperCase() === (d.typed || "").toUpperCase() && !d.usedReplay;
+            sessions.push({
+                acc: isCorrect ? 100 : 0,
+                wpm: d.wpm || lastMatch.wpm || 20,
+                label: d.real || `#${idx+1}`
+            });
         });
-    }
+    } else {
+        // 1. Parsing da stats.accuracySessions
+        if (trendData && typeof trendData === 'object') {
+            Object.values(trendData).forEach(s => {
+                if (s) {
+                    let acc = -1;
+                    if (typeof s.acc === 'number') acc = s.acc;
+                    else if (s.sum && s.total) acc = Math.round((s.sum / s.total) * 100);
 
-    // 2. Integrazione dallo storico partite Cloud
-    if (sessions.length < 5 && Array.isArray(historyMatches) && historyMatches.length > 0) {
-        historyMatches.forEach(m => {
-            if (m) {
-                let acc = -1;
-                const detailsArr = m.details || m.matchDetails || [];
-                if (detailsArr.length > 0) {
-                    const correctCount = detailsArr.filter(d => (d.real || "").toUpperCase() === (d.typed || "").toUpperCase() && !d.usedReplay).length;
-                    acc = Math.round((correctCount / detailsArr.length) * 100);
-                } else if (typeof m.accuracy === 'number') {
-                    acc = m.accuracy;
-                } else if (typeof m.score === 'number' && m.score >= 0) {
-                    acc = 85;
+                    let wpm = s.wpm || s.speed || 20;
+                    let ts = s.ts || 0;
+
+                    if (acc >= 0 && acc <= 100) {
+                        sessions.push({ acc, wpm, ts });
+                    }
                 }
+            });
+        }
 
-                const wpm = m.wpm || (detailsArr[0] ? detailsArr[0].wpm : 20);
-                const ts = m.ts || (m.date ? (typeof m.date === 'number' ? m.date : new Date(m.date).getTime()) : 0);
+        // 2. Integrazione dallo storico partite Cloud
+        if (sessions.length < 5 && Array.isArray(historyMatches) && historyMatches.length > 0) {
+            historyMatches.forEach(m => {
+                if (m) {
+                    let acc = -1;
+                    const detailsArr = m.details || m.matchDetails || [];
+                    if (detailsArr.length > 0) {
+                        const correctCount = detailsArr.filter(d => (d.real || "").toUpperCase() === (d.typed || "").toUpperCase() && !d.usedReplay).length;
+                        acc = Math.round((correctCount / detailsArr.length) * 100);
+                    } else if (typeof m.accuracy === 'number') {
+                        acc = m.accuracy;
+                    } else if (typeof m.score === 'number' && m.score >= 0) {
+                        acc = 85;
+                    }
 
-                if (acc >= 0 && wpm > 0) {
-                    sessions.push({ acc, wpm, ts });
+                    const wpm = m.wpm || (detailsArr[0] ? detailsArr[0].wpm : 20);
+                    const ts = m.ts || (m.date ? (typeof m.date === 'number' ? m.date : new Date(m.date).getTime()) : 0);
+
+                    if (acc >= 0 && wpm > 0) {
+                        sessions.push({ acc, wpm, ts });
+                    }
                 }
-            }
-        });
-    }
+            });
+        }
 
-    sessions.sort((a,b) => (a.ts || 0) - (b.ts || 0));
-    sessions = sessions.slice(-35);
+        // Filtro Giornaliero (Oggi)
+        if (period === 'today') {
+            const todayStart = new Date();
+            todayStart.setHours(0,0,0,0);
+            const todayMs = todayStart.getTime();
+            const todaySessions = sessions.filter(s => s.ts >= todayMs);
+            if (todaySessions.length > 0) sessions = todaySessions;
+        }
+
+        sessions.sort((a,b) => (a.ts || 0) - (b.ts || 0));
+        sessions = sessions.slice(-35);
+    }
 
     const badgeAvgWpm = document.getElementById('badgeAvgWpm');
     const badgePeakWpm = document.getElementById('badgePeakWpm');
@@ -732,6 +760,97 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
     });
 };
 
+window.renderGamePhaseAnalysis = function(historyMatches = []) {
+    const container = document.getElementById('gamePhaseContainer');
+    if (!container) return;
+
+    if (!Array.isArray(historyMatches) || historyMatches.length === 0) {
+        container.innerHTML = '<p style="font-size:0.75em; color:#888; text-align:center; margin:10px 0;">Gioca almeno 1 partita per analizzare la tenuta nelle fasi di gioco.</p>';
+        return;
+    }
+
+    let phase1Acc = [], phase2Acc = [], phase3Acc = [];
+    let phase1Wpm = [], phase2Wpm = [], phase3Wpm = [];
+
+    historyMatches.forEach(m => {
+        const details = (m.details || m.matchDetails || []);
+        if (details.length >= 3) {
+            const len = details.length;
+            const p1End = Math.floor(len / 3);
+            const p2End = Math.floor((len * 2) / 3);
+
+            const calcAcc = (arr) => {
+                if (arr.length === 0) return 0;
+                const correct = arr.filter(d => (d.real || "").toUpperCase() === (d.typed || "").toUpperCase() && !d.usedReplay).length;
+                return Math.round((correct / arr.length) * 100);
+            };
+
+            const calcWpm = (arr) => {
+                if (arr.length === 0) return 20;
+                return Math.round(arr.reduce((s, x) => s + (x.wpm || m.wpm || 20), 0) / arr.length);
+            };
+
+            const arr1 = details.slice(0, p1End);
+            const arr2 = details.slice(p1End, p2End);
+            const arr3 = details.slice(p2End);
+
+            if (arr1.length > 0) { phase1Acc.push(calcAcc(arr1)); phase1Wpm.push(calcWpm(arr1)); }
+            if (arr2.length > 0) { phase2Acc.push(calcAcc(arr2)); phase2Wpm.push(calcWpm(arr2)); }
+            if (arr3.length > 0) { phase3Acc.push(calcAcc(arr3)); phase3Wpm.push(calcWpm(arr3)); }
+        }
+    });
+
+    if (phase1Acc.length === 0) {
+        container.innerHTML = '<p style="font-size:0.75em; color:#888; text-align:center; margin:10px 0;">Completa partite di almeno 3 parole per sbloccare l\'analisi delle fasi.</p>';
+        return;
+    }
+
+    const avgP1Acc = Math.round(phase1Acc.reduce((a,b)=>a+b,0) / phase1Acc.length);
+    const avgP2Acc = Math.round(phase2Acc.reduce((a,b)=>a+b,0) / phase2Acc.length);
+    const avgP3Acc = Math.round(phase3Acc.reduce((a,b)=>a+b,0) / phase3Acc.length);
+
+    const avgP1Wpm = Math.round(phase1Wpm.reduce((a,b)=>a+b,0) / phase1Wpm.length);
+    const avgP2Wpm = Math.round(phase2Wpm.reduce((a,b)=>a+b,0) / phase2Wpm.length);
+    const avgP3Wpm = Math.round(phase3Wpm.reduce((a,b)=>a+b,0) / phase3Wpm.length);
+
+    const dropOff = avgP1Acc - avgP3Acc;
+
+    let adviceText = "🌟 Tenuta mentale eccellente! Nessun calo significativo di concentrazione.";
+    let adviceColor = "#2e7d32";
+
+    if (dropOff >= 8) {
+        adviceText = `⚠️ Calo di tenuta nel finale (-${dropOff}% di accuratezza). Consiglio: fai brevi pause tra le sessioni per evitare l'affaticamento acustico.`;
+        adviceColor = "#d32f2f";
+    } else if (avgP2Acc < avgP1Acc - 6 && avgP2Acc < avgP3Acc - 6) {
+        adviceText = "⚠️ Calo di ritmo nella fase intermedia. Mantieni un respiro costante durante i gruppi centrali.";
+        adviceColor = "#f57f17";
+    }
+
+    const renderBar = (label, acc, wpm, icon) => {
+        const color = acc >= 85 ? '#2e7d32' : (acc >= 70 ? '#f57f17' : '#d32f2f');
+        return `
+            <div style="display:flex; flex-direction:column; gap:2px; font-size:0.75em; color:#000;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:bold; color:#333;">${icon} ${label}</span>
+                    <span><strong style="color:${color};">${acc}% Acc</strong> | <strong style="color:#ff9800;">${wpm} WPM</strong></span>
+                </div>
+                <div style="width:100%; height:8px; background:rgba(0,0,0,0.08); border-radius:4px; overflow:hidden;">
+                    <div style="width:${acc}%; height:100%; background:${color}; transition: width 0.5s ease-out;"></div>
+                </div>
+            </div>
+        `;
+    };
+
+    container.innerHTML = `
+        ${renderBar('Inizio Partita (0% - 33%)', avgP1Acc, avgP1Wpm, '🚀')}
+        ${renderBar('Fase Intermedia (33% - 66%)', avgP2Acc, avgP2Wpm, '⚡')}
+        ${renderBar('Finale Partita (66% - 100%)', avgP3Acc, avgP3Wpm, '🔥')}
+        <div style="margin-top:6px; padding:6px 8px; background:#f0fdf4; border:1px solid ${adviceColor}; border-radius:6px; font-size:0.72em; color:${adviceColor}; font-weight:bold;">
+            ${adviceText}
+        </div>
+    `;
+};
+
 window.showStatInfo = function(type) {
     const modal = document.getElementById('statInfoModal');
     const title = document.getElementById('statInfoTitle');
@@ -818,6 +937,13 @@ window.openMatchDetails = function(matchKey) {
             const bReal = document.createElement('b'); bReal.textContent = row.real; tdReal.appendChild(bReal);
         }
 
+        const tdWpm = document.createElement('td');
+        tdWpm.style.textAlign = 'center';
+        tdWpm.style.fontWeight = 'bold';
+        tdWpm.style.color = '#ff9800';
+        tdWpm.style.fontSize = '0.85em';
+        tdWpm.textContent = `${row.wpm || match.wpm || 20} WPM`;
+
         const tdActions = document.createElement('td');
         tdActions.style.textAlign = 'center';
 
@@ -825,8 +951,13 @@ window.openMatchDetails = function(matchKey) {
         ptsSpan.style.color = color;
         ptsSpan.style.fontWeight = 'bold';
         ptsSpan.style.display = 'block';
-        ptsSpan.textContent = row.points;
+        ptsSpan.textContent = row.points > 0 ? `+${row.points}` : row.points;
         tdActions.appendChild(ptsSpan);
+
+        tr.appendChild(tdTyped);
+        tr.appendChild(tdReal);
+        tr.appendChild(tdWpm);
+        tr.appendChild(tdActions);
 
         if (!isCorrect) {
             const replayBtn = document.createElement('button');
