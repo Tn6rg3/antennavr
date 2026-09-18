@@ -57,6 +57,36 @@
             <audio id="audioPlayer" class="native-audio-player"></audio>
         </section>
 
+        <!-- CHUNK GENERATOR BOX (SPEZZATORE TRACCIA IN SEGMENTI CONTINUI) -->
+        <section class="catalog-card hidden" id="chunkGeneratorSection">
+            <div class="chunk-generator-box" id="chunkGeneratorBox" style="display: flex;">
+                <h3>✂️ SPEZZA E ANALIZZA TRACCIA IN SEGMENTI CONTINUI</h3>
+                <div class="chunk-inputs-bar">
+                    <div class="input-group">
+                        <label for="chunkStepSelect">Passo Taglio (sec):</label>
+                        <select id="chunkStepSelect" class="select-input">
+                            <option value="10">10 Secondi</option>
+                            <option value="15" selected>15 Secondi</option>
+                            <option value="20">20 Secondi</option>
+                            <option value="30">30 Secondi</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label for="chunkLimitSelect">Numero Tracce:</label>
+                        <select id="chunkLimitSelect" class="select-input">
+                            <option value="10">10 Segmenti</option>
+                            <option value="20">20 Segmenti</option>
+                            <option value="50">50 Segmenti</option>
+                            <option value="all" selected>Tutti i Segmenti</option>
+                        </select>
+                    </div>
+                    <button class="ctrl-btn play" id="btnGenerateChunks">✂️ Spezza Traccia in Segmenti</button>
+                    <button class="ctrl-btn stop" id="btnResetFullTrack" title="Torna alla visualizzazione della traccia intera">🔙 Torna a Traccia Intera</button>
+                </div>
+            </div>
+            <div class="chunks-list-container" id="chunksListContainer"></div>
+        </section>
+
         <!-- REGION / LOOP A-B CROPPER & CUTTER BOX -->
         <section class="dataset-card hidden" id="regionCropperSection">
             <div class="region-cropper-box">
