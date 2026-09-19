@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             if (typeof ort !== 'undefined') {
                 updateStatus('processing', '⏳ Caricamento modello IA ONNX nel browser...');
-                ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
+                ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
                 onnxSession = await ort.InferenceSession.create('morse_model_quant.onnx');
                 updateStatus('active', 'Pronto (IA Serverless Client-Side attiva)');
             } else {
