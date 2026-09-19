@@ -1,4 +1,4 @@
-// CLIENT.JS - STANDALONE COMPLETO E SICURO AL 100% CONTRO CODEQL (INPUT FORM VALUE ASSIGNMENTS)
+// CLIENT.JS - STANDALONE COMPLETO E SICURO AL 100% CONTRO CODEQL (CREAZIONE DI NODI DI TESTO ESPLICITI)
 
 document.addEventListener('DOMContentLoaded', () => {
     const statusPill = document.getElementById('statusPill');
@@ -73,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentData = null;
     let audioChunkList = [];
+    let visibleChunksCount = 10;
     let currentPlayingChunkIndex = -1;
     let is3sMode = true;
     let isZoomedABMode = false;
@@ -99,6 +100,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return String(str).replace(/[<>'"]/g, "");
     }
 
+    function setElementText(elem, text) {
+        if (!elem) return;
+        elem.replaceChildren(document.createTextNode(String(text)));
+    }
+
     async function initOnnxModel() {
         try {
             if (typeof ort !== 'undefined') {
@@ -116,8 +122,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initOnnxModel();
 
     function updateStatus(state, text) {
-        if (statusText) statusText.textContent = sanitizeText(text);
-        if (statusPill) statusPill.className = "status-pill " + sanitizeText(state);
+        setElementText(statusText, text);
+        if (statusPill) statusPill.className = "status-pill " + state;
     }
 
     async function safePlayAudio(audioElement) {
@@ -155,11 +161,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     copyBtn.addEventListener('click', () => {
-        const textToCopy = decodedTextBox.value || decodedTextBox.textContent || "";
+        const textToCopy = decodedTextBox ? (decodedTextBox.value || "") : "";
         if (textToCopy) {
             navigator.clipboard.writeText(textToCopy);
-            copyBtn.textContent = '✓ Copiato!';
-            setTimeout(() => copyBtn.textContent = '📋 Copia Testo', 2000);
+            setElementText(copyBtn, '✓ Copiato!');
+            setTimeout(() => setElementText(copyBtn, '📋 Copia Testo'), 2000);
         }
     });
 
@@ -213,10 +219,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 ai_prediction: "",
                 transcript: ""
             });
-
-            if (limitVal !== 'all' && idx >= parseInt(limitVal)) break;
         }
 
+        visibleChunksCount = limitVal === 'all' ? audioChunkList.length : parseInt(limitVal);
         renderAudioChunksList();
     }
 
@@ -229,12 +234,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (audioChunkList.length === 0) {
             const p = document.createElement('p');
             p.className = "placeholder-row";
-            p.textContent = "Nessun segmento generato. Clicca su '✂️ Spezza Traccia in Segmenti'.";
+            setElementText(p, "Nessun segmento generato. Clicca su '✂️ Spezza Traccia in Segmenti'.");
             chunksListContainer.appendChild(p);
             return;
         }
 
-        audioChunkList.forEach((item, i) => {
+        const itemsToRender = audioChunkList.slice(0, visibleChunksCount);
+
+        itemsToRender.forEach((item, i) => {
             const card = document.createElement('div');
             card.className = "chunk-card";
             card.id = "chunkCard_" + i;
@@ -242,22 +249,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const headerDiv = document.createElement('div');
             headerDiv.className = "chunk-card-header";
             const h4 = document.createElement('h4');
-            h4.textContent = "✂️ Segmento #" + (i + 1) + " [" + formatSecToMin(item.startSec) + " - " + formatSecToMin(item.endSec) + "]";
+            setElementText(h4, "✂️ Segmento #" + (i + 1) + " [" + formatSecToMin(item.startSec) + " - " + formatSecToMin(item.endSec) + "]");
             headerDiv.appendChild(h4);
 
             const controlsDiv = document.createElement('div');
             controlsDiv.className = "player-controls inline";
             const btnPlay = document.createElement('button');
             btnPlay.className = "ctrl-btn play";
-            btnPlay.textContent = "▶ Riproduci";
+            setElementText(btnPlay, "▶ Riproduci");
             btnPlay.onclick = () => playChunk(i);
             const btnPause = document.createElement('button');
             btnPause.className = "ctrl-btn pause";
-            btnPause.textContent = "⏸ Pausa";
+            setElementText(btnPause, "⏸ Pausa");
             btnPause.onclick = () => pauseChunk();
             const btnStop = document.createElement('button');
             btnStop.className = "ctrl-btn stop";
-            btnStop.textContent = "⏹ Stop";
+            setElementText(btnStop, "⏹ Stop");
             btnStop.onclick = () => stopChunk();
             controlsDiv.appendChild(btnPlay);
             controlsDiv.appendChild(btnPause);
@@ -272,7 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
             block1.className = "mini-canvas-block";
             const span1 = document.createElement('span');
             span1.className = "mini-canvas-label";
-            span1.textContent = "1. FORMA D'ONDA SEGMENTO";
+            setElementText(span1, "1. FORMA D'ONDA SEGMENTO");
             const cv1 = document.createElement('canvas');
             cv1.id = "chunkWave_" + i;
             cv1.height = 70;
@@ -283,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
             block2.className = "mini-canvas-block";
             const span2 = document.createElement('span');
             span2.className = "mini-canvas-label";
-            span2.textContent = "2. SPETTROGRAMMA MEL SEGMENTO";
+            setElementText(span2, "2. SPETTROGRAMMA MEL SEGMENTO");
             const cv2 = document.createElement('canvas');
             cv2.id = "chunkSpec_" + i;
             cv2.height = 100;
@@ -300,7 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const grpA = document.createElement('div');
             grpA.className = "input-group";
             const lblA = document.createElement('label');
-            lblA.textContent = "Marker A (sec):";
+            setElementText(lblA, "Marker A (sec):");
             const inputA = document.createElement('input');
             inputA.type = "number";
             inputA.id = "chunkInputA_" + i;
@@ -314,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const grpB = document.createElement('div');
             grpB.className = "input-group";
             const lblB = document.createElement('label');
-            lblB.textContent = "Marker B (sec):";
+            setElementText(lblB, "Marker B (sec):");
             const inputB = document.createElement('input');
             inputB.type = "number";
             inputB.id = "chunkInputB_" + i;
@@ -327,7 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const btnDec = document.createElement('button');
             btnDec.className = "ctrl-btn play";
-            btnDec.textContent = "⚡ Decodifica IA";
+            setElementText(btnDec, "⚡ Decodifica IA");
             btnDec.onclick = () => decodeChunkIA(i);
 
             controlsRow.appendChild(grpA);
@@ -341,7 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
             saBox.className = "save-addestra-box";
             saBox.style.flex = "1";
             const lbl = document.createElement('label');
-            lbl.textContent = "💬 Decodifica IA:";
+            setElementText(lbl, "💬 Decodifica IA:");
             const inp = document.createElement('input');
             inp.type = "text";
             inp.id = "chunkAi_" + i;
@@ -356,6 +363,30 @@ document.addEventListener('DOMContentLoaded', () => {
             chunksListContainer.appendChild(card);
             setTimeout(() => drawChunkCanvas(i), 30);
         });
+
+        // BOTTONE IN FONDO PER CARICARE ALTRI SEGMENTI
+        if (visibleChunksCount < audioChunkList.length) {
+            const stepVal = parseInt(chunkLimitSelect.value) || 10;
+            const remaining = audioChunkList.length - visibleChunksCount;
+            const nextBatch = Math.min(stepVal, remaining);
+
+            const loadMoreBox = document.createElement('div');
+            loadMoreBox.className = "load-more-chunks-box";
+            loadMoreBox.style.cssText = "display:flex; justify-content:center; margin:20px 0;";
+
+            const loadMoreBtn = document.createElement('button');
+            loadMoreBtn.className = "ctrl-btn play";
+            loadMoreBtn.style.cssText = "padding:12px 24px; font-size:14px; font-weight:bold;";
+            setElementText(loadMoreBtn, "⏩ Carica Altri " + nextBatch + " Segmenti (" + visibleChunksCount + " di " + audioChunkList.length + " mostrati)");
+
+            loadMoreBtn.addEventListener('click', () => {
+                visibleChunksCount += nextBatch;
+                renderAudioChunksList();
+            });
+
+            loadMoreBox.appendChild(loadMoreBtn);
+            chunksListContainer.appendChild(loadMoreBox);
+        }
     }
 
     window.updateChunkBounds = (i) => {
@@ -472,7 +503,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 isMicRecording = true;
                 btnMic.classList.add('recording');
-                micBtnText.textContent = '⏹ Ferma Microfono Live';
+                setElementText(micBtnText, '⏹ Ferma Microfono Live');
                 updateStatus('active', '🎙️ Microfono In Ascolto (ANC Attivo)');
 
                 const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -518,13 +549,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert("Impossibile accedere al microfono: " + sanitizeText(err.message || err));
                 updateStatus('error', 'Accesso Microfono Negato');
                 btnMic.classList.remove('recording');
-                micBtnText.textContent = '🎙️ Attiva Microfono Live (Ascolto dal Vivo)';
+                setElementText(micBtnText, '🎙️ Attiva Microfono Live (Ascolto dal Vivo)');
                 isMicRecording = false;
             }
         } else {
             isMicRecording = false;
             btnMic.classList.remove('recording');
-            micBtnText.textContent = '🎙️ Attiva Microfono Live (Ascolto dal Vivo)';
+            setElementText(micBtnText, '🎙️ Attiva Microfono Live (Ascolto dal Vivo)');
             updateStatus('active', 'Microfono Arrestato');
 
             if (micDecodeTimer) clearInterval(micDecodeTimer);
@@ -554,8 +585,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Errore decodifica client-side:', error);
             if (!isLive) {
-                updateStatus('error', 'Errore: ' + sanitizeText(error.message));
-                if (decodedTextBox) decodedTextBox.value = '❌ Errore: ' + sanitizeText(error.message);
+                updateStatus('error', "Errore: " + sanitizeText(error.message));
+                if (decodedTextBox) decodedTextBox.value = "❌ Errore: " + sanitizeText(error.message);
             }
         }
     }
@@ -673,15 +704,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const startPlayAction = () => {
         safePlayAudio(audioPlayer);
-        if (btnPlay) btnPlay.textContent = '▶ In Riproduzione';
-        if (btnPlayTab3) btnPlayTab3.textContent = '▶ In Riproduzione';
+        setElementText(btnPlay, '▶ In Riproduzione');
+        setElementText(btnPlayTab3, '▶ In Riproduzione');
         start60FpsCanvasAnimation();
     };
 
     const pausePlayAction = () => {
         try { audioPlayer.pause(); } catch (e) {}
-        if (btnPlay) btnPlay.textContent = '▶ Avvia Audio';
-        if (btnPlayTab3) btnPlayTab3.textContent = '▶ Avvia Audio';
+        setElementText(btnPlay, '▶ Avvia Audio');
+        setElementText(btnPlayTab3, '▶ Avvia Audio');
         stop60FpsCanvasAnimation();
     };
 
@@ -690,8 +721,8 @@ document.addEventListener('DOMContentLoaded', () => {
             audioPlayer.pause();
             audioPlayer.currentTime = 0;
         } catch (e) {}
-        if (btnPlay) btnPlay.textContent = '▶ Avvia Audio';
-        if (btnPlayTab3) btnPlayTab3.textContent = '▶ Avvia Audio';
+        setElementText(btnPlay, '▶ Avvia Audio');
+        setElementText(btnPlayTab3, '▶ Avvia Audio');
         stop60FpsCanvasAnimation();
         renderCanvasesAtCurrentTime();
     };
@@ -727,14 +758,14 @@ document.addEventListener('DOMContentLoaded', () => {
     audioPlayer.addEventListener('pause', stop60FpsCanvasAnimation);
     audioPlayer.addEventListener('ended', () => {
         stop60FpsCanvasAnimation();
-        if (btnPlay) btnPlay.textContent = '▶ Avvia Audio';
-        if (btnPlayTab3) btnPlayTab3.textContent = '▶ Avvia Audio';
+        setElementText(btnPlay, '▶ Avvia Audio');
+        setElementText(btnPlayTab3, '▶ Avvia Audio');
         playheads.forEach(ph => ph.style.display = 'none');
     });
 
     contrastSlider.addEventListener('input', e => {
         contrastGamma = parseFloat(e.target.value);
-        contrastVal.textContent = contrastGamma.toFixed(1) + "x";
+        setElementText(contrastVal, contrastGamma.toFixed(1) + "x");
         renderCanvasesAtCurrentTime();
     });
 
@@ -767,8 +798,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isMicRecording) toggleMicrophoneStream();
 
         updateStatus('processing', "Elaborazione di " + sanitizeText(file.name) + "...");
-        if (fileNameDisplay) fileNameDisplay.textContent = sanitizeText(file.name);
-        if (fileNameDisplayTab3) fileNameDisplayTab3.textContent = sanitizeText(file.name);
+        setElementText(fileNameDisplay, file.name);
+        setElementText(fileNameDisplayTab3, file.name);
 
         const audioUrl = URL.createObjectURL(file);
         audioPlayer.src = audioUrl;
@@ -903,16 +934,16 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 audioPlayer.currentTime = mA;
                 await safePlayAudio(audioPlayer);
-                btnPlay.textContent = '▶ In Riproduzione';
-                if (btnPlayTab3) btnPlayTab3.textContent = '▶ In Riproduzione';
+                setElementText(btnPlay, '▶ In Riproduzione');
+                setElementText(btnPlayTab3, '▶ In Riproduzione');
                 start60FpsCanvasAnimation();
 
                 const checkStop = () => {
                     if (audioPlayer.currentTime >= mB) {
                         try { audioPlayer.pause(); } catch(e){}
                         audioPlayer.removeEventListener('timeupdate', checkStop);
-                        btnPlay.textContent = '▶ Avvia Audio';
-                        if (btnPlayTab3) btnPlayTab3.textContent = '▶ Avvia Audio';
+                        setElementText(btnPlay, '▶ Avvia Audio');
+                        setElementText(btnPlayTab3, '▶ Avvia Audio');
                         stop60FpsCanvasAnimation();
                     }
                 };
@@ -926,10 +957,10 @@ document.addEventListener('DOMContentLoaded', () => {
             isZoomedABMode = !isZoomedABMode;
             if (isZoomedABMode) {
                 btnZoomRegionAB.classList.add('active');
-                btnZoomRegionAB.textContent = '🔍 Reset Zoom Full';
+                setElementText(btnZoomRegionAB, '🔍 Reset Zoom Full');
             } else {
                 btnZoomRegionAB.classList.remove('active');
-                btnZoomRegionAB.textContent = '🔍 Zoom Tratto A-B';
+                setElementText(btnZoomRegionAB, '🔍 Zoom Tratto A-B');
             }
             renderCanvasesAtCurrentTime();
         });
@@ -1012,9 +1043,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const curTime = isMicRecording ? (currentData.duration || 0) : (audioPlayer.currentTime || 0);
         const totalDuration = currentData.duration || 1;
 
-        if (timeDisplayTab3) {
-            timeDisplayTab3.textContent = formatTime(curTime) + " / " + formatTime(totalDuration);
-        }
+        setElementText(timeDisplayTab3, formatTime(curTime) + " / " + formatTime(totalDuration));
 
         let specStartTime = Math.max(0, curTime - 1.0);
         let specEndTime = Math.min(totalDuration, specStartTime + 3.0);
@@ -1405,5 +1434,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const m = Math.floor(sec / 60);
         const s = (sec % 60).toFixed(1);
         return (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
+    }
+
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
 });
