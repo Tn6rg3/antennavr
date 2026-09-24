@@ -1580,6 +1580,16 @@ window.setupBugSystem = function() {
         };
     }
 
+    // --- TASTO ADMIN: PULIZIA UTENTI FANTASMA / INCOMPLETI ---
+    const btnCleanupIncomplete = document.getElementById('btnAdminCleanupIncompleteUsers');
+    if (btnCleanupIncomplete) {
+        btnCleanupIncomplete.onclick = async () => {
+            if (typeof window.adminCleanupIncompleteUsers === 'function') {
+                await window.adminCleanupIncompleteUsers();
+            }
+        };
+    }
+
     // --- FUNZIONE ADMIN: RESET SFIDA GIORNALIERA UTENTE SPECIFICO ---
     window.adminResetDailyForUser = async function(targetUserId) {
         if (!targetUserId) {
@@ -1798,6 +1808,71 @@ window.setupBugSystem = function() {
         } catch(e) {
             console.error("Admin Ban Error:", e);
             alert("Errore blocco utente: " + e.message);
+        }
+    };
+
+    // --- FUNZIONE ADMIN: PULIZIA AUTOMATICA UTENTI INCOMPLETI FANTASMA ---
+    window.adminCleanupIncompleteUsers = async function() {
+        if (!confirm("🧹 PULIZIA DATABASE UTENTI INCOMPLETI\n\nVuoi avviare la scansione per trovare e rimuovere tutti gli utenti fantasma che NON hanno completato l'inserimento dell'Alias e NON hanno mai giocato partite?")) return;
+
+        try {
+            if (typeof showToast === 'function') showToast("Scansione utenti incompleti in corso...");
+
+            const usersSnap = await db.ref('users').once('value');
+            if (!usersSnap.exists()) {
+                alert("Nessun utente trovato nel database.");
+                return;
+            }
+
+            const usersData = usersSnap.val() || {};
+            let incompleteIds = [];
+
+            for (const [id, userObj] of Object.entries(usersData)) {
+                if (!userObj) continue;
+
+                // Non cancellare l'Admin stesso!
+                if (id === "352908417" || id === window.myId) continue;
+
+                const hasCustomAlias = !!(userObj.hasSetCustomAlias === true || (userObj.alias && !userObj.alias.startsWith("Giocatore")));
+                const hasHistory = !!(userObj.history && Object.keys(userObj.history).length > 0);
+                const hasScore = !!(userObj.score && userObj.score > 0);
+
+                // Se l'utente non ha impostato l'Alias ed ha 0 partite giocate e 0 punti:
+                if (!hasCustomAlias && !hasHistory && !hasScore) {
+                    incompleteIds.push({ id, name: userObj.alias || userObj.assignedDefaultName || "Incompleto" });
+                }
+            }
+
+            if (incompleteIds.length === 0) {
+                alert("✨ Nessun utente fantasma/incompleto trovato nel database! Il database è già pulito.");
+                return;
+            }
+
+            const confirmMsg = `🧹 RILEVATI ${incompleteIds.length} UTENTI INCOMPLETI FANTASMA:\n\n` +
+                incompleteIds.slice(0, 10).map(u => `• ID: ${u.id} (${u.name})`).join('\n') +
+                (incompleteIds.length > 10 ? `\n... ed altri ${incompleteIds.length - 10} utenti` : "") +
+                `\n\nVuoi ELIMINARE DEFINITIVAMENTE questi ${incompleteIds.length} profili incompleti dal database?`;
+
+            if (!confirm(confirmMsg)) return;
+
+            if (typeof showToast === 'function') showToast(`Rimozione di ${incompleteIds.length} profili in corso...`);
+
+            const safeRemove = (ref) => ref.remove().catch(() => {});
+
+            for (const u of incompleteIds) {
+                await Promise.all([
+                    safeRemove(db.ref(`users/${u.id}`)),
+                    safeRemove(db.ref(`presence/${u.id}`)),
+                    safeRemove(db.ref(`courseActiveEnrollments/${u.id}`))
+                ]);
+            }
+
+            alert(`✅ Pulizia completata! Rimosse ${incompleteIds.length} schede utente incomplete dal database.`);
+            if (typeof showToast === 'function') showToast(`✅ Rimosse ${incompleteIds.length} schede utente fantasma.`);
+
+        } catch(err) {
+            console.error("Admin Cleanup Error:", err);
+            alert("Errore durante la pulizia: " + err.message);
         }
     };
 
