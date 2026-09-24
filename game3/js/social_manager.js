@@ -310,7 +310,6 @@ window.renderOrUpdateUserListItem = async function(userId, u) {
             const isBanned = (banConfigSnap && banConfigSnap.val() === true) || (banRootSnap && banRootSnap.val() === true);
 
             if (isBanned) {
-                console.warn("Presence: utente bannato filtrato dalla lista online:", userId);
                 window.removeUserListItem(userId);
                 db.ref(`presence/${userId}`).remove().catch(() => {});
                 return;
