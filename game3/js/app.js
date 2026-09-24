@@ -1316,14 +1316,6 @@ window.isValidTelegramId = function(id) {
                 if (els.updateBanner) els.updateBanner.style.display = 'none';
             }
         });
-    }).catch(err => {
-        console.error("CW Game: Auth Error", err);
-        const statusText = document.getElementById('initStatusText');
-        if (statusText) {
-            statusText.textContent = "Errore di connessione al server Morse. Ricarica l'app o riprova più tardi.";
-            statusText.style.color = "#f44336";
-        }
-    });
 
     window.populateGameModesUI?.();
     window.checkGameTypeUI?.();
