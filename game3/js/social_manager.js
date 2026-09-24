@@ -355,6 +355,20 @@ window.renderOrUpdateUserListItem = function(userId, u) {
         statusRow.appendChild(badge);
     }
 
+    // TASTO MESSAGGIO DIRETTO ADMIN (Visibile solo agli Amministratori)
+    if (window.isAdmin) {
+        const adminMsgBtn = document.createElement('button');
+        adminMsgBtn.className = "action-btn-small btn-secondary";
+        adminMsgBtn.style.cssText = "width:auto; padding:2px 6px; font-size:0.7em; margin-left:4px; background:#673ab7; color:#fff; border:none; cursor:pointer;";
+        adminMsgBtn.textContent = "✉️ Admin";
+        adminMsgBtn.title = `Invia messaggio diretto admin all'utente ID: ${userId}`;
+        adminMsgBtn.onclick = (e) => {
+            e.stopPropagation();
+            window.sendAdminMessageToUser(userId, u.name || "Anonimo");
+        };
+        statusRow.appendChild(adminMsgBtn);
+    }
+
     leftSpan.appendChild(statusRow);
 
     const btn = document.createElement('button');
@@ -901,4 +915,36 @@ window.listenToRooms = function() {
     const onRemoved = lobbyQuery.on('child_removed', snap => window.removeRoomCard(snap.key));
 
     listeners.roomsList = { ref: lobbyQuery, onAdded, onChanged, onRemoved };
+};
+
+window.sendAdminMessageToUser = function(targetUserId, targetUserName) {
+    if (!targetUserId) return;
+    const msg = prompt(`✉️ INVIA MESSAGGIO DIRETTAMENTE ALL'UTENTE:\n👤 Nome: ${targetUserName || 'Anonimo'}\n🆔 ID Telegram: ${targetUserId}\n\nScrivi qui il messaggio di testo da inviare:`);
+    if (!msg || msg.trim() === "") return;
+
+    const cleanMsg = msg.trim();
+    const adminName = window.myName || "Amministratore";
+
+    // 1. Invia notifica In-App tramite Firebase (users/targetUserId/bugFeedback)
+    const feedbackData = {
+        reply: `📢 MESSAGGIO DALL'AMMINISTRATORE (${adminName}):\n${cleanMsg}`,
+        originalMsg: "Comunicazione Ufficiale Sviluppatore",
+        ts: firebase.database.ServerValue.TIMESTAMP,
+        date: new Date().toLocaleString('it-IT')
+    };
+
+    db.ref(`users/${targetUserId}/bugFeedback`).push(feedbackData).then(() => {
+        if (typeof showToast === 'function') showToast(`✅ Messaggio inviato a ${targetUserName}!`);
+    }).catch(e => {
+        console.warn("Firebase bugFeedback write note:", e);
+    });
+
+    // 2. Invia Notifica Push via Bot Telegram (usando l'ID numerico targetUserId)
+    const validationUrl = (typeof VALIDATION_SERVER_URL !== 'undefined') ? VALIDATION_SERVER_URL : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
+    const botNotifyUrl = `${validationUrl}?action=notify&targetId=${targetUserId}&text=${encodeURIComponent(`📢 MESSAGGIO DALL'AMMINISTRATORE:\n\n${cleanMsg}`)}`;
+    fetch(botNotifyUrl, { method: 'GET', redirect: 'follow' })
+        .then(() => console.log(`✓ Push Bot Telegram inviata all'ID ${targetUserId}`))
+        .catch(err => console.warn("Bot push notification note:", err));
+
+    alert(`✅ Messaggio inviato con successo all'utente '${targetUserName}' (ID: ${targetUserId})!`);
 };
