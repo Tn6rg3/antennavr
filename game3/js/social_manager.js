@@ -327,14 +327,7 @@ window.renderOrUpdateUserListItem = function(userId, u) {
     const nameB = document.createElement('b');
     nameB.textContent = u.name || "Anonimo";
     nameB.style.cssText = "font-size: 0.95em; color: var(--link-color); text-decoration: underline; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;";
-
-    nameB.onclick = () => {
-        if (window.isAdmin) {
-            window.openDirectTelegramChatAsAdmin(userId, u.username, u.name || "Anonimo");
-        } else {
-            window.openTeamInviteModal(userId, u.name);
-        }
-    };
+    nameB.onclick = () => window.openTeamInviteModal(userId, u.name);
 
     leftSpan.appendChild(nameB);
 
@@ -557,11 +550,27 @@ window.openTeamInviteModal = async function(targetId, targetName) {
             els.recruitMsgBtn.onclick = () => {
                 db.ref(`presence/${targetId}`).once('value', s => {
                     const u = s.val();
-                    // Permettiamo il link solo se lo username esiste (non nascosto dalla privacy)
-                    if (u && u.username && String(u.username).trim() !== "") {
-                        tg.openTelegramLink('https://t.me/' + u.username);
+                    if (u && u.username && String(u.username).trim() !== "" && String(u.username).trim() !== "N/A") {
+                        const cleanUser = String(u.username).replace('@', '').trim();
+                        if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
+                            window.Telegram.WebApp.openTelegramLink('https://t.me/' + cleanUser);
+                        } else {
+                            window.open('https://t.me/' + cleanUser, '_blank');
+                        }
+                    } else if (window.isAdmin && targetId) {
+                        // Se l'utente e privato/anonimo MA l'operatore e ADMIN, apre direttamente la chat privata Telegram via ID numerico!
+                        const adminTgUrl = `https://t.me/user?id=${targetId}`;
+                        if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
+                            window.Telegram.WebApp.openTelegramLink(adminTgUrl);
+                        } else {
+                            window.open(adminTgUrl, '_blank');
+                        }
                     } else {
-                        tg.showAlert(currentLang === 'it' ? "Questo utente ha scelto di mantenere il profilo privato." : "This user has chosen to keep their profile private.");
+                        if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.showAlert === 'function') {
+                            window.Telegram.WebApp.showAlert(currentLang === 'it' ? "Questo utente ha scelto di mantenere il profilo privato." : "This user has chosen to keep their profile private.");
+                        } else {
+                            alert(currentLang === 'it' ? "Questo utente ha scelto di mantenere il profilo privato." : "This user has chosen to keep their profile private.");
+                        }
                     }
                 });
             };

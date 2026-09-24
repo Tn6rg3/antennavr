@@ -840,7 +840,6 @@ function initGame() {
                 try {
                     const mappingRef = db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`);
                     await mappingRef.set(window.myId);
-                    mappingRef.onDisconnect().remove();
                 } catch (e) { console.error("Mapping Error:", e); }
 
                 // 2. Ripristina la presenza online
