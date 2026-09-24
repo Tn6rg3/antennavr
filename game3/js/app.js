@@ -1380,8 +1380,8 @@ window.setupBugSystem = function() {
     const badge = document.getElementById('bugsBadge');
     if (!db) return;
 
-    // Rilevamento Admin basato su Permessi Firebase
-    // Tentiamo di leggere bugReports: se Firebase lo permette, siamo admin.
+    // Rilevamento Admin basato esclusivamente su Permessi Firebase
+    // Tentiamo di leggere bugReports: se le regole Firebase lo permettono, l'utente e admin.
     db.ref('bugReports').limitToLast(1).once('value').then(snap => {
         window.isAdmin = true;
         if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
@@ -1393,8 +1393,6 @@ window.setupBugSystem = function() {
             window.updateAdminBadge();
         });
     }).catch((error) => {
-        // Nascondiamo il pannello SOLO se l'errore è esplicitamente di permessi mancanti
-        // e se siamo effettivamente collegati (per evitare falsi positivi durante il freeze)
         if (error.code === 'PERMISSION_DENIED') {
             window.isAdmin = false;
             if (els.adminBugPanel) els.adminBugPanel.style.display = 'none';
@@ -1830,8 +1828,8 @@ window.setupBugSystem = function() {
             for (const [id, userObj] of Object.entries(usersData)) {
                 if (!userObj) continue;
 
-                // Non cancellare l'Admin stesso!
-                if (id === "352908417" || id === window.myId) continue;
+                // Non cancellare l'utente o Admin corrente in sessione
+                if (id === window.myId) continue;
 
                 const hasCustomAlias = !!(userObj.hasSetCustomAlias === true || (userObj.alias && !userObj.alias.startsWith("Giocatore")));
                 const hasHistory = !!(userObj.history && Object.keys(userObj.history).length > 0);
