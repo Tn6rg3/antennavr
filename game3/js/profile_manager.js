@@ -1330,74 +1330,71 @@ if (els.deleteDataBtn) {
             const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
             const firebaseUid = firebase.auth().currentUser?.uid;
 
-            const safeRemove = (ref) => ref.remove().catch(e => console.warn("Safe remove note:", e));
+            // Raggruppamento delle rimozioni dirette per velocizzare
+            const deletePromises = [
+                db.ref(`users/${window.myId}`).remove(),
+                db.ref(`presence/${window.myId}`).remove(),
+                db.ref(`courseActiveEnrollments/${window.myId}`).remove(),
+                db.ref(`activity/daily/${dKey}/${window.myId}`).remove(),
+                db.ref(`activity/weekly/${wKey}/${window.myId}`).remove(),
+                db.ref(`activity/monthly/${mKey}/${window.myId}`).remove(),
+                db.ref(`invites/${window.myId}`).remove(),
+                db.ref(`invite_accepted/${window.myId}`).remove(),
+                db.ref(`leaderboard/callsign/global/${window.myId}`).remove(),
+                db.ref(`leaderboard/arcade/all/${window.myId}`).remove(),
+                db.ref(`leaderboard/arcade/global/${window.myId}`).remove()
+            ];
 
-            // 1. Pulizia Classifiche e Leaderboard (Mentre uid_mapping e attivo)
-            const categories = ['standard', 'chars', 'quiz', 'pingpong', 'callsign', 'arcade', 'la_torre'];
+            if (firebaseUid) deletePromises.push(db.ref(`uid_mapping/${firebaseUid}`).remove());
+
+            // Aggiunta pulizia dalle leaderboard dinamiche
+            const categories = ['standard', 'chars', 'quiz', 'pingpong'];
             for (const cat of categories) {
-                try {
-                    const catSnap = await db.ref(`leaderboard/${cat}`).once('value');
-                    if (catSnap.exists()) {
-                        catSnap.forEach(subNode => {
-                            if (subNode.hasChild(window.myId)) {
-                                safeRemove(subNode.child(window.myId).ref);
-                            }
-                        });
-                    }
-                } catch(e) {}
-            }
-
-            // 2. Pulizia Richieste Tutor
-            try {
-                const tutorReqSnap = await db.ref('tutorRequests').once('value');
-                if (tutorReqSnap.exists()) {
-                    tutorReqSnap.forEach(child => {
-                        if (child.val() && child.val().uid === window.myId) {
-                            safeRemove(child.ref);
-                        }
+                const catSnap = await db.ref(`leaderboard/${cat}`).once('value');
+                if (catSnap.exists()) {
+                    catSnap.forEach(subNode => {
+                        if (subNode.hasChild(window.myId)) deletePromises.push(subNode.child(window.myId).ref.remove());
                     });
                 }
-            } catch(e) {}
+            }
 
-            // 3. Gestione Squadra
+            // Pulizia richieste Tutor
+            const tutorReqSnap = await db.ref('tutorRequests').once('value');
+            if (tutorReqSnap.exists()) {
+                tutorReqSnap.forEach(child => {
+                    if (child.val().uid === window.myId) deletePromises.push(child.ref.remove());
+                });
+            }
+
+            // Gestione Squadra
             if (window.myTeamId) {
-                try {
-                    const teamRef = db.ref(`teams/${window.myTeamId}`);
-                    const teamSnap = await teamRef.once('value');
-                    if (teamSnap.exists()) {
-                        const team = teamSnap.val();
-                        const members = team.members || {};
-                        const memberIds = Object.keys(members).filter(id => id !== window.myId);
+                const teamRef = db.ref(`teams/${window.myTeamId}`);
+                const teamSnap = await teamRef.once('value');
+                if (teamSnap.exists()) {
+                    const team = teamSnap.val();
+                    const members = team.members || {};
+                    const memberIds = Object.keys(members).filter(id => id !== window.myId);
 
-                        if (memberIds.length === 0) {
-                            safeRemove(teamRef);
-                        } else if (team.captainId === window.myId) {
-                            teamRef.update({ captainId: memberIds[0] }).catch(() => {});
-                            safeRemove(teamRef.child(`members/${window.myId}`));
-                        } else {
-                            safeRemove(teamRef.child(`members/${window.myId}`));
+                    if (memberIds.length === 0) {
+                        deletePromises.push(teamRef.remove());
+                        const trnSnap = await db.ref('tournaments').once('value');
+                        if (trnSnap.exists()) {
+                            trnSnap.forEach(tSnap => {
+                                deletePromises.push(db.ref(`tournaments/${tSnap.key}/teams/${window.myTeamId}`).remove());
+                                deletePromises.push(db.ref(`tournaments/${tSnap.key}/standings/${window.myTeamId}`).remove());
+                            });
                         }
+                    } else if (team.captainId === window.myId) {
+                        deletePromises.push(teamRef.update({ captainId: memberIds[0] }));
+                        deletePromises.push(teamRef.child(`members/${window.myId}`).remove());
+                    } else {
+                        deletePromises.push(teamRef.child(`members/${window.myId}`).remove());
                     }
-                } catch(e) {}
+                }
             }
 
-            // 4. Rimozione Dati Utente Principali (Mentre uid_mapping e ancora attivo!)
-            await Promise.all([
-                safeRemove(db.ref(`users/${window.myId}`)),
-                safeRemove(db.ref(`presence/${window.myId}`)),
-                safeRemove(db.ref(`courseActiveEnrollments/${window.myId}`)),
-                safeRemove(db.ref(`activity/daily/${dKey}/${window.myId}`)),
-                safeRemove(db.ref(`activity/weekly/${wKey}/${window.myId}`)),
-                safeRemove(db.ref(`activity/monthly/${mKey}/${window.myId}`)),
-                safeRemove(db.ref(`invites/${window.myId}`)),
-                safeRemove(db.ref(`invite_accepted/${window.myId}`))
-            ]);
-
-            // 5. Rimozione uid_mapping SOLTANTO COME ULTIMISSIMO PASSAGGIO!
-            if (firebaseUid) {
-                await safeRemove(db.ref(`uid_mapping/${firebaseUid}`));
-            }
-
+            // Attesa di tutte le rimozioni parallele
+            await Promise.all(deletePromises);
             showToast("Profilo eliminato con successo.");
 
             localStorage.clear();
@@ -1409,9 +1406,6 @@ if (els.deleteDataBtn) {
         } catch (e) {
             console.error("Delete Data Error:", e);
             alert("Errore durante l'eliminazione: " + e.message);
-        }
-    };
-}
         }
     };
 }

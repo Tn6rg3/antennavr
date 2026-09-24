@@ -550,34 +550,11 @@ window.openTeamInviteModal = async function(targetId, targetName) {
             els.recruitMsgBtn.onclick = () => {
                 db.ref(`presence/${targetId}`).once('value', s => {
                     const u = s.val();
-                    const botName = (typeof BOT_USERNAME !== 'undefined' ? BOT_USERNAME : "cwappgame_bot");
-                    const appName = (typeof WEBAPP_NAME !== 'undefined' ? WEBAPP_NAME : "cwappgame");
-                    const shareAppUrl = encodeURIComponent(`https://t.me/${botName}/${appName}`);
-
-                    if (u && u.username && String(u.username).trim() !== "" && String(u.username).trim() !== "N/A") {
-                        const cleanUser = String(u.username).replace('@', '').trim();
-                        const tgUrl = `https://t.me/${cleanUser}`;
-                        if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
-                            window.Telegram.WebApp.openTelegramLink(tgUrl);
-                        } else {
-                            window.open(tgUrl, '_blank');
-                        }
+                    // Permettiamo il link solo se lo username esiste (non nascosto dalla privacy)
+                    if (u && u.username && String(u.username).trim() !== "") {
+                        tg.openTelegramLink('https://t.me/' + u.username);
                     } else {
-                        // Per utenti senza username pubblico (privati/anonimi): apre direttamente Telegram senza alcun pop-up interno
-                        const msgText = encodeURIComponent(`Ciao ${targetName || 'operatore'}! Ti contatto da CW Telegram App.`);
-                        const shareUrl = `https://t.me/share/url?url=${shareAppUrl}&text=${msgText}`;
-                        if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
-                            window.Telegram.WebApp.openTelegramLink(shareUrl);
-                        } else {
-                            window.open(shareUrl, '_blank');
-                        }
-                    }
-                });
-            };
-        }
-                        } else {
-                            window.open(shareUrl, '_blank');
-                        }
+                        tg.showAlert(currentLang === 'it' ? "Questo utente ha scelto di mantenere il profilo privato." : "This user has chosen to keep their profile private.");
                     }
                 });
             };
@@ -924,60 +901,4 @@ window.listenToRooms = function() {
     const onRemoved = lobbyQuery.on('child_removed', snap => window.removeRoomCard(snap.key));
 
     listeners.roomsList = { ref: lobbyQuery, onAdded, onChanged, onRemoved };
-};
-
-window.openDirectTelegramChatAsAdmin = function(userId, username, name) {
-    if (!userId) return;
-
-    let tgUrl = "";
-    if (username && username.trim() !== "" && username !== "N/A") {
-        const cleanUser = username.replace('@', '').trim();
-        tgUrl = `https://t.me/${cleanUser}`;
-    } else {
-        tgUrl = `https://t.me/user?id=${userId}`;
-    }
-
-    console.log(`ADMIN: Apertura chat diretta Telegram per '${name}' (${userId}) via ${tgUrl}`);
-
-    if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
-        window.Telegram.WebApp.openTelegramLink(tgUrl);
-    } else {
-        window.open(tgUrl, '_blank');
-    }
-};
-
-window.sendAdminMessageToUser = function(targetUserId, targetUserName) {
-    if (!targetUserId) return;
-    const msg = prompt(`✉️ INVIA MESSAGGIO DIRETTAMENTE ALL'UTENTE:\n👤 Nome: ${targetUserName || 'Anonimo'}\n🆔 ID Telegram: ${targetUserId}\n\nScrivi qui il messaggio di testo da inviare:`);
-    if (!msg || msg.trim() === "") return;
-
-    const cleanMsg = msg.trim();
-    const adminName = window.myName || "Amministratore";
-
-    // 1. Invia notifica In-App tramite Firebase (users/targetUserId/bugFeedback)
-    const feedbackData = {
-        reply: `📢 MESSAGGIO DALL'AMMINISTRATORE (${adminName}):\n\n${cleanMsg}`,
-        originalMsg: "Comunicazione Ufficiale Sviluppatore",
-        ts: firebase.database.ServerValue.TIMESTAMP,
-        date: new Date().toLocaleString('it-IT')
-    };
-
-    db.ref(`users/${targetUserId}/bugFeedback`).push(feedbackData).then(() => {
-        if (typeof showToast === 'function') showToast(`✅ Messaggio in-app inviato a ${targetUserName}!`);
-    }).catch(e => {
-        console.warn("Firebase bugFeedback write note:", e);
-    });
-
-    // 2. Invia Notifica Push via Bot Telegram (usando l'ID numerico targetUserId)
-    if (typeof window.sendPushNotification === 'function') {
-        window.sendPushNotification(targetUserId, `📢 MESSAGGIO DALL'AMMINISTRATORE:\n\n${cleanMsg}`);
-    } else {
-        const validationUrl = (typeof VALIDATION_SERVER_URL !== 'undefined') ? VALIDATION_SERVER_URL : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
-        const botNotifyUrl = `${validationUrl}?action=notify&targetId=${targetUserId}&text=${encodeURIComponent(`📢 MESSAGGIO DALL'AMMINISTRATORE:\n\n${cleanMsg}`)}`;
-        fetch(botNotifyUrl, { method: 'GET', redirect: 'follow' })
-            .then(() => console.log(`✓ Push Bot Telegram inviata all'ID ${targetUserId}`))
-            .catch(err => console.warn("Bot push notification note:", err));
-    }
-
-    alert(`✅ Messaggio inviato con successo all'utente '${targetUserName}' (ID: ${targetUserId})!`);
 };

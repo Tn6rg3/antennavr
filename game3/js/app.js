@@ -840,6 +840,7 @@ function initGame() {
                 try {
                     const mappingRef = db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`);
                     await mappingRef.set(window.myId);
+                    mappingRef.onDisconnect().remove();
                 } catch (e) { console.error("Mapping Error:", e); }
 
                 // 2. Ripristina la presenza online
@@ -1526,6 +1527,17 @@ window.updateAdminBadge = async function() {
             badge.style.display = 'none';
         }
     }
+
+    if (courseBadge) {
+        if (pendingTutorRequestsCount > 0) {
+            courseBadge.textContent = pendingTutorRequestsCount;
+            courseBadge.style.display = 'flex';
+            courseBadge.classList.add('badge-active');
+        } else {
+            courseBadge.style.display = 'none';
+            courseBadge.classList.remove('badge-active');
+        }
+    }
 };
 
 window.loadAdminBugs = function() {
@@ -1635,29 +1647,31 @@ window.openBugReply = function(bugKey, userId, originalMsg) {
 };
 
 window.checkBugFeedback = function() {
-    const activeUserId = window.myId || (typeof myId !== 'undefined' && myId ? myId : null);
-    if (!activeUserId || !db) return;
+    if (!myId) return;
+    db.ref(`users/${myId}/bugFeedback`).once('value', snap => {
+        if (!snap.exists()) return;
 
-    db.ref(`users/${activeUserId}/bugFeedback`).on('child_added', snap => {
-        const feedback = snap.val();
-        if (!feedback) return;
+        snap.forEach(child => {
+            const feedback = child.val();
+            const modal = document.getElementById('bugFeedbackModal');
+            const origMsg = document.getElementById('feedbackOriginalMsg');
+            const replyText = document.getElementById('feedbackReplyText');
+            const closeBtn = document.getElementById('btnCloseFeedbackModal');
 
-        const modal = document.getElementById('bugFeedbackModal');
-        const origMsg = document.getElementById('feedbackOriginalMsg');
-        const replyText = document.getElementById('feedbackReplyText');
-        const closeBtn = document.getElementById('btnCloseFeedbackModal');
+            if (modal && origMsg && replyText && closeBtn) {
+                origMsg.textContent = `"${feedback.originalMsg}"`;
+                replyText.textContent = feedback.reply;
 
-        if (modal && origMsg && replyText && closeBtn) {
-            origMsg.textContent = `"${feedback.originalMsg || 'Comunicazione Admin'}"`;
-            replyText.textContent = feedback.reply || "";
+                setTimeout(() => {
+                    modal.style.display = 'flex';
+                }, 2000);
 
-            modal.style.display = 'flex';
-
-            closeBtn.onclick = () => {
-                modal.style.display = 'none';
-                db.ref(`users/${activeUserId}/bugFeedback/${snap.key}`).remove();
-            };
-        }
+                closeBtn.onclick = () => {
+                    modal.style.display = 'none';
+                    db.ref(`users/${myId}/bugFeedback/${child.key}`).remove();
+                };
+            }
+        });
     });
 };
 
@@ -2226,11 +2240,8 @@ if (els.createRoomBtn) {
                     console.log(`Radar: Automatic WPM detected at ${autoWpm} (Max errors: ${maxErrors})`);
                 }
 
-                let userSelectedWpm = parseInt(els.startWpmInput?.value);
-                let finalWpm = (!isNaN(userSelectedWpm) && userSelectedWpm > 0) ? userSelectedWpm : autoWpm;
-
-                window.currentWpm = window.baseWpm = finalWpm;
-                if (els.startWpmInput) els.startWpmInput.value = finalWpm;
+                window.currentWpm = window.baseWpm = autoWpm;
+                if (els.startWpmInput) els.startWpmInput.value = autoWpm;
 
                 // Salviamo lo stato iniziale per il report finale
                 window.targetTrainingContext = {
