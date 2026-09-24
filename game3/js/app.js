@@ -1005,18 +1005,6 @@ window.initMandatoryAliasHandlers = function() {
                 }, 1000);
             }
         });
-                localStorage.clear();
-                sessionStorage.clear();
-                if (typeof showToast === 'function') showToast("⚠️ Il tuo profilo è stato rimosso dal server.");
-                setTimeout(() => {
-                    if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.close === 'function') {
-                        window.Telegram.WebApp.close();
-                    } else {
-                        location.reload();
-                    }
-                }, 1000);
-            }
-        });
 
         // --- PROTEZIONE ANTI-SPAM (USERNAME GATE) ---
         // Se l'utente non ha username E non esiste ancora nel database, lo blocchiamo
