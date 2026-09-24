@@ -292,6 +292,13 @@ window.refreshOnlineUsersList = function() {
 };
 
 window.renderOrUpdateUserListItem = function(userId, u) {
+    const bannedSnap = await db.ref(`appConfig/bannedUsers/${userId}`).once('value');
+
+    if (bannedSnap.val() === true) {
+        delete window.onlineUsersCache[userId];
+        window.removeUserListItem(userId);
+        return;
+}
     const isValId = (typeof window.isValidTelegramId === 'function') ? window.isValidTelegramId(userId) : (userId && userId !== 'undefined' && userId !== 'null' && userId !== '0');
 
     if (!els.onlineUsersList || !isValId || userId === myId || userId === window.myId) {
