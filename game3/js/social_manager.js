@@ -956,24 +956,28 @@ window.sendAdminMessageToUser = function(targetUserId, targetUserName) {
 
     // 1. Invia notifica In-App tramite Firebase (users/targetUserId/bugFeedback)
     const feedbackData = {
-        reply: `📢 MESSAGGIO DALL'AMMINISTRATORE (${adminName}):\n${cleanMsg}`,
+        reply: `📢 MESSAGGIO DALL'AMMINISTRATORE (${adminName}):\n\n${cleanMsg}`,
         originalMsg: "Comunicazione Ufficiale Sviluppatore",
         ts: firebase.database.ServerValue.TIMESTAMP,
         date: new Date().toLocaleString('it-IT')
     };
 
     db.ref(`users/${targetUserId}/bugFeedback`).push(feedbackData).then(() => {
-        if (typeof showToast === 'function') showToast(`✅ Messaggio inviato a ${targetUserName}!`);
+        if (typeof showToast === 'function') showToast(`✅ Messaggio in-app inviato a ${targetUserName}!`);
     }).catch(e => {
         console.warn("Firebase bugFeedback write note:", e);
     });
 
     // 2. Invia Notifica Push via Bot Telegram (usando l'ID numerico targetUserId)
-    const validationUrl = (typeof VALIDATION_SERVER_URL !== 'undefined') ? VALIDATION_SERVER_URL : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
-    const botNotifyUrl = `${validationUrl}?action=notify&targetId=${targetUserId}&text=${encodeURIComponent(`📢 MESSAGGIO DALL'AMMINISTRATORE:\n\n${cleanMsg}`)}`;
-    fetch(botNotifyUrl, { method: 'GET', redirect: 'follow' })
-        .then(() => console.log(`✓ Push Bot Telegram inviata all'ID ${targetUserId}`))
-        .catch(err => console.warn("Bot push notification note:", err));
+    if (typeof window.sendPushNotification === 'function') {
+        window.sendPushNotification(targetUserId, `📢 MESSAGGIO DALL'AMMINISTRATORE:\n\n${cleanMsg}`);
+    } else {
+        const validationUrl = (typeof VALIDATION_SERVER_URL !== 'undefined') ? VALIDATION_SERVER_URL : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
+        const botNotifyUrl = `${validationUrl}?action=notify&targetId=${targetUserId}&text=${encodeURIComponent(`📢 MESSAGGIO DALL'AMMINISTRATORE:\n\n${cleanMsg}`)}`;
+        fetch(botNotifyUrl, { method: 'GET', redirect: 'follow' })
+            .then(() => console.log(`✓ Push Bot Telegram inviata all'ID ${targetUserId}`))
+            .catch(err => console.warn("Bot push notification note:", err));
+    }
 
     alert(`✅ Messaggio inviato con successo all'utente '${targetUserName}' (ID: ${targetUserId})!`);
 };

@@ -1635,31 +1635,29 @@ window.openBugReply = function(bugKey, userId, originalMsg) {
 };
 
 window.checkBugFeedback = function() {
-    if (!myId) return;
-    db.ref(`users/${myId}/bugFeedback`).once('value', snap => {
-        if (!snap.exists()) return;
+    const activeUserId = window.myId || (typeof myId !== 'undefined' && myId ? myId : null);
+    if (!activeUserId || !db) return;
 
-        snap.forEach(child => {
-            const feedback = child.val();
-            const modal = document.getElementById('bugFeedbackModal');
-            const origMsg = document.getElementById('feedbackOriginalMsg');
-            const replyText = document.getElementById('feedbackReplyText');
-            const closeBtn = document.getElementById('btnCloseFeedbackModal');
+    db.ref(`users/${activeUserId}/bugFeedback`).on('child_added', snap => {
+        const feedback = snap.val();
+        if (!feedback) return;
 
-            if (modal && origMsg && replyText && closeBtn) {
-                origMsg.textContent = `"${feedback.originalMsg}"`;
-                replyText.textContent = feedback.reply;
+        const modal = document.getElementById('bugFeedbackModal');
+        const origMsg = document.getElementById('feedbackOriginalMsg');
+        const replyText = document.getElementById('feedbackReplyText');
+        const closeBtn = document.getElementById('btnCloseFeedbackModal');
 
-                setTimeout(() => {
-                    modal.style.display = 'flex';
-                }, 2000);
+        if (modal && origMsg && replyText && closeBtn) {
+            origMsg.textContent = `"${feedback.originalMsg || 'Comunicazione Admin'}"`;
+            replyText.textContent = feedback.reply || "";
 
-                closeBtn.onclick = () => {
-                    modal.style.display = 'none';
-                    db.ref(`users/${myId}/bugFeedback/${child.key}`).remove();
-                };
-            }
-        });
+            modal.style.display = 'flex';
+
+            closeBtn.onclick = () => {
+                modal.style.display = 'none';
+                db.ref(`users/${activeUserId}/bugFeedback/${snap.key}`).remove();
+            };
+        }
     });
 };
 
