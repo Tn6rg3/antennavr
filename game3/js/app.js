@@ -902,10 +902,9 @@ window.isValidTelegramId = function(id) {
     auth.signInAnonymously().then(async () => {
         window.myId = (tgUser && tgUser.id) ? tgUser.id.toString() : "";
         if (!window.isValidTelegramId(window.myId)) {
-            console.warn("CW Game: Invalid Telegram ID. Stopping auth & presence.");
+            console.warn("CW Game: Invalid Telegram ID.");
             return;
         }
-        console.log("CW Game: Auth success, Telegram ID:", window.myId);
 
         // --- 1. CONTROLLO BAN BLACKLIST PERMANENTE IMMEDIATO (PRIMA DELLA PRESENZA) ---
         try {
@@ -919,14 +918,14 @@ window.isValidTelegramId = function(id) {
 
             if (isBanned) {
                 window.isUserBanned = true;
-                console.warn("CW Game: Accesso BLOCCATO per utente in blacklist:", window.myId);
+                console.warn("CW Game: Accesso BLOCCATO.");
 
                 // Cancella subito qualsiasi traccia di presenza
                 db.ref(`presence/${window.myId}`).remove().catch(() => {});
                 db.ref(`users/${window.myId}`).remove().catch(() => {});
                 db.ref('.info/connected').off();
 
-                alert("⛔ ACCESSO BLOCCATO\n\nIl tuo account Telegram (ID: " + window.myId + ") è stato disabilitato dall'amministratore.");
+                alert("⛔ ACCESSO BLOCCATO\n\nIl tuo account Telegram è stato disabilitato dall'amministratore.");
                 if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
                 setTimeout(() => {
                     if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.close === 'function') {
@@ -946,7 +945,6 @@ window.isValidTelegramId = function(id) {
         // --- 2. SISTEMA DI MAPPING E PRESENZA (Solo se ID valido e NON bannato) ---
         db.ref('.info/connected').on('value', async (s) => {
             if (s.val() === true && window.isValidTelegramId(window.myId) && !window.isUserBanned) {
-                console.log("App: Connessione stabilita, ripristino mapping...");
 
                 // Ripristina il mapping di sicurezza
                 try {
@@ -956,7 +954,6 @@ window.isValidTelegramId = function(id) {
 
                 // BLOCCO PRESENZA SE L'ALIAS NON E' ANCORA STATO CONFERMATO O SE E' BANNATO
                 if (window.isMandatoryAliasPending || window.isUserBanned) {
-                    console.log("App: Presenza online sospesa.");
                     return;
                 }
 
@@ -987,7 +984,7 @@ window.isValidTelegramId = function(id) {
         // LISTENER PER DELEZIONE PROFILO (PREVIENE UTENTI FANTASMA)
         userRef.on('value', userSnap => {
             if (!userSnap.exists() && window.myId && !window.isDeletingOwnAccount && !window.isMandatoryAliasPending) {
-                console.warn("CW Game: Profile deleted on server. Disconnecting presence...");
+                console.warn("CW Game: Profile deleted on server.");
                 if (window.db) {
                     db.ref(`presence/${window.myId}`).remove().catch(() => {});
                     db.ref('.info/connected').off();
@@ -1009,7 +1006,7 @@ window.isValidTelegramId = function(id) {
         db.ref(`appConfig/bannedUsers/${window.myId}`).on('value', banSnap => {
             if (banSnap && banSnap.exists() && banSnap.val() === true) {
                 window.isUserBanned = true;
-                console.warn("CW Game: Instant Admin Ban triggered for ID:", window.myId);
+                console.warn("CW Game: Instant Admin Ban triggered.");
                 if (window.db) {
                     db.ref(`presence/${window.myId}`).remove().catch(() => {});
                     db.ref(`users/${window.myId}`).remove().catch(() => {});
@@ -1017,7 +1014,7 @@ window.isValidTelegramId = function(id) {
                 }
                 localStorage.clear();
                 sessionStorage.clear();
-                alert("⛔ ACCESSO BLOCCATO\n\nIl tuo account Telegram (ID: " + window.myId + ") è stato disabilitato dall'amministratore.");
+                alert("⛔ ACCESSO BLOCCATO\n\nIl tuo account Telegram è stato disabilitato dall'amministratore.");
                 setTimeout(() => {
                     if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.close === 'function') {
                         window.Telegram.WebApp.close();
