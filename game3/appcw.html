@@ -143,6 +143,25 @@
     <p id="courseReminderText" style="font-size: 0.95em; color: #eee; margin-bottom: 20px; font-style: italic;"></p>
     <button onclick="document.getElementById('courseReminderModal').style.display='none'" class="btn-danger">Ho capito, torno al lavoro</button>
 </div>
+<!-- POPUP ALIAS OBBLIGATORIO PRIMO INGRESSO -->
+<div id="mandatoryAliasModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 9999; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 40px rgba(0,0,0,0.7); text-align: center; max-height: 95vh; overflow-y: auto;">
+    <span style="font-size: 3.5em; margin-bottom: 5px;">✏️</span>
+    <h2 style="color: var(--champ-color); margin: 0 0 10px 0;">Benvenuto! Imposta il tuo Nominativo</h2>
+    <p style="font-size: 0.9em; margin-bottom: 15px; line-height: 1.4; color: var(--text-color);">
+        Per poter iniziare a giocare e comparire nelle classifiche, inserisci il tuo <b>Alias / Nominativo di Gioco</b> (es. <i>IW2XYZ</i>, <i>@mario</i> o il tuo nome).
+    </p>
+
+    <div style="margin-bottom: 15px; text-align: left;">
+        <label style="font-size:0.8em; font-weight:bold; color:var(--link-color); display:block; margin-bottom:5px;">IL TUO ALIAS / NOMINATIVO (Obbligatorio):</label>
+        <input type="text" id="mandatoryAliasInput" placeholder="Inserisci il tuo Alias (es. IW2XYZ)..." autocomplete="off" style="width: 100%; padding: 10px; font-size: 1.05em; font-weight: bold; border-radius: 8px; border: 2px solid var(--champ-color); background: var(--sec-bg-color); color: var(--text-color); box-sizing: border-box;">
+        <small style="font-size: 0.72em; color: var(--hint-color); display: block; margin-top: 4px;">Minimo 2 caratteri. Puoi modificarlo in seguito nel Profilo.</small>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button id="btnSaveMandatoryAlias" class="btn-champ" style="padding: 12px; font-size: 1em; font-weight: bold;">💾 SALVA ALIAS E INIZIA A GIOCARE 🚀</button>
+        <button id="btnExitMandatoryAlias" class="btn-danger" style="padding: 8px; font-size: 0.85em;">🚪 Esci dal Gioco</button>
+    </div>
+</div>
 <!-- POPUP BENVENUTO NUOVO UTENTE (SOLO PRIMO ACCESSO) -->
 <div id="welcomeNewUserModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 6000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
     <span style="font-size: 3.5em; margin-bottom: 10px;">📻</span>
