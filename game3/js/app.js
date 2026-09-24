@@ -1960,29 +1960,6 @@ window.setupBugSystem = function() {
         }
     };
 
-            if (!confirm(confirmMsg)) return;
-
-            if (typeof showToast === 'function') showToast(`Rimozione di ${incompleteIds.length} profili in corso...`);
-
-            const safeRemove = (ref) => ref.remove().catch(() => {});
-
-            for (const u of incompleteIds) {
-                await Promise.all([
-                    safeRemove(db.ref(`users/${u.id}`)),
-                    safeRemove(db.ref(`presence/${u.id}`)),
-                    safeRemove(db.ref(`courseActiveEnrollments/${u.id}`))
-                ]);
-            }
-
-            alert(`✅ Pulizia completata! Rimosse ${incompleteIds.length} schede utente incomplete dal database.`);
-            if (typeof showToast === 'function') showToast(`✅ Rimosse ${incompleteIds.length} schede utente fantasma.`);
-
-        } catch(err) {
-            console.error("Admin Cleanup Error:", err);
-            alert("Errore durante la pulizia: " + err.message);
-        }
-    };
-
     // --- TASTO DEV: RESET SFIDA GIORNALIERA PERSONALE ---
     if (els.btnDevResetDaily) {
         els.btnDevResetDaily.onclick = async () => {
