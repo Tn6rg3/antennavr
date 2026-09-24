@@ -77,7 +77,7 @@ window.addEventListener('focus', updateViewportHeight);
 
 // --- GESTIONE RIPRISTINO APP (PREVIENE APP BLOCCATA DA BACKGROUND) ---
 const handleAppResume = (forceReconnect = false) => {
-    console.log("App: Ripristino visibilità e risveglio da background (force=%o)...", forceReconnect);
+    console.log("App: Ripristino visibilità e risveglio da background...");
 
     // 1. Sblocco e ripristino incondizionato di tutti i contesti Web Audio
     if (typeof window.resumeAudioContext === 'function') {
@@ -92,36 +92,23 @@ const handleAppResume = (forceReconnect = false) => {
     }
     inputActive = true;
 
-    // 3. Ripristino Connessione Firebase
-    if (window.db && forceReconnect) {
-        window.db.goOffline();
-        setTimeout(() => { if (window.db) window.db.goOnline(); }, 100);
-    } else if (window.db) {
+    // 3. Ripristino Connessione Firebase SENZA forzare goOffline (previene la cancellazione temporanea di presence!)
+    if (window.db) {
         window.db.goOnline();
     }
 
     // Aggiorniamo subito lo stato di presenza su Firebase
     updateAppStatus(true);
-
-    // 4. Ricarica dati vitali resettando i listener se siamo fuori da una partita
-    if (window.myId && window.db && !gameRunning) {
-         if (typeof window.listeners !== 'undefined') {
-             if (window.listeners.presence) { window.listeners.presence.ref.off(); window.listeners.presence = null; }
-             if (window.listeners.roomsList) { window.listeners.roomsList.ref.off(); window.listeners.roomsList = null; }
-         }
-         if (typeof window.listenToOnlineUsers === 'function') window.listenToOnlineUsers();
-         if (typeof window.listenToRooms === 'function') window.listenToRooms();
-    }
 };
 
 // Listener per eventi del ciclo di vita Telegram WebApp (Sblocco immediato su risveglio)
 if (window.Telegram && window.Telegram.WebApp) {
     try {
         window.Telegram.WebApp.onEvent('viewportChanged', (e) => {
-            if (e && e.isStateChanged) handleAppResume(true);
+            if (e && e.isStateChanged) handleAppResume(false);
         });
         window.Telegram.WebApp.onEvent('activated', () => {
-            handleAppResume(true);
+            handleAppResume(false);
         });
     } catch(e) {}
 }
@@ -133,16 +120,16 @@ window.addEventListener('pointerdown', () => {
     }
 }, { passive: true });
 
-// WATCHDOG: Rileva sospensioni profonde (es. schermo spento a lungo)
+// WATCHDOG: Rileva risvegli dopo sospensioni prolungate (es. schermo spento a lungo)
 let lastWatchdogTick = Date.now();
 setInterval(() => {
     const now = Date.now();
-    if (now - lastWatchdogTick > 8000) { // Salto temporale di 8 secondi
-        console.warn("App: Watchdog rileva risveglio profondo, forzo sblocco audio e riconnessione...");
-        handleAppResume(true);
+    if (now - lastWatchdogTick > 30000) { // Salto temporale di almeno 30 secondi
+        console.warn("App: Watchdog rileva risveglio profondo, riattivo connessione...");
+        handleAppResume(false);
     }
     lastWatchdogTick = now;
-}, 2000);
+}, 5000);
 
 document.addEventListener('visibilitychange', () => {
     const isVisible = !document.hidden;
