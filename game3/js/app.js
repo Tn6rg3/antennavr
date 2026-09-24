@@ -906,24 +906,58 @@ window.initMandatoryAliasHandlers = function() {
         window.myId = tgUser.id.toString();
         console.log("CW Game: Auth success, Telegram ID:", window.myId);
 
-        // --- SISTEMA DI MAPPING E PRESENZA ---
+        // --- 1. CONTROLLO BAN BLACKLIST PERMANENTE IMMEDIATO (PRIMA DELLA PRESENZA) ---
+        try {
+            const [banSnap1, banSnap2] = await Promise.all([
+                db.ref(`appConfig/bannedUsers/${window.myId}`).once('value').catch(() => null),
+                db.ref(`bannedUsers/${window.myId}`).once('value').catch(() => null)
+            ]);
+
+            const isBanned = (banSnap1 && banSnap1.exists() && banSnap1.val() === true) ||
+                             (banSnap2 && banSnap2.exists() && banSnap2.val() === true);
+
+            if (isBanned) {
+                window.isUserBanned = true;
+                console.warn("CW Game: Accesso BLOCCATO per utente in blacklist:", window.myId);
+
+                // Cancella subito qualsiasi traccia di presenza
+                db.ref(`presence/${window.myId}`).remove().catch(() => {});
+                db.ref(`users/${window.myId}`).remove().catch(() => {});
+                db.ref('.info/connected').off();
+
+                alert("⛔ ACCESSO BLOCCATO\n\nIl tuo account Telegram (ID: " + window.myId + ") è stato disabilitato dall'amministratore.");
+                if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
+                setTimeout(() => {
+                    if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.close === 'function') {
+                        window.Telegram.WebApp.close();
+                    } else if (window.tg && typeof window.tg.close === 'function') {
+                        window.tg.close();
+                    } else {
+                        location.reload();
+                    }
+                }, 800);
+                return; // Interrompe l'avvio incondizionatamente!
+            }
+        } catch(e) {}
+
+        // --- 2. SISTEMA DI MAPPING E PRESENZA (Solo se NON bannato) ---
         db.ref('.info/connected').on('value', async (s) => {
-            if (s.val() === true && window.myId) {
+            if (s.val() === true && window.myId && !window.isUserBanned) {
                 console.log("App: Connessione stabilita, ripristino mapping...");
 
-                // 1. Ripristina il mapping di sicurezza
+                // Ripristina il mapping di sicurezza
                 try {
                     const mappingRef = db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`);
                     await mappingRef.set(window.myId);
                 } catch (e) { console.error("Mapping Error:", e); }
 
-                // BLOCCO PRESENZA SE L'ALIAS NON E' ANCORA STATO CONFERMATO
-                if (window.isMandatoryAliasPending) {
-                    console.log("App: Presenza online sospesa in attesa di conferma Alias obbligatorio.");
+                // BLOCCO PRESENZA SE L'ALIAS NON E' ANCORA STATO CONFERMATO O SE E' BANNATO
+                if (window.isMandatoryAliasPending || window.isUserBanned) {
+                    console.log("App: Presenza online sospesa.");
                     return;
                 }
 
-                // 2. Ripristina la presenza online SOLO se ha un alias registrato
+                // Ripristina la presenza online SOLO se ha un alias registrato
                 const pRef = db.ref(`presence/${window.myId}`);
                 pRef.onDisconnect().remove();
                 const presenceData = {
@@ -937,26 +971,11 @@ window.initMandatoryAliasHandlers = function() {
                 };
                 pRef.set(presenceData);
 
-                // 3. Forza il ricontrollo dei permessi Admin al ripristino della connessione
                 if (typeof window.setupBugSystem === 'function') {
                     window.setupBugSystem();
                 }
             }
         });
-
-        // --- CONTROLLO UTENTI BLOCCATI (BAN ADMIN) ---
-        try {
-            const bannedSnap = await db.ref(`appConfig/bannedUsers/${window.myId}`).once('value');
-            if (bannedSnap.exists() && bannedSnap.val() === true) {
-                console.warn("CW Game: Accesso bloccato per utente in blacklist:", window.myId);
-                alert("⛔ ACCESSO BLOCCATO\n\nIl tuo account Telegram (ID: " + window.myId + ") è stato disabilitato dall'amministratore.");
-                if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
-                if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.close === 'function') {
-                    window.Telegram.WebApp.close();
-                }
-                return; // Interrompe l'avvio del gioco!
-            }
-        } catch(e) {}
 
         const userRef = db.ref(`users/${window.myId}`);
         const snap = await userRef.once('value');
