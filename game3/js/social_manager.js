@@ -396,6 +396,7 @@ window.renderOrUpdateUserListItem = function(userId, u) {
 };
 
 window.removeUserListItem = function(userId) {
+    if (window.onlineUsersCache) delete window.onlineUsersCache[userId];
     if (!els.onlineUsersList) return;
     const li = document.getElementById(`user_list_item_${userId}`);
     if (li) li.remove();

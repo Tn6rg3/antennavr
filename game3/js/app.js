@@ -1770,6 +1770,10 @@ window.setupBugSystem = function() {
             if (typeof showToast === 'function') showToast(`✅ Utente '${targetName}' (ID: ${targetId}) eliminato con successo!`);
             alert(`✅ Utente '${targetName}' (ID: ${targetId}) rimosso definitivamente dal database!`);
 
+            // Pulisce la cache locale delle presenze e forza il refresh dell'elenco utenti
+            if (typeof window.removeUserListItem === 'function') window.removeUserListItem(targetId);
+            if (typeof window.refreshOnlineUsersList === 'function') window.refreshOnlineUsersList();
+
             const inputEl = document.getElementById('adminDeleteUserInput');
             if (inputEl) inputEl.value = "";
 
