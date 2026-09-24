@@ -2246,6 +2246,19 @@ if (document.getElementById('pingPongWordToSend')) {
 }
 */
 
+window.replayCurrentWord = function() {
+    if (!gameWords || !gameWords[wordIndex]) return;
+    const currentWordToPlay = gameWords[wordIndex].toUpperCase();
+    const activeWpmToPlay = currentWpm || 20;
+    const savedTone = parseInt(localStorage.getItem(STORAGE_PREF_TONE)) || window.currentTone || 600;
+    if (window.currentMode !== 'callsign') {
+        window.currentTone = savedTone;
+    }
+    if (typeof playMorseAudio === 'function') {
+        playMorseAudio(currentWordToPlay, activeWpmToPlay);
+    }
+};
+
 window.lostFocusDuringWord = false;
 
 document.addEventListener('visibilitychange', () => {
@@ -2259,34 +2272,30 @@ document.addEventListener('visibilitychange', () => {
             audioCtx.resume();
         }
         if (typeof startBluetoothKeepAlive === 'function') startBluetoothKeepAlive();
+
+        const savedTone = parseInt(localStorage.getItem(STORAGE_PREF_TONE)) || window.currentTone || 600;
+        if (window.currentMode !== 'callsign') {
+            window.currentTone = savedTone;
+        }
+
         if (gameRunning && window.lostFocusDuringWord) {
             window.lostFocusDuringWord = false;
-            inputActive = false;
-            showToast("⚠️ Schermo spento: parola considerata persa!");
+            if (els && els.permanentGameInput) {
+                els.permanentGameInput.disabled = false;
+            }
+            inputActive = true;
 
-            if (window.currentMode === 'conquest') {
-                db.ref(`rooms/${roomCode}/coop_state`).transaction(state => {
-                    if (!state || state.status !== 'playing') return state;
-                    state.progress = Math.max(0, (state.progress || 0) - 2);
-                    return state;
-                });
-                setTimeout(() => {
-                    if (gameRunning) {
-                        if (typeof startCoopSequence === 'function') startCoopSequence();
-                    }
-                }, 1000);
+            showToast(currentLang === 'it' ? "📱 Partita ripresa! Riascolto parola..." : "📱 Game resumed! Replaying word...", 2000);
 
-            } else if (window.currentMode === 'quiz') {
-                if (typeof submitQuizAnswer === 'function') submitQuizAnswer(-1);
-
-            } else if (window.currentMode === 'pingpong') {
-                if (typeof window.sendAutoPingPongWord === 'function') window.sendAutoPingPongWord();
-
-            } else {
-                currentWpm = Math.max(10, currentWpm - 2);
-                if (els.wpmDisplay) {
-                    els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
+            setTimeout(() => {
+                if (gameRunning) {
+                    window.replayCurrentWord();
                 }
+            }, 500);
+            return;
+        }
+    }
+});
 
                 const missedWord = gameWords[wordIndex] ? gameWords[wordIndex].toUpperCase() : "-";
 

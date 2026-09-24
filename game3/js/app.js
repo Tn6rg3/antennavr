@@ -2240,8 +2240,11 @@ if (els.createRoomBtn) {
                     console.log(`Radar: Automatic WPM detected at ${autoWpm} (Max errors: ${maxErrors})`);
                 }
 
-                window.currentWpm = window.baseWpm = autoWpm;
-                if (els.startWpmInput) els.startWpmInput.value = autoWpm;
+                let userSelectedWpm = parseInt(els.startWpmInput?.value);
+                let finalWpm = (!isNaN(userSelectedWpm) && userSelectedWpm > 0) ? userSelectedWpm : autoWpm;
+
+                window.currentWpm = window.baseWpm = finalWpm;
+                if (els.startWpmInput) els.startWpmInput.value = finalWpm;
 
                 // Salviamo lo stato iniziale per il report finale
                 window.targetTrainingContext = {
