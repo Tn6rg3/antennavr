@@ -920,6 +920,20 @@ window.initMandatoryAliasHandlers = function() {
             }
         });
 
+        // --- CONTROLLO UTENTI BLOCCATI (BAN ADMIN) ---
+        try {
+            const bannedSnap = await db.ref(`appConfig/bannedUsers/${window.myId}`).once('value');
+            if (bannedSnap.exists() && bannedSnap.val() === true) {
+                console.warn("CW Game: Accesso bloccato per utente in blacklist:", window.myId);
+                alert("⛔ ACCESSO BLOCCATO\n\nIl tuo account Telegram (ID: " + window.myId + ") è stato disabilitato dall'amministratore.");
+                if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
+                if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.close === 'function') {
+                    window.Telegram.WebApp.close();
+                }
+                return; // Interrompe l'avvio del gioco!
+            }
+        } catch(e) {}
+
         const userRef = db.ref(`users/${window.myId}`);
         const snap = await userRef.once('value');
         const data = snap.val() || {};
@@ -1531,6 +1545,17 @@ window.setupBugSystem = function() {
         };
     }
 
+    // --- TASTO ADMIN: BLOCCAMNETO / BAN UTENTE SPECIFICO ---
+    const btnBanUser = document.getElementById('btnAdminBanUser');
+    if (btnBanUser) {
+        btnBanUser.onclick = async () => {
+            const inputVal = (document.getElementById('adminDeleteUserInput')?.value || "").trim();
+            if (typeof window.adminBanUserByName === 'function') {
+                await window.adminBanUserByName(inputVal);
+            }
+        };
+    }
+
     // --- FUNZIONE ADMIN: RESET SFIDA GIORNALIERA UTENTE SPECIFICO ---
     window.adminResetDailyForUser = async function(targetUserId) {
         if (!targetUserId) {
@@ -1666,6 +1691,77 @@ window.setupBugSystem = function() {
         } catch(err) {
             console.error("Admin Delete User Error:", err);
             alert("Errore eliminazione utente: " + err.message);
+        }
+    };
+
+    window.adminBanUserByName = async function(inputVal) {
+        if (!inputVal || inputVal.trim() === "") {
+            alert("Inserisci il Nome, Alias o Username dell'utente da bloccare.");
+            return;
+        }
+
+        const cleanVal = inputVal.replace('@', '').trim().toLowerCase();
+        let targetId = null;
+        let targetName = inputVal;
+
+        try {
+            if (typeof showToast === 'function') showToast("Ricerca utente per blocco...");
+
+            const presenceSnap = await db.ref('presence').once('value');
+            if (presenceSnap.exists()) {
+                const presenceData = presenceSnap.val();
+                for (const [id, userObj] of Object.entries(presenceData)) {
+                    if (!userObj) continue;
+                    const uName = (userObj.username || "").toLowerCase();
+                    const aliasName = (userObj.name || "").toLowerCase();
+                    if ((uName && uName === cleanVal) || (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)))) {
+                        targetId = id;
+                        targetName = userObj.name || userObj.username || id;
+                        break;
+                    }
+                }
+            }
+
+            if (!targetId) {
+                const usersSnap = await db.ref('users').once('value');
+                if (usersSnap.exists()) {
+                    const usersData = usersSnap.val();
+                    for (const [id, userObj] of Object.entries(usersData)) {
+                        if (!userObj) continue;
+                        const uName = (userObj.username || "").toLowerCase();
+                        const aliasName = (userObj.alias || userObj.assignedDefaultName || "").toLowerCase();
+                        if ((uName && uName === cleanVal) || (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)))) {
+                            targetId = id;
+                            targetName = userObj.alias || userObj.assignedDefaultName || userObj.username || id;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!targetId && !isNaN(inputVal.trim())) targetId = inputVal.trim();
+
+            if (!targetId) {
+                alert(`❌ Impossibile trovare l'utente per '${inputVal}'.`);
+                return;
+            }
+
+            const confirmText = `⛔ CONFERMA BLOCCO PERMANENTE UTENTE (BAN ADMIN)\n\nUtente Trovato:\n👤 Nome: ${targetName}\n🆔 Telegram ID: ${targetId}\n\nVuoi inserire questo ID nella BLACKLIST PERMANENTE ed eliminare i suoi dati? L'utente non potrà mai più accedere al gioco.`;
+            if (!confirm(confirmText)) return;
+
+            // 1. Salva in Blacklist Permanente su Firebase
+            await db.ref(`appConfig/bannedUsers/${targetId}`).set(true);
+
+            // 2. Elimina i suoi dati e profilo
+            if (typeof window.adminDeleteUserByName === 'function') {
+                await window.adminDeleteUserByName(targetId);
+            }
+
+            alert(`⛔ Utente '${targetName}' (ID: ${targetId}) BLOCCATO permanentemente e rimosso dal gioco!`);
+
+        } catch(e) {
+            console.error("Admin Ban Error:", e);
+            alert("Errore blocco utente: " + e.message);
         }
     };
 
