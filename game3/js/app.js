@@ -1456,6 +1456,17 @@ window.setupBugSystem = function() {
         };
     }
 
+    // --- TASTO ADMIN: ELIMINAZIONE UTENTE SPECIFICO ---
+    const btnDeleteUser = document.getElementById('btnAdminDeleteUser');
+    if (btnDeleteUser) {
+        btnDeleteUser.onclick = async () => {
+            const inputVal = (document.getElementById('adminDeleteUserInput')?.value || "").trim();
+            if (typeof window.adminDeleteUserByName === 'function') {
+                await window.adminDeleteUserByName(inputVal);
+            }
+        };
+    }
+
     // --- FUNZIONE ADMIN: RESET SFIDA GIORNALIERA UTENTE SPECIFICO ---
     window.adminResetDailyForUser = async function(targetUserId) {
         if (!targetUserId) {
@@ -1474,6 +1485,123 @@ window.setupBugSystem = function() {
         } catch(err) {
             console.error("Admin Reset Daily Error:", err);
             alert("Errore sblocco admin: " + err.message);
+        }
+    };
+
+    // --- FUNZIONE ADMIN: ELIMINAZIONE UTENTE PER NOME / ALIAS ---
+    window.adminDeleteUserByName = async function(inputVal) {
+        if (!inputVal || inputVal.trim() === "") {
+            alert("Inserisci il Nome, Alias o Username dell'utente da eliminare.");
+            return;
+        }
+
+        const cleanVal = inputVal.replace('@', '').trim().toLowerCase();
+        let targetId = null;
+        let targetName = inputVal;
+        let targetUsername = "";
+
+        try {
+            if (typeof showToast === 'function') showToast("Ricerca utente nel database...");
+
+            // 1. Cerca nei dati di presenza online
+            const presenceSnap = await db.ref('presence').once('value');
+            if (presenceSnap.exists()) {
+                const presenceData = presenceSnap.val();
+                for (const [id, userObj] of Object.entries(presenceData)) {
+                    if (!userObj) continue;
+                    const uName = (userObj.username || "").toLowerCase();
+                    const aliasName = (userObj.name || "").toLowerCase();
+
+                    if ((uName && uName === cleanVal) || (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)))) {
+                        targetId = id;
+                        targetName = userObj.name || userObj.username || id;
+                        targetUsername = userObj.username || "";
+                        break;
+                    }
+                }
+            }
+
+            // 2. Se non trovato in presence, cerca nei profili users
+            if (!targetId) {
+                const usersSnap = await db.ref('users').once('value');
+                if (usersSnap.exists()) {
+                    const usersData = usersSnap.val();
+                    for (const [id, userObj] of Object.entries(usersData)) {
+                        if (!userObj) continue;
+                        const uName = (userObj.username || "").toLowerCase();
+                        const aliasName = (userObj.alias || userObj.assignedDefaultName || "").toLowerCase();
+
+                        if ((uName && uName === cleanVal) || (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)))) {
+                            targetId = id;
+                            targetName = userObj.alias || userObj.assignedDefaultName || userObj.username || id;
+                            targetUsername = userObj.username || "";
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // 3. Fallback se ha inserito direttamente l'ID numerico Telegram
+            if (!targetId && !isNaN(inputVal.trim())) {
+                targetId = inputVal.trim();
+            }
+
+            if (!targetId) {
+                alert(`❌ Impossibile trovare l'utente per '${inputVal}'. Verifica la scrittura e riprova.`);
+                return;
+            }
+
+            // FINESTRA DI CONFERMA SICUREZZA ADMIN
+            const userDetailsText = `⚠️ CONFERMA ELIMINAZIONE UTENTE (ADMIN)\n\nUtente Trovato:\n👤 Nome / Alias: ${targetName}\n🆔 Telegram ID: ${targetId}\n${targetUsername ? '💬 Username: @' + targetUsername + '\n' : ''}\nSei assolutamente sicuro di voler ELIMINARE DEFINITIVAMENTE tutti i dati, classifiche, storico e profilo di questo utente?`;
+
+            if (!confirm(userDetailsText)) return;
+            if (!confirm(`🛑 CONFERMA FINALE: Eliminare l'utente '${targetName}' (ID: ${targetId})? L'operazione NON può essere annullata.`)) return;
+
+            if (typeof showToast === 'function') showToast("Eliminazione dati utente in corso...");
+
+            const safeRemove = (ref) => ref.remove().catch(e => console.warn("Safe remove note:", e));
+
+            // 1. Pulizia Classifiche e Leaderboard
+            const categories = ['standard', 'chars', 'quiz', 'pingpong', 'callsign', 'arcade', 'la_torre'];
+            for (const cat of categories) {
+                try {
+                    const catSnap = await db.ref(`leaderboard/${cat}`).once('value');
+                    if (catSnap.exists()) {
+                        catSnap.forEach(subNode => {
+                            if (subNode.hasChild(targetId)) safeRemove(subNode.child(targetId).ref);
+                        });
+                    }
+                } catch(e) {}
+            }
+
+            // 2. Pulizia Nodi Utente
+            await Promise.all([
+                safeRemove(db.ref(`users/${targetId}`)),
+                safeRemove(db.ref(`presence/${targetId}`)),
+                safeRemove(db.ref(`courseActiveEnrollments/${targetId}`)),
+                safeRemove(db.ref(`invites/${targetId}`)),
+                safeRemove(db.ref(`invite_accepted/${targetId}`))
+            ]);
+
+            // 3. Pulizia Richieste Tutor
+            try {
+                const tutorReqSnap = await db.ref('tutorRequests').once('value');
+                if (tutorReqSnap.exists()) {
+                    tutorReqSnap.forEach(child => {
+                        if (child.val() && child.val().uid === targetId) safeRemove(child.ref);
+                    });
+                }
+            } catch(e) {}
+
+            if (typeof showToast === 'function') showToast(`✅ Utente '${targetName}' (ID: ${targetId}) eliminato con successo!`);
+            alert(`✅ Utente '${targetName}' (ID: ${targetId}) rimosso definitivamente dal database!`);
+
+            const inputEl = document.getElementById('adminDeleteUserInput');
+            if (inputEl) inputEl.value = "";
+
+        } catch(err) {
+            console.error("Admin Delete User Error:", err);
+            alert("Errore eliminazione utente: " + err.message);
         }
     };
 
