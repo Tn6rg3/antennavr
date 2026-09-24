@@ -562,27 +562,19 @@ window.openTeamInviteModal = async function(targetId, targetName) {
                         } else {
                             window.open(tgUrl, '_blank');
                         }
-                    } else if (window.isAdmin && targetId) {
-                        // Se l'utente ha il profilo privato MA chi clicca e ADMIN:
-                        // Chiede se inviare un Messaggio Diretto (Notifica Bot + In-App) oppure aprire il selettore Telegram
-                        const choice = confirm(`L'utente '${targetName}' ha il profilo privato.\n\nVuoi inviargli un Messaggio Diretto Admin (Notifica Bot Telegram + Pop-Up In-App)?`);
-                        if (choice) {
-                            window.sendAdminMessageToUser(targetId, targetName);
-                        } else {
-                            const msgText = encodeURIComponent(`Ciao ${targetName}! Ti contatto da CW Telegram App.`);
-                            const shareUrl = `https://t.me/share/url?url=${shareAppUrl}&text=${msgText}`;
-                            if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
-                                window.Telegram.WebApp.openTelegramLink(shareUrl);
-                            } else {
-                                window.open(shareUrl, '_blank');
-                            }
-                        }
                     } else {
-                        // Per gli utenti normali: apre il selettore di condivisione Telegram
-                        const msgText = encodeURIComponent(`Ciao ${targetName}! Ti invito a giocare su CW Telegram App.`);
+                        // Per utenti senza username pubblico (privati/anonimi): apre direttamente Telegram senza alcun pop-up interno
+                        const msgText = encodeURIComponent(`Ciao ${targetName || 'operatore'}! Ti contatto da CW Telegram App.`);
                         const shareUrl = `https://t.me/share/url?url=${shareAppUrl}&text=${msgText}`;
                         if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
                             window.Telegram.WebApp.openTelegramLink(shareUrl);
+                        } else {
+                            window.open(shareUrl, '_blank');
+                        }
+                    }
+                });
+            };
+        }
                         } else {
                             window.open(shareUrl, '_blank');
                         }
