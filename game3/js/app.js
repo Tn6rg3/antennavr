@@ -1910,25 +1910,24 @@ window.setupBugSystem = function() {
 
             let incompleteIds = new Set();
 
-            // 1. Controlla profili in users
+            // 1. Controlla profili in users (Rileva qualsiasi utente privo di Alias o non confermato)
             for (const [id, userObj] of Object.entries(usersData)) {
                 if (!userObj || id === "352908417" || id === window.myId) continue;
 
-                const hasCustomAlias = !!(userObj.hasSetCustomAlias === true || (userObj.alias && !userObj.alias.startsWith("Giocatore")));
-                const hasHistory = !!(userObj.history && Object.keys(userObj.history).length > 0);
-                const hasScore = !!(userObj.score && userObj.score > 0);
+                const isAliasMissingOrGeneric = !userObj.alias || userObj.hasSetCustomAlias !== true || userObj.alias === "Giocatore" || userObj.alias.startsWith("Giocatore");
 
-                if (!hasCustomAlias && !hasHistory && !hasScore) {
+                if (isAliasMissingOrGeneric) {
                     incompleteIds.add(id);
                 }
             }
 
-            // 2. Controlla presenze orfane in presence
+            // 2. Controlla presenze in presence (Rileva qualsiasi presenza orfana o priva di alias)
             for (const [id, userObj] of Object.entries(presenceData)) {
                 if (!userObj || id === "352908417" || id === window.myId) continue;
                 const userProfile = usersData[id];
-                const hasCustomAlias = userProfile && (userProfile.hasSetCustomAlias === true || (userProfile.alias && !userProfile.alias.startsWith("Giocatore")));
-                if (!hasCustomAlias) {
+                const isAliasMissingOrGeneric = !userProfile || !userProfile.alias || userProfile.hasSetCustomAlias !== true || userProfile.alias === "Giocatore" || userProfile.alias.startsWith("Giocatore");
+
+                if (isAliasMissingOrGeneric) {
                     incompleteIds.add(id);
                 }
             }
@@ -1940,24 +1939,34 @@ window.setupBugSystem = function() {
                 return;
             }
 
-            const confirmMsg = `🧹 RILEVATI ${targetIds.length} UTENTI INCOMPLETI FANTASMA:\n\n` +
+            const confirmMsg = `🧹 RILEVATI ${targetIds.length} UTENTI INCOMPLETI / SENZA ALIAS:\n\n` +
                 targetIds.slice(0, 10).map(id => `• ID: ${id}`).join('\n') +
                 (targetIds.length > 10 ? `\n... ed altri ${targetIds.length - 10} utenti` : "") +
-                `\n\nVuoi ELIMINARE DEFINITIVAMENTE queste ${targetIds.length} schede dal database?`;
+                `\n\nVuoi ELIMINARE DEFINITIVAMENTE dal database queste ${targetIds.length} schede utente senza Alias?`;
 
             if (!confirm(confirmMsg)) return;
 
             if (typeof showToast === 'function') showToast(`Rimozione di ${targetIds.length} profili in corso...`);
 
-            const safeRemove = (ref) => ref.remove().catch(() => {});
-
             for (const targetId of targetIds) {
-                await Promise.all([
-                    safeRemove(db.ref(`users/${targetId}`)),
-                    safeRemove(db.ref(`presence/${targetId}`)),
-                    safeRemove(db.ref(`courseActiveEnrollments/${targetId}`))
-                ]);
-                delete window.onlineUsersCache[targetId];
+                const atomicDelete = {};
+                atomicDelete[`users/${targetId}`] = null;
+                atomicDelete[`presence/${targetId}`] = null;
+                atomicDelete[`courseActiveEnrollments/${targetId}`] = null;
+
+                try {
+                    await db.ref().update(atomicDelete);
+                } catch(e) {
+                    await Promise.all([
+                        db.ref(`users/${targetId}`).remove().catch(() => {}),
+                        db.ref(`presence/${targetId}`).remove().catch(() => {}),
+                        db.ref(`courseActiveEnrollments/${targetId}`).remove().catch(() => {})
+                    ]);
+                }
+
+                if (window.onlineUsersCache) delete window.onlineUsersCache[targetId];
+                if (typeof window.removeUserListItem === 'function') window.removeUserListItem(targetId);
+            }
                 if (typeof window.removeUserListItem === 'function') window.removeUserListItem(targetId);
             }
 
