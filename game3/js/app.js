@@ -2544,7 +2544,6 @@ if (els.lobbyChatInput) {
         if (e.key === 'Enter') els.sendLobbyChatBtn?.click();
     };
 }
-}
 if (els.clearChatBtn) {
     els.clearChatBtn.onclick = () => {
         if (confirm('Vuoi cancellare la cronologia?')) {
