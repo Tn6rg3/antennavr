@@ -550,26 +550,41 @@ window.openTeamInviteModal = async function(targetId, targetName) {
             els.recruitMsgBtn.onclick = () => {
                 db.ref(`presence/${targetId}`).once('value', s => {
                     const u = s.val();
+                    const botName = (typeof BOT_USERNAME !== 'undefined' ? BOT_USERNAME : "cwappgame_bot");
+                    const appName = (typeof WEBAPP_NAME !== 'undefined' ? WEBAPP_NAME : "cwappgame");
+                    const shareAppUrl = encodeURIComponent(`https://t.me/${botName}/${appName}`);
+
                     if (u && u.username && String(u.username).trim() !== "" && String(u.username).trim() !== "N/A") {
                         const cleanUser = String(u.username).replace('@', '').trim();
+                        const tgUrl = `https://t.me/${cleanUser}`;
                         if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
-                            window.Telegram.WebApp.openTelegramLink('https://t.me/' + cleanUser);
+                            window.Telegram.WebApp.openTelegramLink(tgUrl);
                         } else {
-                            window.open('https://t.me/' + cleanUser, '_blank');
+                            window.open(tgUrl, '_blank');
                         }
                     } else if (window.isAdmin && targetId) {
-                        // Se l'utente e privato/anonimo MA l'operatore e ADMIN, apre direttamente la chat privata Telegram via ID numerico!
-                        const adminTgUrl = `https://t.me/user?id=${targetId}`;
-                        if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
-                            window.Telegram.WebApp.openTelegramLink(adminTgUrl);
+                        // Se l'utente ha il profilo privato MA chi clicca e ADMIN:
+                        // Chiede se inviare un Messaggio Diretto (Notifica Bot + In-App) oppure aprire il selettore Telegram
+                        const choice = confirm(`L'utente '${targetName}' ha il profilo privato.\n\nVuoi inviargli un Messaggio Diretto Admin (Notifica Bot Telegram + Pop-Up In-App)?`);
+                        if (choice) {
+                            window.sendAdminMessageToUser(targetId, targetName);
                         } else {
-                            window.open(adminTgUrl, '_blank');
+                            const msgText = encodeURIComponent(`Ciao ${targetName}! Ti contatto da CW Telegram App.`);
+                            const shareUrl = `https://t.me/share/url?url=${shareAppUrl}&text=${msgText}`;
+                            if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
+                                window.Telegram.WebApp.openTelegramLink(shareUrl);
+                            } else {
+                                window.open(shareUrl, '_blank');
+                            }
                         }
                     } else {
-                        if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.showAlert === 'function') {
-                            window.Telegram.WebApp.showAlert(currentLang === 'it' ? "Questo utente ha scelto di mantenere il profilo privato." : "This user has chosen to keep their profile private.");
+                        // Per gli utenti normali: apre il selettore di condivisione Telegram
+                        const msgText = encodeURIComponent(`Ciao ${targetName}! Ti invito a giocare su CW Telegram App.`);
+                        const shareUrl = `https://t.me/share/url?url=${shareAppUrl}&text=${msgText}`;
+                        if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
+                            window.Telegram.WebApp.openTelegramLink(shareUrl);
                         } else {
-                            alert(currentLang === 'it' ? "Questo utente ha scelto di mantenere il profilo privato." : "This user has chosen to keep their profile private.");
+                            window.open(shareUrl, '_blank');
                         }
                     }
                 });
