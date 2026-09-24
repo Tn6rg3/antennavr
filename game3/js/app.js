@@ -557,13 +557,24 @@ async function startApp() {
         return;
     }
 
-    // 2. Proseguiamo con l'avvio normale
-    myName = currentTgUser.first_name || "Operatore";
-    window.myId = currentTgUser.id ? currentTgUser.id.toString() : "";
-    myId = window.myId;
+    // INIZIALIZZAZIONE PREVENTIVA FIREBASE SE NON ANCORA PRONTO
+    const firebaseConfig = {
+        apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk",
+        authDomain: "telegrafiabot.firebaseapp.com",
+        databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "telegrafiabot",
+        storageBucket: "telegrafiabot.firebasestorage.app",
+        messagingSenderId: "575790683327",
+        appId: "1:575790683327:web:db333b0316c8e8ec63a20a"
+    };
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    if (!window.db) window.db = firebase.database();
+    if (!window.auth) window.auth = firebase.auth();
+    db = window.db;
+    auth = window.auth;
 
     // ESEGUIAMO AUTH & CONTROLLO BAN SOLTANTO ORA CHE window.myId E' DEFINITO AL 100%!
-    auth.signInAnonymously().then(async () => {
+    window.auth.signInAnonymously().then(async () => {
         if (!window.isValidTelegramId(window.myId)) {
             console.warn("CW Game: Invalid Telegram ID.");
             return;
