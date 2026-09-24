@@ -16,6 +16,13 @@ window.initDOMCache = function() {
 window.showScreen = function(screenId) {
     clearAllTimers();
 
+    // BLOCCO ALIAS OBBLIGATORIO: Se l'utente non ha ancora impostato il suo alias, forza schermata Profilo
+    if (window.isMandatoryAliasPending && screenId !== 'profileScreen') {
+        screenId = 'profileScreen';
+        const modal = document.getElementById('mandatoryAliasModal');
+        if (modal) modal.style.display = 'flex';
+    }
+
     // Sicurezza: se usciamo dalla schermata audio reale, chiudiamo il microfono
     if (screenId !== 'realTxScreen' && typeof window.stopAudioAnalyzer === 'function') {
         window.stopAudioAnalyzer();
@@ -2246,19 +2253,6 @@ if (document.getElementById('pingPongWordToSend')) {
 }
 */
 
-window.replayCurrentWord = function() {
-    if (!gameWords || !gameWords[wordIndex]) return;
-    const currentWordToPlay = gameWords[wordIndex].toUpperCase();
-    const activeWpmToPlay = currentWpm || 20;
-    const savedTone = parseInt(localStorage.getItem(STORAGE_PREF_TONE)) || window.currentTone || 600;
-    if (window.currentMode !== 'callsign') {
-        window.currentTone = savedTone;
-    }
-    if (typeof playMorseAudio === 'function') {
-        playMorseAudio(currentWordToPlay, activeWpmToPlay);
-    }
-};
-
 window.lostFocusDuringWord = false;
 
 document.addEventListener('visibilitychange', () => {
@@ -2272,26 +2266,87 @@ document.addEventListener('visibilitychange', () => {
             audioCtx.resume();
         }
         if (typeof startBluetoothKeepAlive === 'function') startBluetoothKeepAlive();
-
-        const savedTone = parseInt(localStorage.getItem(STORAGE_PREF_TONE)) || window.currentTone || 600;
-        if (window.currentMode !== 'callsign') {
-            window.currentTone = savedTone;
-        }
-
         if (gameRunning && window.lostFocusDuringWord) {
             window.lostFocusDuringWord = false;
-            if (els && els.permanentGameInput) {
-                els.permanentGameInput.disabled = false;
-            }
-            inputActive = true;
+            inputActive = false;
+            showToast("⚠️ Schermo spento: parola considerata persa!");
 
-            showToast(currentLang === 'it' ? "📱 Partita ripresa! Riascolto parola..." : "📱 Game resumed! Replaying word...", 2000);
+            if (window.currentMode === 'conquest') {
+                db.ref(`rooms/${roomCode}/coop_state`).transaction(state => {
+                    if (!state || state.status !== 'playing') return state;
+                    state.progress = Math.max(0, (state.progress || 0) - 2);
+                    return state;
+                });
+                setTimeout(() => {
+                    if (gameRunning) {
+                        if (typeof startCoopSequence === 'function') startCoopSequence();
+                    }
+                }, 1000);
 
-            setTimeout(() => {
-                if (gameRunning) {
-                    window.replayCurrentWord();
+            } else if (window.currentMode === 'quiz') {
+                if (typeof submitQuizAnswer === 'function') submitQuizAnswer(-1);
+
+            } else if (window.currentMode === 'pingpong') {
+                if (typeof window.sendAutoPingPongWord === 'function') window.sendAutoPingPongWord();
+
+            } else {
+                currentWpm = Math.max(10, currentWpm - 2);
+                if (els.wpmDisplay) {
+                    els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
                 }
-            }, 500);
+
+                const missedWord = gameWords[wordIndex] ? gameWords[wordIndex].toUpperCase() : "-";
+
+                matchDetailsArray.push({
+                    real: missedWord,
+                    typed: "TIMEOUT (SCHERMO)",
+                    points: 0,
+                    wpm: currentWpm,
+                    ms: 0,
+                    correct: false,
+                    usedReplay: false
+                });
+
+                if (window.currentMode === 'daily_challenge' && wordIndex >= 20) {
+                    showToast("❌ Timeout oltre la 20ª parola! La tua Sfida Giornaliera si conclude qui.");
+                    if (nextWordTimeout) clearTimeout(nextWordTimeout);
+                    setTimeout(() => {
+                        window.finishGame();
+                    }, 1200);
+                    return;
+                }
+
+                if (els.tableBody) {
+                    const tr = document.createElement('tr');
+                    const tdTyped = document.createElement('td');
+                    tdTyped.textContent = "TIMEOUT";
+                    tdTyped.style.color = "#d32f2f";
+                    tdTyped.style.fontSize = "0.8em";
+
+                    const tdReal = document.createElement('td');
+                    tdReal.innerHTML = "";
+      const b = document.createElement('b');
+      b.textContent = missedWord;
+      tdReal.appendChild(b);
+
+                    const tdPoints = document.createElement('td');
+                    tdPoints.style.color = "#d32f2f";
+                    tdPoints.style.fontWeight = 'bold';
+                    tdPoints.textContent = "0";
+
+                    tr.appendChild(tdTyped);
+                    tr.appendChild(tdReal);
+                    tr.appendChild(tdPoints);
+                    els.tableBody.appendChild(tr);
+
+                    if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
+                }
+
+                wordIndex++;
+                setTimeout(() => {
+                    if (gameRunning) window.playNextWord();
+                }, 800);
+            }
         }
     }
 });

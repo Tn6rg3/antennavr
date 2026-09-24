@@ -847,14 +847,14 @@ function initGame() {
                 const pRef = db.ref(`presence/${window.myId}`);
                 pRef.onDisconnect().remove();
                 const presenceData = {
-                    name: window.myName || tgUser.first_name,
+                    name: window.myName || (typeof tgUser !== 'undefined' && tgUser ? tgUser.first_name : "") || "Giocatore",
                     username: window.myPrivacy ? "" : tgUsername,
                     status: 'online',
                     uid: firebase.auth().currentUser.uid,
+                    level: (window.userProgression && window.userProgression.level) ? window.userProgression.level : 1,
                     ts: firebase.database.ServerValue.TIMESTAMP,
                     lastActive: firebase.database.ServerValue.TIMESTAMP
                 };
-                if (window.userProgression?.level) presenceData.level = window.userProgression.level;
                 pRef.set(presenceData);
 
                 // 3. Forza il ricontrollo dei permessi Admin al ripristino della connessione
@@ -964,6 +964,26 @@ function initGame() {
 
         if (els.playerName) els.playerName.textContent = window.myName;
 
+        // --- GESTIONE ALIAS OBBLIGATORIO PRIMO INGRESSO ---
+        const hasSetCustomAlias = !!(data && (data.hasSetCustomAlias === true || (data.alias && !data.alias.startsWith("Giocatore"))));
+
+        if (!hasSetCustomAlias) {
+            window.isMandatoryAliasPending = true;
+            setTimeout(() => {
+                if (typeof window.showProfileScreen === 'function') window.showProfileScreen();
+                const modal = document.getElementById('mandatoryAliasModal');
+                const input = document.getElementById('mandatoryAliasInput');
+                if (modal) {
+                    if (input) input.value = window.myName || (tgUser ? tgUser.first_name : "") || "";
+                    modal.style.display = 'flex';
+                }
+            }, 800);
+        }
+
+        if (typeof window.initMandatoryAliasHandlers === 'function') {
+            window.initMandatoryAliasHandlers();
+        }
+
         // --- SISTEMA LAZY CLEANUP GIORNALIERO ---
         try {
             const cleanupRef = db.ref('appConfig/lastCleanupTs');
@@ -1055,6 +1075,8 @@ function initGame() {
 
             pRef.set(presenceData);
         });
+
+        window.initMandatoryAliasHandlers();
 
         // --- MONITORAGGIO INATTIVITÀ ---
         const updateActivity = () => { lastActivityTs = Date.now(); };

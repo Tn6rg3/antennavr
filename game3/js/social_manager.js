@@ -294,8 +294,10 @@ window.refreshOnlineUsersList = function() {
 window.renderOrUpdateUserListItem = function(userId, u) {
     if (!els.onlineUsersList || userId === myId) return;
 
-    // Se l'utente ha attivato la privacy online, lo rimuoviamo se esiste e non lo renderizziamo
-    if (u.privacyOnline) {
+    // Se l'utente ha attivato la privacy online o e offline da piu di 10 minuti, rimuovilo
+    const now = Date.now();
+    const lastActive = u.lastActive || u.ts || 0;
+    if (u.privacyOnline || u.status === 'offline' || (now - lastActive > 600000)) {
         window.removeUserListItem(userId);
         delete window.onlineUsersCache[userId];
         return;
@@ -325,22 +327,21 @@ window.renderOrUpdateUserListItem = function(userId, u) {
     leftSpan.style.cssText = "display: flex; flex-direction: column; flex-grow: 1; min-width: 0; padding-right: 10px;";
 
     const nameB = document.createElement('b');
-    nameB.textContent = u.name || "Anonimo";
+    nameB.textContent = u.name || "Giocatore";
     nameB.style.cssText = "font-size: 0.95em; color: var(--link-color); text-decoration: underline; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;";
-    nameB.onclick = () => window.openTeamInviteModal(userId, u.name);
+    nameB.onclick = () => window.openTeamInviteModal(userId, u.name || "Giocatore");
 
     leftSpan.appendChild(nameB);
 
-    // LIVELLO E STATO
+    // LIVELLO E STATO (Mostra sempre almeno Lv. 1)
     const statusRow = document.createElement('div');
     statusRow.style.cssText = "display: flex; gap: 5px; align-items: center;";
 
-    if (u.level) {
-        const lvDiv = document.createElement('div');
-        lvDiv.style.cssText = "font-size: 0.72em; color: var(--champ-color); font-weight: bold; opacity: 0.9;";
-        lvDiv.textContent = `Lv. ${u.level}`;
-        statusRow.appendChild(lvDiv);
-    }
+    const userLevel = u.level || 1;
+    const lvDiv = document.createElement('div');
+    lvDiv.style.cssText = "font-size: 0.72em; color: var(--champ-color); font-weight: bold; opacity: 0.9;";
+    lvDiv.textContent = `Lv. ${userLevel}`;
+    statusRow.appendChild(lvDiv);
 
     // Badge Stato Speciale
     if (isIChallengingHim) {
