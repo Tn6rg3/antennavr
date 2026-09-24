@@ -1910,25 +1910,35 @@ window.setupBugSystem = function() {
 
             let incompleteIds = new Set();
 
-            // 1. Controlla profili in users (Rileva qualsiasi utente privo di Alias o non confermato)
+            // 1. Controlla profili in users (Ispetta sia l'Alias che la presenza di attività reale)
             for (const [id, userObj] of Object.entries(usersData)) {
                 if (!userObj || id === "352908417" || id === window.myId) continue;
 
-                const isAliasMissingOrGeneric = !userObj.alias || userObj.hasSetCustomAlias !== true || userObj.alias === "Giocatore" || userObj.alias.startsWith("Giocatore");
+                const isGenericName = !userObj.alias || userObj.alias === "Giocatore" || userObj.alias.startsWith("Giocatore") || userObj.alias === "Operatore";
+                const hasNoHistory = !userObj.history || Object.keys(userObj.history).length === 0;
+                const hasNoScore = !userObj.score || userObj.score === 0;
+                const hasNoCourse = !userObj.course || (!userObj.course.active_plan && (!userObj.course.completedLessons || userObj.course.completedLessons.length === 0));
 
-                if (isAliasMissingOrGeneric) {
+                // E' un fantasma SOLO SE ha un nome generico/mancante E non ha mai giocato/studiato!
+                if (isGenericName && hasNoHistory && hasNoScore && hasNoCourse) {
                     incompleteIds.add(id);
                 }
             }
 
-            // 2. Controlla presenze in presence (Rileva qualsiasi presenza orfana o priva di alias)
+            // 2. Controlla presenze in presence (Pulisce presenze orfane di utenti mai registrati)
             for (const [id, userObj] of Object.entries(presenceData)) {
                 if (!userObj || id === "352908417" || id === window.myId) continue;
                 const userProfile = usersData[id];
-                const isAliasMissingOrGeneric = !userProfile || !userProfile.alias || userProfile.hasSetCustomAlias !== true || userProfile.alias === "Giocatore" || userProfile.alias.startsWith("Giocatore");
 
-                if (isAliasMissingOrGeneric) {
+                if (!userProfile) {
                     incompleteIds.add(id);
+                } else {
+                    const isGenericName = !userProfile.alias || userProfile.alias === "Giocatore" || userProfile.alias.startsWith("Giocatore") || userProfile.alias === "Operatore";
+                    const hasNoHistory = !userProfile.history || Object.keys(userProfile.history).length === 0;
+                    const hasNoScore = !userProfile.score || userProfile.score === 0;
+                    if (isGenericName && hasNoHistory && hasNoScore) {
+                        incompleteIds.add(id);
+                    }
                 }
             }
 
@@ -1939,10 +1949,10 @@ window.setupBugSystem = function() {
                 return;
             }
 
-            const confirmMsg = `🧹 RILEVATI ${targetIds.length} UTENTI INCOMPLETI / SENZA ALIAS:\n\n` +
+            const confirmMsg = `🧹 RILEVATI ${targetIds.length} UTENTI FANTASMA INCOMPLETI (Senza Alias e con 0 Partite):\n\n` +
                 targetIds.slice(0, 10).map(id => `• ID: ${id}`).join('\n') +
                 (targetIds.length > 10 ? `\n... ed altri ${targetIds.length - 10} utenti` : "") +
-                `\n\nVuoi ELIMINARE DEFINITIVAMENTE dal database queste ${targetIds.length} schede utente senza Alias?`;
+                `\n\nVuoi ELIMINARE DEFINITIVAMENTE dal database queste ${targetIds.length} schede fantasma?`;
 
             if (!confirm(confirmMsg)) return;
 
