@@ -2506,6 +2506,7 @@ if (els.sendChatBtn) {
 if (els.chatInput) {
     els.chatInput.onkeypress = (e) => {
         if (e.key === 'Enter') els.sendChatBtn?.click();
+    };
 }
 
 if (els.sendLobbyChatBtn) {
