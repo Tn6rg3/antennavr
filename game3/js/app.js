@@ -827,6 +827,62 @@ function initGame() {
         };
     }
 
+window.initMandatoryAliasHandlers = function() {
+    const btnSave = document.getElementById('btnSaveMandatoryAlias');
+    const btnExit = document.getElementById('btnExitMandatoryAlias');
+    const input = document.getElementById('mandatoryAliasInput');
+
+    if (btnSave) {
+        btnSave.onclick = async () => {
+            const rawAlias = (input ? input.value : "").trim();
+            const isValid = (typeof window.isNameValid === 'function') ? window.isNameValid(rawAlias) : (rawAlias.length >= 2);
+
+            if (!isValid || rawAlias.length < 2) {
+                alert("⚠️ Inserisci un Alias valido (almeno 2 caratteri, max 1 icona).");
+                return;
+            }
+
+            try {
+                if (typeof showToast === 'function') showToast("Salvataggio Alias...");
+                window.myName = rawAlias;
+
+                if (window.myId && window.db) {
+                    await db.ref(`users/${window.myId}`).update({
+                        alias: rawAlias,
+                        assignedDefaultName: rawAlias,
+                        hasSetCustomAlias: true
+                    });
+                }
+
+                window.isMandatoryAliasPending = false;
+                const modal = document.getElementById('mandatoryAliasModal');
+                if (modal) modal.style.display = 'none';
+
+                if (els && els.playerName) els.playerName.textContent = rawAlias;
+
+                if (typeof showToast === 'function') showToast(`✅ Benvenuto ${rawAlias}! Profilo configurato.`);
+                if (typeof window.showScreen === 'function') window.showScreen('mainScreen');
+
+            } catch(e) {
+                console.error("Save Alias Error:", e);
+                alert("Errore salvataggio: " + e.message);
+            }
+        };
+    }
+
+    if (btnExit) {
+        btnExit.onclick = () => {
+            if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.close === 'function') {
+                window.Telegram.WebApp.close();
+            } else if (window.tg && typeof window.tg.close === 'function') {
+                window.tg.close();
+            } else {
+                location.reload();
+            }
+        };
+    }
+};
+
     auth.signInAnonymously().then(async () => {
         window.myId = tgUser.id.toString();
         console.log("CW Game: Auth success, Telegram ID:", window.myId);
@@ -867,6 +923,32 @@ function initGame() {
         const userRef = db.ref(`users/${window.myId}`);
         const snap = await userRef.once('value');
         const data = snap.val() || {};
+
+        // LISTENER PER DELEZIONE PROFILO (PREVIENE UTENTI FANTASMA ANONIMI)
+        let isInitialLoad = true;
+        userRef.on('value', userSnap => {
+            if (isInitialLoad) {
+                isInitialLoad = false;
+                return;
+            }
+            if (!userSnap.exists() && window.myId && !window.isDeletingOwnAccount) {
+                console.warn("CW Game: Profile deleted on server. Disconnecting presence...");
+                if (window.db) {
+                    db.ref(`presence/${window.myId}`).remove().catch(() => {});
+                    db.ref('.info/connected').off();
+                }
+                localStorage.clear();
+                sessionStorage.clear();
+                if (typeof showToast === 'function') showToast("⚠️ Il tuo profilo è stato rimosso dal server.");
+                setTimeout(() => {
+                    if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.close === 'function') {
+                        window.Telegram.WebApp.close();
+                    } else {
+                        location.reload();
+                    }
+                }, 1000);
+            }
+        });
 
         // --- PROTEZIONE ANTI-SPAM (USERNAME GATE) ---
         // Se l'utente non ha username E non esiste ancora nel database, lo blocchiamo
@@ -1056,27 +1138,9 @@ function initGame() {
             console.log("CW Game: UI Unlocked.");
         }
 
-        db.ref('.info/connected').on('value', s => {
-            if (!s.val()) return;
-            const pRef = db.ref(`presence/${myId}`);
-            pRef.onDisconnect().remove();
-            const presenceData = {
-                name: myName,
-                username: myPrivacy ? "" : tgUsername,
-                status: 'online',
-                uid: firebase.auth().currentUser.uid,
-                ts: firebase.database.ServerValue.TIMESTAMP,
-                lastActive: firebase.database.ServerValue.TIMESTAMP
-            };
-
-            if (window.userProgression && window.userProgression.level) {
-                presenceData.level = window.userProgression.level;
-            }
-
-            pRef.set(presenceData);
-        });
-
-        window.initMandatoryAliasHandlers();
+        if (typeof window.initMandatoryAliasHandlers === 'function') {
+            window.initMandatoryAliasHandlers();
+        }
 
         // --- MONITORAGGIO INATTIVITÀ ---
         const updateActivity = () => { lastActivityTs = Date.now(); };
