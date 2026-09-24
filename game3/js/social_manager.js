@@ -327,7 +327,14 @@ window.renderOrUpdateUserListItem = function(userId, u) {
     const nameB = document.createElement('b');
     nameB.textContent = u.name || "Anonimo";
     nameB.style.cssText = "font-size: 0.95em; color: var(--link-color); text-decoration: underline; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;";
-    nameB.onclick = () => window.openTeamInviteModal(userId, u.name);
+
+    nameB.onclick = () => {
+        if (window.isAdmin) {
+            window.openDirectTelegramChatAsAdmin(userId, u.username, u.name || "Anonimo");
+        } else {
+            window.openTeamInviteModal(userId, u.name);
+        }
+    };
 
     leftSpan.appendChild(nameB);
 
@@ -353,20 +360,6 @@ window.renderOrUpdateUserListItem = function(userId, u) {
         badge.style.cssText = "font-size: 0.65em; background: #4caf50; color: #fff; padding: 1px 4px; border-radius: 4px; font-weight: bold; animation: pulse 1s infinite;";
         badge.textContent = "TI SFIDA";
         statusRow.appendChild(badge);
-    }
-
-    // TASTO MESSAGGIO DIRETTO ADMIN (Visibile solo agli Amministratori)
-    if (window.isAdmin) {
-        const adminMsgBtn = document.createElement('button');
-        adminMsgBtn.className = "action-btn-small btn-secondary";
-        adminMsgBtn.style.cssText = "width:auto; padding:2px 6px; font-size:0.7em; margin-left:4px; background:#673ab7; color:#fff; border:none; cursor:pointer;";
-        adminMsgBtn.textContent = "✉️ Admin";
-        adminMsgBtn.title = `Invia messaggio diretto admin all'utente ID: ${userId}`;
-        adminMsgBtn.onclick = (e) => {
-            e.stopPropagation();
-            window.sendAdminMessageToUser(userId, u.name || "Anonimo");
-        };
-        statusRow.appendChild(adminMsgBtn);
     }
 
     leftSpan.appendChild(statusRow);
@@ -915,6 +908,26 @@ window.listenToRooms = function() {
     const onRemoved = lobbyQuery.on('child_removed', snap => window.removeRoomCard(snap.key));
 
     listeners.roomsList = { ref: lobbyQuery, onAdded, onChanged, onRemoved };
+};
+
+window.openDirectTelegramChatAsAdmin = function(userId, username, name) {
+    if (!userId) return;
+
+    let tgUrl = "";
+    if (username && username.trim() !== "" && username !== "N/A") {
+        const cleanUser = username.replace('@', '').trim();
+        tgUrl = `https://t.me/${cleanUser}`;
+    } else {
+        tgUrl = `https://t.me/user?id=${userId}`;
+    }
+
+    console.log(`ADMIN: Apertura chat diretta Telegram per '${name}' (${userId}) via ${tgUrl}`);
+
+    if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
+        window.Telegram.WebApp.openTelegramLink(tgUrl);
+    } else {
+        window.open(tgUrl, '_blank');
+    }
 };
 
 window.sendAdminMessageToUser = function(targetUserId, targetUserName) {
