@@ -1015,6 +1015,11 @@ window.isValidTelegramId = function(id) {
     return strId !== "" && strId !== "undefined" && strId !== "null" && strId !== "0" && strId.length >= 3;
 };
 
+        // --- CARICAMENTO PROFILO UTENTE ---
+        const userRef = db.ref(`users/${window.myId}`);
+        const snap = await userRef.once('value');
+        const data = snap.val() || {};
+
         // --- PROTEZIONE ANTI-SPAM (USERNAME GATE) ---
         // Se l'utente non ha username E non esiste ancora nel database, lo blocchiamo
         if (!tgUsername && !snap.exists()) {
