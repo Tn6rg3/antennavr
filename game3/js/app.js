@@ -1527,17 +1527,6 @@ window.updateAdminBadge = async function() {
             badge.style.display = 'none';
         }
     }
-
-    if (courseBadge) {
-        if (pendingTutorRequestsCount > 0) {
-            courseBadge.textContent = pendingTutorRequestsCount;
-            courseBadge.style.display = 'flex';
-            courseBadge.classList.add('badge-active');
-        } else {
-            courseBadge.style.display = 'none';
-            courseBadge.classList.remove('badge-active');
-        }
-    }
 };
 
 window.loadAdminBugs = function() {

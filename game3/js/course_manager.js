@@ -249,16 +249,9 @@ window.checkCourseInactivity = function() {
 
     if (window.courseData.progress.last_inactivity_check === todayStr) return;
 
-    const lastSession = window.courseData.progress.last_session_date;
-    if (!lastSession) {
-        window.courseData.progress.last_inactivity_check = todayStr;
-        window.saveCourseState();
-        return;
-    }
-
     const isExpelled = window.checkStudentAutomaticExpulsion(window.myId, window.courseData);
     if (isExpelled) {
-        alert("OPERATORE ESPULSO DAL CORSO PER INATTIVITÀ.\n\nNon ti sei collegato dall'ultima lezione (" + lastSession + "). Il tuo piano di studi è stato revocato automaticamente.");
+        alert("OPERATORE ESPULSO DAL CORSO PER INATTIVITÀ.\n\nNon ti sei allenato di recente. Il tuo piano di studi è stato revocato automaticamente per inattività prolungata.");
         window.updateGlobalEnrollmentRecord(false);
         window.courseData = window.getDefaultCourseData();
         window.saveCourseState();
@@ -272,36 +265,44 @@ window.checkCourseInactivity = function() {
 
 window.checkStudentAutomaticExpulsion = function(uid, cData) {
     if (!uid || !cData || cData.active_plan !== true || !db) return false;
-    const lastSession = cData.progress && cData.progress.last_session_date;
-    if (!lastSession) return false;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const lastDate = new Date(lastSession);
-    lastDate.setHours(0, 0, 0, 0);
 
-    let missedTrainingDays = 0;
-    let tempDate = new Date(lastDate);
-    tempDate.setDate(tempDate.getDate() + 1);
+    const lastSession = cData.progress && cData.progress.last_session_date;
+    const enrolledDate = cData.progress && cData.progress.enrolled_date;
 
-    while (tempDate < today) {
-        const dayIdx = (tempDate.getDay() + 6) % 7;
-        const dayData = cData.weekly_schedule ? cData.weekly_schedule[dayIdx] : null;
-        if (dayData && dayData.sessions.some(s => s.type !== 'REST')) {
-            missedTrainingDays++;
-        }
-        tempDate.setDate(tempDate.getDate() + 1);
+    let referenceDate = null;
+    if (lastSession) {
+        referenceDate = new Date(lastSession);
+    } else if (enrolledDate) {
+        referenceDate = new Date(enrolledDate);
+    } else {
+        referenceDate = new Date();
+        referenceDate.setDate(referenceDate.getDate() - 3);
+    }
+    referenceDate.setHours(0, 0, 0, 0);
+
+    const diffMs = today.getTime() - referenceDate.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    // Calcolo richiami automatici in base ai giorni di inattività (1 richiamo ogni 2 giorni di fermo)
+    const missedReminders = Math.max(0, Math.floor(diffDays / 2));
+    const existingReminders = (cData.progress && cData.progress.reminders_count) || 0;
+    const totalReminders = Math.min(3, Math.max(existingReminders, missedReminders));
+
+    if (totalReminders > existingReminders) {
+        db.ref(`users/${uid}/course/progress/reminders_count`).set(totalReminders);
     }
 
-    const currentReminders = (cData.progress && cData.progress.reminders_count || 0) + missedTrainingDays;
-    if (currentReminders >= 3) {
-        console.log("Course: Expelling inactive user " + uid + " due to " + currentReminders + " missed reminders.");
-        db.ref("users/" + uid + "/course").update({
+    if (totalReminders >= 3) {
+        console.log("Course: Auto-expelling inactive student " + uid + " due to " + totalReminders + " reminders (" + diffDays + " days inactive).");
+        db.ref(`users/${uid}/course`).update({
             active_plan: false,
-            "progress/reminders_count": currentReminders,
-            expelled_reason: "Inattività"
+            "progress/reminders_count": totalReminders,
+            expelled_reason: "Inattività prolungata"
         });
-        db.ref("courseActiveEnrollments/" + uid).remove();
+        db.ref(`courseActiveEnrollments/${uid}`).remove();
         return true;
     }
     return false;
