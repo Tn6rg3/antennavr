@@ -152,12 +152,16 @@ document.addEventListener('visibilitychange', () => {
 
 // --- GESTIONE PRESENZA E FOCUS (HEARTBEAT) ---
 const updateAppStatus = (isFocused) => {
-    if (window.myId && window.db) {
-        db.ref(`presence/${window.myId}`).update({
-            isFocused: isFocused,
-            lastActive: firebase.database.ServerValue.TIMESTAMP
-        });
-    }
+    if (window.isMandatoryAliasPending || window.isUserBanned || !window.myId || !window.db) return;
+
+    db.ref(`presence/${window.myId}`).once('value', s => {
+        if (s.exists()) {
+            db.ref(`presence/${window.myId}`).update({
+                isFocused: isFocused,
+                lastActive: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+    });
 };
 
 // Heartbeat ogni 15 secondi per confermare la presenza
@@ -1214,9 +1218,13 @@ window.initMandatoryAliasHandlers = function() {
                 // Rimuoviamo anche la presenza per sicurezza
                 db.ref(`presence/${myId}`).remove();
                 // Fermiamo l'aggiornamento automatico fino alla prossima interazione
-            } else if (db && myId) {
-                // Aggiorna il timestamp sul server ogni minuto per mostrare che siamo vivi
-                db.ref(`presence/${myId}/lastActive`).set(firebase.database.ServerValue.TIMESTAMP);
+            } else if (db && myId && !window.isMandatoryAliasPending && !window.isUserBanned) {
+                // Aggiorna il timestamp sul server ogni minuto solo se il nodo presenza esiste ancora
+                db.ref(`presence/${myId}`).once('value', s => {
+                    if (s.exists()) {
+                        db.ref(`presence/${myId}/lastActive`).set(firebase.database.ServerValue.TIMESTAMP);
+                    }
+                });
             }
         }, 60000); // Controllo ogni minuto
 
