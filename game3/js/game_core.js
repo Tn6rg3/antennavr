@@ -2292,63 +2292,6 @@ document.addEventListener('visibilitychange', () => {
                     window.replayCurrentWord();
                 }
             }, 500);
-            return;
-        }
-    }
-});
-
-                const missedWord = gameWords[wordIndex] ? gameWords[wordIndex].toUpperCase() : "-";
-
-                matchDetailsArray.push({
-                    real: missedWord,
-                    typed: "TIMEOUT (SCHERMO)",
-                    points: 0,
-                    wpm: currentWpm,
-                    ms: 0,
-                    correct: false,
-                    usedReplay: false
-                });
-
-                if (window.currentMode === 'daily_challenge' && wordIndex >= 20) {
-                    showToast("❌ Timeout oltre la 20ª parola! La tua Sfida Giornaliera si conclude qui.");
-                    if (nextWordTimeout) clearTimeout(nextWordTimeout);
-                    setTimeout(() => {
-                        window.finishGame();
-                    }, 1200);
-                    return;
-                }
-
-                if (els.tableBody) {
-                    const tr = document.createElement('tr');
-                    const tdTyped = document.createElement('td');
-                    tdTyped.textContent = "TIMEOUT";
-                    tdTyped.style.color = "#d32f2f";
-                    tdTyped.style.fontSize = "0.8em";
-
-                    const tdReal = document.createElement('td');
-                    tdReal.innerHTML = "";
-      const b = document.createElement('b');
-      b.textContent = missedWord;
-      tdReal.appendChild(b);
-
-                    const tdPoints = document.createElement('td');
-                    tdPoints.style.color = "#d32f2f";
-                    tdPoints.style.fontWeight = 'bold';
-                    tdPoints.textContent = "0";
-
-                    tr.appendChild(tdTyped);
-                    tr.appendChild(tdReal);
-                    tr.appendChild(tdPoints);
-                    els.tableBody.appendChild(tr);
-
-                    if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
-                }
-
-                wordIndex++;
-                setTimeout(() => {
-                    if (gameRunning) window.playNextWord();
-                }, 800);
-            }
         }
     }
 });
