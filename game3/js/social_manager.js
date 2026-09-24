@@ -292,12 +292,17 @@ window.refreshOnlineUsersList = function() {
 };
 
 window.renderOrUpdateUserListItem = function(userId, u) {
-    if (!els.onlineUsersList || userId === myId) return;
+    const isValId = (typeof window.isValidTelegramId === 'function') ? window.isValidTelegramId(userId) : (userId && userId !== 'undefined' && userId !== 'null' && userId !== '0');
+
+    if (!els.onlineUsersList || !isValId || userId === myId || userId === window.myId) {
+        window.removeUserListItem(userId);
+        return;
+    }
 
     // Se l'utente ha attivato la privacy online o e offline da piu di 10 minuti, rimuovilo
     const now = Date.now();
     const lastActive = u.lastActive || u.ts || 0;
-    if (u.privacyOnline || u.status === 'offline' || (now - lastActive > 600000)) {
+    if (!u || u.privacyOnline || u.status === 'offline' || (now - lastActive > 600000)) {
         window.removeUserListItem(userId);
         delete window.onlineUsersCache[userId];
         return;
@@ -410,6 +415,30 @@ window.removeUserListItem = function(userId) {
     }
 };
 
+window.logAdminPresenceEvent = function(eventType, uid, val) {
+    const logContainer = document.getElementById('adminPresenceLogList');
+    if (!logContainer) return;
+
+    const timeStr = new Date().toLocaleTimeString('it-IT');
+    const uName = val ? (val.name || val.username || 'Senza Nome') : 'Rimozione';
+    const isFocused = val ? (val.isFocused !== false) : false;
+
+    let icon = "🟡";
+    let color = "#ffeb3b";
+
+    if (eventType === 'child_added') {
+        icon = "🟢"; color = "#00ff66";
+    } else if (eventType === 'child_removed') {
+        icon = "🔴"; color = "#ff4444";
+    }
+
+    const logEntry = document.createElement('div');
+    logEntry.style.cssText = `margin-bottom:3px; border-bottom:1px solid #222; color:${color};`;
+    logEntry.innerHTML = `[${timeStr}] ${icon} <b>${eventType.toUpperCase()}</b> | ID: <code>${uid}</code> | Nome: '${uName}' ${val ? '| Focus: ' + isFocused : ''}`;
+
+    logContainer.prepend(logEntry);
+};
+
 window.listenToOnlineUsers = function() {
     if (listeners.presence) return;
 
@@ -418,14 +447,23 @@ window.listenToOnlineUsers = function() {
     const presenceRef = db.ref('presence').limitToLast(25);
 
     const onAdded = presenceRef.on('child_added', snap => {
+        if (window.isAdmin) {
+            window.logAdminPresenceEvent('child_added', snap.key, snap.val());
+        }
         if (snap.key !== myId) window.renderOrUpdateUserListItem(snap.key, snap.val());
     });
 
     const onChanged = presenceRef.on('child_changed', snap => {
+        if (window.isAdmin) {
+            window.logAdminPresenceEvent('child_changed', snap.key, snap.val());
+        }
         if (snap.key !== myId) window.renderOrUpdateUserListItem(snap.key, snap.val());
     });
 
     const onRemoved = presenceRef.on('child_removed', snap => {
+        if (window.isAdmin) {
+            window.logAdminPresenceEvent('child_removed', snap.key, null);
+        }
         delete window.onlineUsersCache[snap.key];
         window.removeUserListItem(snap.key);
     });

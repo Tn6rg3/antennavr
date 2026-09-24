@@ -1728,6 +1728,11 @@ window.setupBugSystem = function() {
         }
 
         try {
+            // Garantisce il mapping di sicurezza Admin prima di qualsiasi rimozione
+            if (firebase.auth().currentUser && window.myId) {
+                await db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).set(window.myId).catch(() => {});
+            }
+
             if (typeof showToast === 'function') showToast("Ricerca utenti nel database...");
             const candidates = await window.findAdminUserCandidates(inputVal);
 
@@ -1817,6 +1822,11 @@ window.setupBugSystem = function() {
         }
 
         try {
+            // Garantisce il mapping di sicurezza Admin prima di qualsiasi blocco
+            if (firebase.auth().currentUser && window.myId) {
+                await db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).set(window.myId).catch(() => {});
+            }
+
             if (typeof showToast === 'function') showToast("Ricerca utenti per blocco...");
             const candidates = await window.findAdminUserCandidates(inputVal);
 
@@ -1873,40 +1883,82 @@ window.setupBugSystem = function() {
         try {
             if (typeof showToast === 'function') showToast("Scansione utenti incompleti in corso...");
 
-            const usersSnap = await db.ref('users').once('value');
-            if (!usersSnap.exists()) {
-                alert("Nessun utente trovato nel database.");
-                return;
+            // Garantisce il mapping di sicurezza Admin prima di qualsiasi pulizia
+            if (firebase.auth().currentUser && window.myId) {
+                await db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).set(window.myId).catch(() => {});
             }
 
-            const usersData = usersSnap.val() || {};
-            let incompleteIds = [];
+            const [usersSnap, presenceSnap] = await Promise.all([
+                db.ref('users').once('value').catch(() => null),
+                db.ref('presence').once('value').catch(() => null)
+            ]);
 
+            const usersData = (usersSnap && usersSnap.exists()) ? usersSnap.val() : {};
+            const presenceData = (presenceSnap && presenceSnap.exists()) ? presenceSnap.val() : {};
+
+            let incompleteIds = new Set();
+
+            // 1. Controlla profili in users
             for (const [id, userObj] of Object.entries(usersData)) {
-                if (!userObj) continue;
-
-                // Non cancellare l'utente o Admin corrente in sessione
-                if (id === window.myId) continue;
+                if (!userObj || id === "352908417" || id === window.myId) continue;
 
                 const hasCustomAlias = !!(userObj.hasSetCustomAlias === true || (userObj.alias && !userObj.alias.startsWith("Giocatore")));
                 const hasHistory = !!(userObj.history && Object.keys(userObj.history).length > 0);
                 const hasScore = !!(userObj.score && userObj.score > 0);
 
-                // Se l'utente non ha impostato l'Alias ed ha 0 partite giocate e 0 punti:
                 if (!hasCustomAlias && !hasHistory && !hasScore) {
-                    incompleteIds.push({ id, name: userObj.alias || userObj.assignedDefaultName || "Incompleto" });
+                    incompleteIds.add(id);
                 }
             }
 
-            if (incompleteIds.length === 0) {
+            // 2. Controlla presenze orfane in presence
+            for (const [id, userObj] of Object.entries(presenceData)) {
+                if (!userObj || id === "352908417" || id === window.myId) continue;
+                const userProfile = usersData[id];
+                const hasCustomAlias = userProfile && (userProfile.hasSetCustomAlias === true || (userProfile.alias && !userProfile.alias.startsWith("Giocatore")));
+                if (!hasCustomAlias) {
+                    incompleteIds.add(id);
+                }
+            }
+
+            const targetIds = Array.from(incompleteIds);
+
+            if (targetIds.length === 0) {
                 alert("✨ Nessun utente fantasma/incompleto trovato nel database! Il database è già pulito.");
                 return;
             }
 
-            const confirmMsg = `🧹 RILEVATI ${incompleteIds.length} UTENTI INCOMPLETI FANTASMA:\n\n` +
-                incompleteIds.slice(0, 10).map(u => `• ID: ${u.id} (${u.name})`).join('\n') +
-                (incompleteIds.length > 10 ? `\n... ed altri ${incompleteIds.length - 10} utenti` : "") +
-                `\n\nVuoi ELIMINARE DEFINITIVAMENTE questi ${incompleteIds.length} profili incompleti dal database?`;
+            const confirmMsg = `🧹 RILEVATI ${targetIds.length} UTENTI INCOMPLETI FANTASMA:\n\n` +
+                targetIds.slice(0, 10).map(id => `• ID: ${id}`).join('\n') +
+                (targetIds.length > 10 ? `\n... ed altri ${targetIds.length - 10} utenti` : "") +
+                `\n\nVuoi ELIMINARE DEFINITIVAMENTE queste ${targetIds.length} schede dal database?`;
+
+            if (!confirm(confirmMsg)) return;
+
+            if (typeof showToast === 'function') showToast(`Rimozione di ${targetIds.length} profili in corso...`);
+
+            const safeRemove = (ref) => ref.remove().catch(() => {});
+
+            for (const targetId of targetIds) {
+                await Promise.all([
+                    safeRemove(db.ref(`users/${targetId}`)),
+                    safeRemove(db.ref(`presence/${targetId}`)),
+                    safeRemove(db.ref(`courseActiveEnrollments/${targetId}`))
+                ]);
+                delete window.onlineUsersCache[targetId];
+                if (typeof window.removeUserListItem === 'function') window.removeUserListItem(targetId);
+            }
+
+            if (typeof window.refreshOnlineUsersList === 'function') window.refreshOnlineUsersList();
+
+            alert(`✅ Pulizia completata! Rimosse ${targetIds.length} schede utente incomplete dal database.`);
+            if (typeof showToast === 'function') showToast(`✅ Rimosse ${targetIds.length} schede utente fantasma.`);
+
+        } catch(err) {
+            console.error("Admin Cleanup Error:", err);
+            alert("Errore durante la pulizia: " + err.message);
+        }
+    };
 
             if (!confirm(confirmMsg)) return;
 
