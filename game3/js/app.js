@@ -910,8 +910,8 @@ window.isValidTelegramId = function(id) {
         // --- 1. CONTROLLO BAN BLACKLIST PERMANENTE IMMEDIATO (PRIMA DELLA PRESENZA) ---
         try {
             const [banSnap1, banSnap2] = await Promise.all([
-                db.ref(`appConfig/bannedUsers/${window.myId}`).once('value').catch(() => null),
-                db.ref(`bannedUsers/${window.myId}`).once('value').catch(() => null)
+                db.ref(`appConfig/bannedUsers/${window.myId}`).once('value'),
+                db.ref(`bannedUsers/${window.myId}`).once('value')
             ]);
 
             const isBanned = (banSnap1 && banSnap1.exists() && banSnap1.val() === true) ||
@@ -939,7 +939,9 @@ window.isValidTelegramId = function(id) {
                 }, 800);
                 return; // Interrompe l'avvio incondizionatamente!
             }
-        } catch(e) {}
+        } catch(e) {
+            console.warn("Verify Ban Check Note:", e);
+        }
 
         // --- 2. SISTEMA DI MAPPING E PRESENZA (Solo se ID valido e NON bannato) ---
         db.ref('.info/connected').on('value', async (s) => {
@@ -1005,7 +1007,7 @@ window.isValidTelegramId = function(id) {
 
         // LISTENER IN TEMPO REALE BAN ADMIN (CHIUSURA ISTANTANEA SE BANNATO DALL'ADMIN)
         db.ref(`appConfig/bannedUsers/${window.myId}`).on('value', banSnap => {
-            if (banSnap.exists() && banSnap.val() === true) {
+            if (banSnap && banSnap.exists() && banSnap.val() === true) {
                 window.isUserBanned = true;
                 console.warn("CW Game: Instant Admin Ban triggered for ID:", window.myId);
                 if (window.db) {
@@ -1024,6 +1026,8 @@ window.isValidTelegramId = function(id) {
                     }
                 }, 800);
             }
+        }, error => {
+            console.error("Realtime ban listener error:", error);
         });
 
         // --- PROTEZIONE ANTI-SPAM (USERNAME GATE) ---
