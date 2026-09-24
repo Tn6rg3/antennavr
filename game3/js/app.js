@@ -1793,8 +1793,15 @@ window.setupBugSystem = function() {
             const confirmText = `⛔ CONFERMA BLOCCO PERMANENTE UTENTE (BAN ADMIN)\n\nUtente Trovato:\n👤 Nome / Alias: ${targetName}\n🆔 Telegram ID: ${targetId}\n\nVuoi inserire questo ID nella BLACKLIST PERMANENTE ed eliminare i suoi dati? L'utente non potrà mai più accedere al gioco.`;
             if (!confirm(confirmText)) return;
 
-            // 1. Salva in Blacklist Permanente su Firebase
-            await db.ref(`appConfig/bannedUsers/${targetId}`).set(true);
+            // 1. Salva in Blacklist Permanente su Firebase (Sia su appConfig che su bannedUsers root)
+            try {
+                await Promise.all([
+                    db.ref(`appConfig/bannedUsers/${targetId}`).set(true).catch(() => {}),
+                    db.ref(`bannedUsers/${targetId}`).set(true).catch(() => {})
+                ]);
+            } catch(bErr) {
+                console.warn("BannedUsers write note:", bErr);
+            }
 
             // 2. Elimina i suoi dati e profilo
             if (typeof window.adminDeleteUserByName === 'function') {
