@@ -824,7 +824,7 @@ window.updatePushBtnUI = function(btn) {
 
 window.startApp = startApp;
 
-function initGame() {
+async function initGame() {
     const firebaseConfig = {
         apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk",
         authDomain: "telegrafiabot.firebaseapp.com",
