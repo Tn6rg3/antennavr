@@ -291,8 +291,7 @@ window.refreshOnlineUsersList = function() {
     });
 };
 
-window.renderOrUpdateUserListItem = function(userId, u) {
-    
+window.renderOrUpdateUserListItem = async function(userId, u) {
     const isValId = (typeof window.isValidTelegramId === 'function') ? window.isValidTelegramId(userId) : (userId && userId !== 'undefined' && userId !== 'null' && userId !== '0');
 
     if (!els.onlineUsersList || !isValId || userId === myId || userId === window.myId) {
@@ -300,12 +299,30 @@ window.renderOrUpdateUserListItem = function(userId, u) {
         return;
     }
 
+    // FILTRO RIGIDO BLACKLIST: mai mostrare utenti in blacklist
+    try {
+        if (db) {
+            const [banConfigSnap, banRootSnap] = await Promise.all([
+                db.ref(`appConfig/bannedUsers/${userId}`).once('value').catch(() => null),
+                db.ref(`bannedUsers/${userId}`).once('value').catch(() => null)
+            ]);
+
+            const isBanned = (banConfigSnap && banConfigSnap.val() === true) || (banRootSnap && banRootSnap.val() === true);
+
+            if (isBanned) {
+                console.warn("Presence: utente bannato filtrato dalla lista online:", userId);
+                window.removeUserListItem(userId);
+                db.ref(`presence/${userId}`).remove().catch(() => {});
+                return;
+            }
+        }
+    } catch (err) {}
+
     // Se l'utente ha attivato la privacy online o e offline da piu di 10 minuti, rimuovilo
     const now = Date.now();
-    const lastActive = u.lastActive || u.ts || 0;
+    const lastActive = u ? (u.lastActive || u.ts || 0) : 0;
     if (!u || u.privacyOnline || u.status === 'offline' || (now - lastActive > 600000)) {
         window.removeUserListItem(userId);
-        delete window.onlineUsersCache[userId];
         return;
     }
 
@@ -447,18 +464,22 @@ window.listenToOnlineUsers = function() {
     // OTTIMIZZAZIONE: Carichiamo solo i 25 utenti più attivi invece di tutti (risparmio download massiccio)
     const presenceRef = db.ref('presence').limitToLast(25);
 
-    const onAdded = presenceRef.on('child_added', snap => {
+    const onAdded = presenceRef.on('child_added', async snap => {
         if (window.isAdmin) {
             window.logAdminPresenceEvent('child_added', snap.key, snap.val());
         }
-        if (snap.key !== myId) window.renderOrUpdateUserListItem(snap.key, snap.val());
+        if (snap.key !== myId && snap.key !== window.myId) {
+            await window.renderOrUpdateUserListItem(snap.key, snap.val());
+        }
     });
 
-    const onChanged = presenceRef.on('child_changed', snap => {
+    const onChanged = presenceRef.on('child_changed', async snap => {
         if (window.isAdmin) {
             window.logAdminPresenceEvent('child_changed', snap.key, snap.val());
         }
-        if (snap.key !== myId) window.renderOrUpdateUserListItem(snap.key, snap.val());
+        if (snap.key !== myId && snap.key !== window.myId) {
+            await window.renderOrUpdateUserListItem(snap.key, snap.val());
+        }
     });
 
     const onRemoved = presenceRef.on('child_removed', snap => {

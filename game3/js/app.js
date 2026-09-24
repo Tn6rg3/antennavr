@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.224";
+const APP_VERSION = "20260807.223";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1853,17 +1853,29 @@ window.setupBugSystem = function() {
             const confirmText = `⛔ CONFERMA BLOCCO PERMANENTE UTENTE (BAN ADMIN)\n\nUtente Trovato:\n👤 Nome / Alias: ${targetName}\n🆔 Telegram ID: ${targetId}\n\nVuoi inserire questo ID nella BLACKLIST PERMANENTE ed eliminare i suoi dati? L'utente non potrà mai più accedere al gioco.`;
             if (!confirm(confirmText)) return;
 
-            // 1. Salva in Blacklist Permanente su Firebase (Sia su appConfig che su bannedUsers root)
+            // 1. Salva in Blacklist Permanente su Firebase (Sia su appConfig che su bannedUsers root) ed elimina la presenza
             try {
+                const banUpdates = {};
+                banUpdates[`appConfig/bannedUsers/${targetId}`] = true;
+                banUpdates[`bannedUsers/${targetId}`] = true;
+                banUpdates[`presence/${targetId}`] = null;
+
+                await db.ref().update(banUpdates);
+            } catch(bErr) {
+                console.warn("Atomic Ban write note, running fallback:", bErr);
                 await Promise.all([
                     db.ref(`appConfig/bannedUsers/${targetId}`).set(true).catch(() => {}),
-                    db.ref(`bannedUsers/${targetId}`).set(true).catch(() => {})
+                    db.ref(`bannedUsers/${targetId}`).set(true).catch(() => {}),
+                    db.ref(`presence/${targetId}`).remove().catch(() => {})
                 ]);
-            } catch(bErr) {
-                console.warn("BannedUsers write note:", bErr);
             }
 
-            // 2. Elimina i suoi dati e profilo
+            // 2. Pulisce la cache locale delle presenze
+            if (window.onlineUsersCache) delete window.onlineUsersCache[targetId];
+            if (typeof window.removeUserListItem === 'function') window.removeUserListItem(targetId);
+            if (typeof window.refreshOnlineUsersList === 'function') window.refreshOnlineUsersList();
+
+            // 3. Elimina i suoi dati e profilo
             if (typeof window.adminDeleteUserByName === 'function') {
                 await window.adminDeleteUserByName(targetId);
             }
