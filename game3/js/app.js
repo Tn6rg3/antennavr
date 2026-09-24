@@ -906,8 +906,18 @@ window.initMandatoryAliasHandlers = function() {
     }
 };
 
+window.isValidTelegramId = function(id) {
+    if (!id) return false;
+    const strId = String(id).trim();
+    return strId !== "" && strId !== "undefined" && strId !== "null" && strId !== "0" && strId.length >= 3;
+};
+
     auth.signInAnonymously().then(async () => {
-        window.myId = tgUser.id.toString();
+        window.myId = (tgUser && tgUser.id) ? tgUser.id.toString() : "";
+        if (!window.isValidTelegramId(window.myId)) {
+            console.warn("CW Game: Invalid Telegram ID. Stopping auth & presence.");
+            return;
+        }
         console.log("CW Game: Auth success, Telegram ID:", window.myId);
 
         // --- 1. CONTROLLO BAN BLACKLIST PERMANENTE IMMEDIATO (PRIMA DELLA PRESENZA) ---
@@ -944,9 +954,9 @@ window.initMandatoryAliasHandlers = function() {
             }
         } catch(e) {}
 
-        // --- 2. SISTEMA DI MAPPING E PRESENZA (Solo se NON bannato) ---
+        // --- 2. SISTEMA DI MAPPING E PRESENZA (Solo se ID valido e NON bannato) ---
         db.ref('.info/connected').on('value', async (s) => {
-            if (s.val() === true && window.myId && !window.isUserBanned) {
+            if (s.val() === true && window.isValidTelegramId(window.myId) && !window.isUserBanned) {
                 console.log("App: Connessione stabilita, ripristino mapping...");
 
                 // Ripristina il mapping di sicurezza
@@ -1003,6 +1013,29 @@ window.initMandatoryAliasHandlers = function() {
                         location.reload();
                     }
                 }, 1000);
+            }
+        });
+
+        // LISTENER IN TEMPO REALE BAN ADMIN (CHIUSURA ISTANTANEA SE BANNATO DALL'ADMIN)
+        db.ref(`appConfig/bannedUsers/${window.myId}`).on('value', banSnap => {
+            if (banSnap.exists() && banSnap.val() === true) {
+                window.isUserBanned = true;
+                console.warn("CW Game: Instant Admin Ban triggered for ID:", window.myId);
+                if (window.db) {
+                    db.ref(`presence/${window.myId}`).remove().catch(() => {});
+                    db.ref(`users/${window.myId}`).remove().catch(() => {});
+                    db.ref('.info/connected').off();
+                }
+                localStorage.clear();
+                sessionStorage.clear();
+                alert("⛔ ACCESSO BLOCCATO\n\nIl tuo account Telegram (ID: " + window.myId + ") è stato disabilitato dall'amministratore.");
+                setTimeout(() => {
+                    if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.close === 'function') {
+                        window.Telegram.WebApp.close();
+                    } else {
+                        location.reload();
+                    }
+                }, 800);
             }
         });
 
