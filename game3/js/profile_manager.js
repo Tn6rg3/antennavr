@@ -1412,17 +1412,6 @@ if (els.deleteDataBtn) {
         }
     };
 }
-            showToast("Profilo eliminato con successo.");
-
-            localStorage.clear();
-            setTimeout(() => {
-                if (window.tg && typeof window.tg.close === 'function') window.tg.close();
-                else location.reload();
-            }, 1500);
-
-        } catch (e) {
-            console.error("Delete Data Error:", e);
-            alert("Errore durante l'eliminazione: " + e.message);
         }
     };
 }
