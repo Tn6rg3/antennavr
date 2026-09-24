@@ -1112,13 +1112,13 @@ window.isValidTelegramId = function(id) {
             window.myPushNotifs = data.pushNotifications;
         }
 
-        if (needsUpdate) {
+        if (needsUpdate && !window.isMandatoryAliasPending && !window.isUserBanned) {
             await userRef.update(updates);
             console.log("Privacy: Applied default settings (Privacy ON, Alias set).");
         }
 
-        if (!snap.exists() || !data.welcomed) {
-            // Aggiorniamo welcomed e i dati base
+        if ((!snap.exists() || !data.welcomed) && !window.isMandatoryAliasPending && !window.isUserBanned) {
+            // Aggiorniamo welcomed e i dati base solo a configurazione ultimata
             await userRef.update({ welcomed: true, createdAt: firebase.database.ServerValue.TIMESTAMP });
             window.isNewUserWaitingWelcome = true; // Flag per coordinare la sfida giornaliera
             if (els.welcomeNewUserModal) els.welcomeNewUserModal.style.display = 'flex';
@@ -1965,8 +1965,6 @@ window.setupBugSystem = function() {
                 }
 
                 if (window.onlineUsersCache) delete window.onlineUsersCache[targetId];
-                if (typeof window.removeUserListItem === 'function') window.removeUserListItem(targetId);
-            }
                 if (typeof window.removeUserListItem === 'function') window.removeUserListItem(targetId);
             }
 
