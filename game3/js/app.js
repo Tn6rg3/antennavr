@@ -858,6 +858,25 @@ window.initMandatoryAliasHandlers = function() {
                 const modal = document.getElementById('mandatoryAliasModal');
                 if (modal) modal.style.display = 'none';
 
+                // SCRITTURA PRESENZA ONLINE SOLO ORA CHE L'ALIAS E' STATO CONFERMATO!
+                if (window.myId && window.db) {
+                    const pRef = db.ref(`presence/${window.myId}`);
+                    pRef.onDisconnect().remove();
+                    pRef.set({
+                        name: rawAlias,
+                        username: window.myPrivacy ? "" : tgUsername,
+                        status: 'online',
+                        uid: firebase.auth().currentUser ? firebase.auth().currentUser.uid : "",
+                        level: (window.userProgression && window.userProgression.level) ? window.userProgression.level : 1,
+                        ts: firebase.database.ServerValue.TIMESTAMP,
+                        lastActive: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
+
+                if (typeof window.checkDailyMissionsStatus === 'function') {
+                    window.checkDailyMissionsStatus();
+                }
+
                 if (els && els.playerName) els.playerName.textContent = rawAlias;
 
                 if (typeof showToast === 'function') showToast(`✅ Benvenuto ${rawAlias}! Profilo configurato.`);
@@ -890,20 +909,25 @@ window.initMandatoryAliasHandlers = function() {
         // --- SISTEMA DI MAPPING E PRESENZA ---
         db.ref('.info/connected').on('value', async (s) => {
             if (s.val() === true && window.myId) {
-                console.log("App: Connessione stabilita, ripristino mapping e presenza...");
+                console.log("App: Connessione stabilita, ripristino mapping...");
 
-                // 1. Ripristina il mapping di sicurezza (Fondamentale per le regole Firebase)
+                // 1. Ripristina il mapping di sicurezza
                 try {
                     const mappingRef = db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`);
                     await mappingRef.set(window.myId);
-                    mappingRef.onDisconnect().remove();
                 } catch (e) { console.error("Mapping Error:", e); }
 
-                // 2. Ripristina la presenza online
+                // BLOCCO PRESENZA SE L'ALIAS NON E' ANCORA STATO CONFERMATO
+                if (window.isMandatoryAliasPending) {
+                    console.log("App: Presenza online sospesa in attesa di conferma Alias obbligatorio.");
+                    return;
+                }
+
+                // 2. Ripristina la presenza online SOLO se ha un alias registrato
                 const pRef = db.ref(`presence/${window.myId}`);
                 pRef.onDisconnect().remove();
                 const presenceData = {
-                    name: window.myName || (typeof tgUser !== 'undefined' && tgUser ? tgUser.first_name : "") || "Giocatore",
+                    name: window.myName || "Giocatore",
                     username: window.myPrivacy ? "" : tgUsername,
                     status: 'online',
                     uid: firebase.auth().currentUser.uid,

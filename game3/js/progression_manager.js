@@ -117,6 +117,8 @@ window.showLevelUpOverlay = function(newLevel) {
 
 // --- DAILY MISSIONS ---
 window.generateDailyMissions = function() {
+    if (!myId || !db || window.isMandatoryAliasPending) return;
+
     const today = new Date().toISOString().split('T')[0];
     const missions = [
         { id: 'm1', type: 'count', target: 50, current: 0, xp: 100, it: "Indovina 50 parole totali", en: "Guess 50 total words" },
