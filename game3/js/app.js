@@ -985,19 +985,26 @@ window.initMandatoryAliasHandlers = function() {
         const snap = await userRef.once('value');
         const data = snap.val() || {};
 
-        // LISTENER PER DELEZIONE PROFILO (PREVIENE UTENTI FANTASMA ANONIMI)
-        let isInitialLoad = true;
+        // LISTENER PER DELEZIONE PROFILO (PREVIENE UTENTI FANTASMA)
         userRef.on('value', userSnap => {
-            if (isInitialLoad) {
-                isInitialLoad = false;
-                return;
-            }
-            if (!userSnap.exists() && window.myId && !window.isDeletingOwnAccount) {
+            if (!userSnap.exists() && window.myId && !window.isDeletingOwnAccount && !window.isMandatoryAliasPending) {
                 console.warn("CW Game: Profile deleted on server. Disconnecting presence...");
                 if (window.db) {
                     db.ref(`presence/${window.myId}`).remove().catch(() => {});
                     db.ref('.info/connected').off();
                 }
+                localStorage.clear();
+                sessionStorage.clear();
+                if (typeof showToast === 'function') showToast("⚠️ Il tuo profilo è stato rimosso dal server.");
+                setTimeout(() => {
+                    if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.close === 'function') {
+                        window.Telegram.WebApp.close();
+                    } else {
+                        location.reload();
+                    }
+                }, 1000);
+            }
+        });
                 localStorage.clear();
                 sessionStorage.clear();
                 if (typeof showToast === 'function') showToast("⚠️ Il tuo profilo è stato rimosso dal server.");
