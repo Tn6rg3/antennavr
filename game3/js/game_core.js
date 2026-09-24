@@ -97,7 +97,9 @@ window.showScreen = function(screenId) {
             if (window.userProgression?.level) {
                 presenceData.level = window.userProgression.level;
             }
-            db.ref(`presence/${myId}`).update(presenceData);
+            if (myId && !window.isMandatoryAliasPending) {
+                db.ref(`presence/${myId}`).update(presenceData);
+            }
         } catch(e) {}
     }
 
@@ -353,13 +355,15 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
         if (listeners.room) { listeners.room.off(); listeners.room = null; }
     }
 
-    db.ref(`presence/${myId}`).update({
-        name: myName,
-        username: myPrivacy ? "" : tgUsername,
-        allowSpectators: false,
-        activeRoomCode: null,
-        status: 'online'
-    });
+    if (myId && !window.isMandatoryAliasPending) {
+        db.ref(`presence/${myId}`).update({
+            name: myName,
+            username: myPrivacy ? "" : tgUsername,
+            allowSpectators: false,
+            activeRoomCode: null,
+            status: 'online'
+        });
+    }
 
     if (typeof window.hideChat === 'function') window.hideChat();
 
@@ -1201,11 +1205,13 @@ window.finishGame = function() {
     window.outgoingChallengeId = null;
     window.incomingChallengeId = null;
 
-    db.ref(`presence/${myId}`).update({
-        allowSpectators: false,
-        activeRoomCode: null,
-        status: 'online'
-    });
+    if (myId && !window.isMandatoryAliasPending) {
+        db.ref(`presence/${myId}`).update({
+            allowSpectators: false,
+            activeRoomCode: null,
+            status: 'online'
+        });
+    }
 
     if (roomCode) {
         window.lastFinishedRoomCode = roomCode; // Salviamo l'ultimo codice per la leaderboard
