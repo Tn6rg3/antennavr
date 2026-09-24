@@ -1577,6 +1577,71 @@ window.setupBugSystem = function() {
         }
     };
 
+    // --- HELPER DI RICERCA UNIVERSALE UTENTI ADMIN ---
+    window.findAdminUserCandidates = async function(inputVal) {
+        const cleanVal = inputVal.replace('@', '').trim().toLowerCase();
+        let candidates = new Map();
+
+        // 1. Cerca nei dati di presenza online
+        try {
+            const presenceSnap = await db.ref('presence').once('value');
+            if (presenceSnap.exists()) {
+                for (const [id, userObj] of Object.entries(presenceSnap.val() || {})) {
+                    if (!userObj) continue;
+                    const uName = (userObj.username || "").toLowerCase();
+                    const aliasName = (userObj.name || "").toLowerCase();
+
+                    const matchesName = (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)));
+                    const matchesUser = (uName && (uName === cleanVal || uName.includes(cleanVal)));
+                    const matchesGeneric = (cleanVal.includes('giocat') || cleanVal.includes('anonim')) && (!aliasName || aliasName.includes('giocat') || aliasName.includes('anonim'));
+                    const matchesId = (id === cleanVal || id.includes(cleanVal));
+
+                    if (matchesName || matchesUser || matchesGeneric || matchesId) {
+                        candidates.set(id, {
+                            id: id,
+                            name: userObj.name || userObj.username || "Giocatore / Anonimo",
+                            username: userObj.username || ""
+                        });
+                    }
+                }
+            }
+        } catch(e) {}
+
+        // 2. Cerca nei profili users
+        try {
+            const usersSnap = await db.ref('users').once('value');
+            if (usersSnap.exists()) {
+                for (const [id, userObj] of Object.entries(usersSnap.val() || {})) {
+                    if (!userObj) continue;
+                    const uName = (userObj.username || "").toLowerCase();
+                    const aliasName = (userObj.alias || userObj.assignedDefaultName || "").toLowerCase();
+
+                    const matchesName = (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)));
+                    const matchesUser = (uName && (uName === cleanVal || uName.includes(cleanVal)));
+                    const matchesGeneric = (cleanVal.includes('giocat') || cleanVal.includes('anonim')) && (!aliasName || aliasName.includes('giocat') || aliasName.includes('anonim'));
+                    const matchesId = (id === cleanVal || id.includes(cleanVal));
+
+                    if (matchesName || matchesUser || matchesGeneric || matchesId) {
+                        if (!candidates.has(id)) {
+                            candidates.set(id, {
+                                id: id,
+                                name: userObj.alias || userObj.assignedDefaultName || userObj.username || "Giocatore / Anonimo",
+                                username: userObj.username || ""
+                            });
+                        }
+                    }
+                }
+            }
+        } catch(e) {}
+
+        if (candidates.size === 0 && !isNaN(inputVal.trim())) {
+            const cleanId = inputVal.trim();
+            candidates.set(cleanId, { id: cleanId, name: inputVal.trim(), username: "" });
+        }
+
+        return Array.from(candidates.values());
+    };
+
     // --- FUNZIONE ADMIN: ELIMINAZIONE UTENTE PER NOME / ALIAS ---
     window.adminDeleteUserByName = async function(inputVal) {
         if (!inputVal || inputVal.trim() === "") {
@@ -1584,61 +1649,30 @@ window.setupBugSystem = function() {
             return;
         }
 
-        const cleanVal = inputVal.replace('@', '').trim().toLowerCase();
-        let targetId = null;
-        let targetName = inputVal;
-        let targetUsername = "";
-
         try {
-            if (typeof showToast === 'function') showToast("Ricerca utente nel database...");
+            if (typeof showToast === 'function') showToast("Ricerca utenti nel database...");
+            const candidates = await window.findAdminUserCandidates(inputVal);
 
-            // 1. Cerca nei dati di presenza online
-            const presenceSnap = await db.ref('presence').once('value');
-            if (presenceSnap.exists()) {
-                const presenceData = presenceSnap.val();
-                for (const [id, userObj] of Object.entries(presenceData)) {
-                    if (!userObj) continue;
-                    const uName = (userObj.username || "").toLowerCase();
-                    const aliasName = (userObj.name || "").toLowerCase();
-
-                    if ((uName && uName === cleanVal) || (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)))) {
-                        targetId = id;
-                        targetName = userObj.name || userObj.username || id;
-                        targetUsername = userObj.username || "";
-                        break;
-                    }
-                }
-            }
-
-            // 2. Se non trovato in presence, cerca nei profili users
-            if (!targetId) {
-                const usersSnap = await db.ref('users').once('value');
-                if (usersSnap.exists()) {
-                    const usersData = usersSnap.val();
-                    for (const [id, userObj] of Object.entries(usersData)) {
-                        if (!userObj) continue;
-                        const uName = (userObj.username || "").toLowerCase();
-                        const aliasName = (userObj.alias || userObj.assignedDefaultName || "").toLowerCase();
-
-                        if ((uName && uName === cleanVal) || (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)))) {
-                            targetId = id;
-                            targetName = userObj.alias || userObj.assignedDefaultName || userObj.username || id;
-                            targetUsername = userObj.username || "";
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // 3. Fallback se ha inserito direttamente l'ID numerico Telegram
-            if (!targetId && !isNaN(inputVal.trim())) {
-                targetId = inputVal.trim();
-            }
-
-            if (!targetId) {
-                alert(`❌ Impossibile trovare l'utente per '${inputVal}'. Verifica la scrittura e riprova.`);
+            if (candidates.length === 0) {
+                alert(`❌ Impossibile trovare l'utente per '${inputVal}'. Verifica la scrittura o inserisci direttamente l'ID Telegram.`);
                 return;
             }
+
+            let selectedUser = candidates[0];
+            if (candidates.length > 1) {
+                const listTxt = candidates.map((c, idx) => `${idx + 1}) ${c.name} (ID: ${c.id})`).join('\n');
+                const selIdx = prompt(`Trovati ${candidates.length} utenti corrispondenti per '${inputVal}':\n\n${listTxt}\n\nInserisci il numero dell'utente da eliminare (1-${candidates.length}):`);
+                const parsedIdx = parseInt(selIdx) - 1;
+                if (!isNaN(parsedIdx) && candidates[parsedIdx]) {
+                    selectedUser = candidates[parsedIdx];
+                } else {
+                    return; // Annullato o selezione non valida
+                }
+            }
+
+            const targetId = selectedUser.id;
+            const targetName = selectedUser.name;
+            const targetUsername = selectedUser.username;
 
             // FINESTRA DI CONFERMA SICUREZZA ADMIN
             const userDetailsText = `⚠️ CONFERMA ELIMINAZIONE UTENTE (ADMIN)\n\nUtente Trovato:\n👤 Nome / Alias: ${targetName}\n🆔 Telegram ID: ${targetId}\n${targetUsername ? '💬 Username: @' + targetUsername + '\n' : ''}\nSei assolutamente sicuro di voler ELIMINARE DEFINITIVAMENTE tutti i dati, classifiche, storico e profilo di questo utente?`;
@@ -1700,53 +1734,31 @@ window.setupBugSystem = function() {
             return;
         }
 
-        const cleanVal = inputVal.replace('@', '').trim().toLowerCase();
-        let targetId = null;
-        let targetName = inputVal;
-
         try {
-            if (typeof showToast === 'function') showToast("Ricerca utente per blocco...");
+            if (typeof showToast === 'function') showToast("Ricerca utenti per blocco...");
+            const candidates = await window.findAdminUserCandidates(inputVal);
 
-            const presenceSnap = await db.ref('presence').once('value');
-            if (presenceSnap.exists()) {
-                const presenceData = presenceSnap.val();
-                for (const [id, userObj] of Object.entries(presenceData)) {
-                    if (!userObj) continue;
-                    const uName = (userObj.username || "").toLowerCase();
-                    const aliasName = (userObj.name || "").toLowerCase();
-                    if ((uName && uName === cleanVal) || (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)))) {
-                        targetId = id;
-                        targetName = userObj.name || userObj.username || id;
-                        break;
-                    }
-                }
-            }
-
-            if (!targetId) {
-                const usersSnap = await db.ref('users').once('value');
-                if (usersSnap.exists()) {
-                    const usersData = usersSnap.val();
-                    for (const [id, userObj] of Object.entries(usersData)) {
-                        if (!userObj) continue;
-                        const uName = (userObj.username || "").toLowerCase();
-                        const aliasName = (userObj.alias || userObj.assignedDefaultName || "").toLowerCase();
-                        if ((uName && uName === cleanVal) || (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)))) {
-                            targetId = id;
-                            targetName = userObj.alias || userObj.assignedDefaultName || userObj.username || id;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (!targetId && !isNaN(inputVal.trim())) targetId = inputVal.trim();
-
-            if (!targetId) {
-                alert(`❌ Impossibile trovare l'utente per '${inputVal}'.`);
+            if (candidates.length === 0) {
+                alert(`❌ Impossibile trovare l'utente per '${inputVal}'. Verifica la scrittura o inserisci direttamente l'ID Telegram.`);
                 return;
             }
 
-            const confirmText = `⛔ CONFERMA BLOCCO PERMANENTE UTENTE (BAN ADMIN)\n\nUtente Trovato:\n👤 Nome: ${targetName}\n🆔 Telegram ID: ${targetId}\n\nVuoi inserire questo ID nella BLACKLIST PERMANENTE ed eliminare i suoi dati? L'utente non potrà mai più accedere al gioco.`;
+            let selectedUser = candidates[0];
+            if (candidates.length > 1) {
+                const listTxt = candidates.map((c, idx) => `${idx + 1}) ${c.name} (ID: ${c.id})`).join('\n');
+                const selIdx = prompt(`Trovati ${candidates.length} utenti corrispondenti per '${inputVal}':\n\n${listTxt}\n\nInserisci il numero dell'utente da BLOCCARE (1-${candidates.length}):`);
+                const parsedIdx = parseInt(selIdx) - 1;
+                if (!isNaN(parsedIdx) && candidates[parsedIdx]) {
+                    selectedUser = candidates[parsedIdx];
+                } else {
+                    return; // Annullato o selezione non valida
+                }
+            }
+
+            const targetId = selectedUser.id;
+            const targetName = selectedUser.name;
+
+            const confirmText = `⛔ CONFERMA BLOCCO PERMANENTE UTENTE (BAN ADMIN)\n\nUtente Trovato:\n👤 Nome / Alias: ${targetName}\n🆔 Telegram ID: ${targetId}\n\nVuoi inserire questo ID nella BLACKLIST PERMANENTE ed eliminare i suoi dati? L'utente non potrà mai più accedere al gioco.`;
             if (!confirm(confirmText)) return;
 
             // 1. Salva in Blacklist Permanente su Firebase
