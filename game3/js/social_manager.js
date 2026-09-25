@@ -436,8 +436,8 @@ window.listenToOnlineUsers = function() {
     if (listeners.presence) return;
 
     if (els.onlineUsersList) els.onlineUsersList.innerHTML = '';
-    // OTTIMIZZAZIONE: Carichiamo solo i 25 utenti più attivi invece di tutti (risparmio download massiccio)
-    const presenceRef = db.ref('presence').limitToLast(25);
+    // Mostriamo fino a 100 utenti attivi contemporaneamente
+    const presenceRef = db.ref('presence').limitToLast(100);
 
     const onAdded = presenceRef.on('child_added', async snap => {
         if (snap.key !== myId && snap.key !== window.myId) {
@@ -917,8 +917,8 @@ window.listenToRooms = function() {
 
     if (els.waitingRoomsList) els.waitingRoomsList.innerHTML = '';
 
-    // --- FIX: Usiamo public_lobby_rooms per la bacheca (più leggero e affidabile) ---
-    const lobbyQuery = db.ref('public_lobby_rooms').orderByChild('status').equalTo('waiting').limitToLast(20);
+    // --- FIX: Usiamo public_lobby_rooms per la bacheca (fino a 100 stanze in attesa) ---
+    const lobbyQuery = db.ref('public_lobby_rooms').orderByChild('status').equalTo('waiting').limitToLast(100);
 
     const onAdded = lobbyQuery.on('child_added', snap => {
         const room = snap.val();

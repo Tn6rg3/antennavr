@@ -577,7 +577,7 @@ window.initCourseChat = function() {
         messagesCont.scrollTop = messagesCont.scrollHeight;
     };
 
-    chatRef.limitToLast(50).on('value', chatCallback);
+    chatRef.limitToLast(100).on('value', chatCallback);
 
     if (!window.listeners) window.listeners = {};
     window.listeners.courseChatRef = chatRef;

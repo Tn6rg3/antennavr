@@ -1525,7 +1525,7 @@ window.setupBugSystem = function() {
 
                 // 2. Se non è un ID numerico o non trovato, cerca nei dati di presenza online
                 if (!targetId) {
-                    const presenceSnap = await db.ref('presence').limitToLast(50).once('value');
+                    const presenceSnap = await db.ref('presence').limitToLast(100).once('value');
                     const presenceData = presenceSnap.val() || {};
 
                     for (const [id, userObj] of Object.entries(presenceData)) {
@@ -1665,9 +1665,9 @@ window.setupBugSystem = function() {
             } catch(e) {}
         }
 
-        // 1. Cerca nei dati di presenza online (limitato a 50)
+        // 1. Cerca nei dati di presenza online (limitato a 100)
         try {
-            const presenceSnap = await db.ref('presence').limitToLast(50).once('value');
+            const presenceSnap = await db.ref('presence').limitToLast(100).once('value');
             if (presenceSnap.exists()) {
                 for (const [id, userObj] of Object.entries(presenceSnap.val() || {})) {
                     if (!userObj) continue;

@@ -268,7 +268,7 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
     // 1. SFIDA GIORNALIERA
     if (tabType === 'daily_challenge') {
         let todayStr = new Date().toISOString().split('T')[0];
-        db.ref(`leaderboard/daily_challenge/${todayStr}`).orderByChild('score').limitToLast(50).once('value', snapshot => {
+        db.ref(`leaderboard/daily_challenge/${todayStr}`).orderByChild('score').limitToLast(100).once('value', snapshot => {
             let players = [];
             snapshot.forEach(child => {
                 let p = child.val();
@@ -292,8 +292,8 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         const dbPath = `leaderboard/recent_matches/${baseMode}${tabType !== 'pingpong' ? '_multi' : ''}`;
         console.log("LB: Fetching Multi from:", dbPath, "Filter:", filterWordCount);
 
-        // OTTIMIZZAZIONE: Usiamo limitToLast(50) per evitare di scaricare migliaia di match passati
-        db.ref(dbPath).limitToLast(50).once('value', snapshot => {
+        // OTTIMIZZAZIONE: Usiamo limitToLast(100) per caricare fino ai primi 100 partecipanti
+        db.ref(dbPath).limitToLast(100).once('value', snapshot => {
             let matches = [];
             if (snapshot.exists()) {
                 snapshot.forEach(wcNode => {
@@ -321,7 +321,7 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
 
     // 3. NOMINATIVI (CW FREAK)
     if (tabType === 'callsign') {
-        db.ref('leaderboard/callsign/global').orderByChild('score').limitToLast(50).once('value', snapshot => {
+        db.ref('leaderboard/callsign/global').orderByChild('score').limitToLast(100).once('value', snapshot => {
             let players = [];
             snapshot.forEach(child => {
                 let p = child.val();
@@ -339,7 +339,7 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
 
     // 4. TORNEI
     if (tabType === 'tournaments') {
-        db.ref('leaderboard/tournaments').orderByChild('score').limitToLast(50).once('value', snapshot => {
+        db.ref('leaderboard/tournaments').orderByChild('score').limitToLast(100).once('value', snapshot => {
             let teams = [];
             snapshot.forEach(child => {
                 let t = child.val();
@@ -357,7 +357,7 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
 
     // 4b. ARCADE
     if (tabType === 'arcade') {
-        db.ref('leaderboard/arcade/all').orderByChild('score').limitToLast(50).once('value', snapshot => {
+        db.ref('leaderboard/arcade/all').orderByChild('score').limitToLast(100).once('value', snapshot => {
             let players = [];
             snapshot.forEach(child => {
                 let p = child.val();
@@ -376,7 +376,7 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
 
     // 4c. LA TORRE
     if (tabType === 'la_torre') {
-        db.ref('leaderboard/la_torre/all').orderByChild('score').limitToLast(50).once('value', snapshot => {
+        db.ref('leaderboard/la_torre/all').orderByChild('score').limitToLast(100).once('value', snapshot => {
             let players = [];
             snapshot.forEach(child => {
                 let p = child.val();
@@ -402,7 +402,7 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
     console.log("LB: Fetching Solo from:", dbPath);
 
     const fetchSoloNode = (nodeKey) => {
-        return db.ref(`${dbPath}/${nodeKey}`).orderByChild('score').limitToLast(50).once('value');
+        return db.ref(`${dbPath}/${nodeKey}`).orderByChild('score').limitToLast(100).once('value');
     };
 
     const processSnap = (snapshot, wcKey) => {
