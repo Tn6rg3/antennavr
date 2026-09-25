@@ -152,8 +152,6 @@ window.initAudioAnalyzer = function() {
             window.updateAnalyzerStats(true);
         };
     }
-        };
-    }
 
     if (els.btnStartSession) els.btnStartSession.onclick = () => window.startRealTxSession();
     if (els.btnStopSession) els.btnStopSession.onclick = () => window.stopRealTxSession(true);
