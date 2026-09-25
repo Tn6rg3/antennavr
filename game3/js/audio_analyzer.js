@@ -350,6 +350,18 @@ window.runOnnxInferenceOnPcmBuffer = async function() {
             }
         }
 
+        // Normalizzazione di picco a 0.95 (Identica al dataset PyTorch di addestramento)
+        let maxAmp = 0.0;
+        for (let i = 0; i < 3200; i++) {
+            const absVal = Math.abs(audio3200[i]);
+            if (absVal > maxAmp) maxAmp = absVal;
+        }
+        if (maxAmp > 0.0001) {
+            for (let i = 0; i < 3200; i++) {
+                audio3200[i] = (audio3200[i] / maxAmp) * 0.95;
+            }
+        }
+
         // Calcolo dello Spettrogramma Mel (64 mels) 100% Neurale per la rete ONNX
         const melSpec = window.computeMelSpectrogramJS(audio3200, 3200, 64);
         const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
