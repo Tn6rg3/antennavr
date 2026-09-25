@@ -209,6 +209,17 @@ window.startStabilizedAnalysis = function() {
         if (ctx.state === 'suspended') ctx.resume();
 
         const samples = e.inputBuffer.getChannelData(0);
+
+        // Salva i campioni PCM audio reali nel buffer circolare per la rete neurale IA ONNX
+        if (!state.micPcmRingBuffer) {
+            state.micPcmRingBuffer = new Float32Array(96000); // Buffer circolare audio a 48kHz
+            state.pcmWritePos = 0;
+        }
+        for (let i = 0; i < samples.length; i++) {
+            state.micPcmRingBuffer[state.pcmWritePos] = samples[i];
+            state.pcmWritePos = (state.pcmWritePos + 1) % state.micPcmRingBuffer.length;
+        }
+
         const mag = getMagnitude(samples, state.targetFreq, state.sampleRate);
 
         if (mag < state.noiseFloor * 2) state.noiseFloor = (state.noiseFloor * 0.98) + (mag * 0.02);
@@ -321,6 +332,49 @@ window.handleTransition = function(markCount) {
     window.updateAnalyzerStats();
 };
 
+window.runOnnxInferenceOnPcmBuffer = async function() {
+    const state = window.audioAnalyzerState;
+    if (!state.aiEnabled || !state.ortSession) return;
+    if (typeof window.computeMelSpectrogramJS !== 'function' || typeof window.ctcGreedyDecodeJS !== 'function') return;
+
+    try {
+        const session = state.ortSession;
+        let audio3200 = new Float32Array(3200);
+        if (state.micPcmRingBuffer && state.micPcmRingBuffer.length > 0) {
+            const bufLen = state.micPcmRingBuffer.length;
+            const srcSr = state.sampleRate || 48000;
+            const step = srcSr / 3200;
+            for (let i = 0; i < 3200; i++) {
+                const readIdx = Math.floor((state.pcmWritePos - Math.floor((3200 - i) * step) + bufLen) % bufLen);
+                audio3200[i] = state.micPcmRingBuffer[readIdx] || 0;
+            }
+        }
+
+        // Calcolo dello Spettrogramma Mel (64 mels) 100% Neurale per la rete ONNX
+        const melSpec = window.computeMelSpectrogramJS(audio3200, 3200, 64);
+        const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
+
+        const inputName = (session.inputNames && session.inputNames.length > 0) ? session.inputNames[0] : 'input_spectrogram';
+        const feeds = {};
+        feeds[inputName] = inputTensor;
+        const results = await session.run(feeds);
+
+        const outputKeys = Object.keys(results);
+        const outKey = outputKeys.find(k => k.includes('log') || k.includes('prob') || k.includes('out')) || outputKeys[0];
+        const outTensor = results[outKey];
+
+        const aiRawResult = window.ctcGreedyDecodeJS(outTensor.data, outTensor.dims) || "";
+        let cleanAiResult = aiRawResult.replace(/[*():;=.,\s]+/g, "").trim();
+
+        if (cleanAiResult) {
+            state.aiDecodedText += cleanAiResult.substring(0, 1);
+            window.updateDecodedDisplay();
+        }
+    } catch (e) {
+        console.warn("RealTx ONNX Inference error:", e);
+    }
+};
+
 window.decodeCurrentCode = function() {
     const state = window.audioAnalyzerState;
     if (!state.currentCode) return;
@@ -339,13 +393,12 @@ window.decodeCurrentCode = function() {
         state.sessionData.characters.push({ char: charToStore, code: state.currentCode, acc: lastAcc, wpm: state.wpm });
     }
 
-    // DECODIFICA DSP (TEXTBOX 1)
+    // DECODIFICA DSP (TEXTBOX 1 - Algoritmica con WPM)
     state.decodedText += charToStore;
 
-    // DECODIFICA IA ONNX (TEXTBOX 2 - SE ATTIVA)
+    // DECODIFICA IA ONNX (TEXTBOX 2 - 100% Neurale senza WPM)
     if (state.aiEnabled) {
-        let aiChar = foundChar;
-        state.aiDecodedText += (aiChar || "?");
+        window.runOnnxInferenceOnPcmBuffer();
     }
 
     state.currentCode = "";

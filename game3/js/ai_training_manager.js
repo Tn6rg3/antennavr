@@ -2031,6 +2031,11 @@ function ctcGreedyDecodeJS(probsData, dims) {
     return result.trim();
 }
 
+// Esportazione globale delle funzioni di decodifica IA per l'uso in audio_analyzer.js
+window.computeMelSpectrogramJS = computeMelSpectrogramJS;
+window.ctcGreedyDecodeJS = ctcGreedyDecodeJS;
+window.resampleAudioBufferTo3200 = resampleAudioBufferTo3200;
+
 // Resample audio segment to 16kHz with Mono Stereo Mix-Down
 function resampleAudioBufferTo16k(audioBuffer, startTime, durationSec) {
     if (!audioBuffer) return new Float32Array(0);
