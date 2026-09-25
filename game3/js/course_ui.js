@@ -386,25 +386,7 @@ window.showStudentDetailedStats = function(uid, name) {
             });
         }
 
-        // 3. UNIONE STORICO SESSIONI
-        const rawHist1 = histSnap.val() || {};
-        const rawHist2 = courseHistSnap.val() || {};
-
-        let combinedHistory = [
-            ...Object.values(rawHist1).filter(h => h && h.mode === 'course'),
-            ...Object.values(rawHist2).filter(h => h)
-        ];
-
-        // Rimuoviamo eventuali duplicati basati sul timestamp
-        const seenTs = new Set();
-        combinedHistory = combinedHistory.filter(h => {
-            if (!h || !h.date) return false;
-            if (seenTs.has(h.date)) return false;
-            seenTs.add(h.date);
-            return true;
-        }).sort((a,b) => (b.date || 0) - (a.date || 0));
-
-        // 4. RENDERING STORIA SESSIONI E DRILL-DOWN
+        // 3. RENDERING STORIA SESSIONI E DRILL-DOWN
         const hs = document.getElementById('tutorStudentHistory');
         if (hs) {
             hs.innerHTML = '';
