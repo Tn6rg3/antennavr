@@ -265,7 +265,8 @@ window.loadProfileInfo = function() {
         return;
     }
 
-    db.ref(`users/${userId}/history`).once('value').then(snap => {
+    // OTTIMIZZAZIONE BANDA: Limitiamo il caricamento alle ultime 50 partite giocate
+    db.ref(`users/${userId}/history`).limitToLast(50).once('value').then(snap => {
         listContainer.innerHTML = '';
         window.userMatchHistory = [];
 

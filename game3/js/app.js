@@ -1136,23 +1136,24 @@ window.isValidTelegramId = function(id) {
             window.initMandatoryAliasHandlers();
         }
 
-        // --- SISTEMA LAZY CLEANUP GIORNALIERO ---
+        // --- SISTEMA LAZY CLEANUP GIORNALIERO (Eseguito solo da Admin per risparmio banda) ---
         try {
-            const cleanupRef = db.ref('appConfig/lastCleanupTs');
-            cleanupRef.once('value', snap => {
-                const lastCleanup = snap.val() || 0;
-                const now = Date.now();
-                const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+            if (window.isAdmin) {
+                const cleanupRef = db.ref('appConfig/lastCleanupTs');
+                cleanupRef.once('value', snap => {
+                    const lastCleanup = snap.val() || 0;
+                    const now = Date.now();
+                    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-                if (now - lastCleanup > ONE_DAY_MS) {
-                    console.log("CW Game: Running daily database garbage collector...");
-                    // 1. Svuotiamo le chat principali
-                    db.ref('globalChat').remove();
-                    db.ref('courseChat').remove();
-                    db.ref('courseChats').remove();
+                    if (now - lastCleanup > ONE_DAY_MS) {
+                        console.log("CW Game: Running daily database garbage collector...");
+                        // 1. Svuotiamo le chat principali
+                        db.ref('globalChat').remove();
+                        db.ref('courseChat').remove();
+                        db.ref('courseChats').remove();
 
-                    // 2. Pulizia stanze orfane o scadute
-                    db.ref('rooms').once('value', roomsSnap => {
+                        // 2. Pulizia stanze orfane o scadute
+                        db.ref('rooms').once('value', roomsSnap => {
                         if (!roomsSnap.exists()) return;
                         roomsSnap.forEach(rSnap => {
                             const r = rSnap.val();
@@ -1185,6 +1186,7 @@ window.isValidTelegramId = function(id) {
                     cleanupRef.set(now);
                 }
             });
+            }
         } catch(e) { console.warn("Cleanup error:", e); }
 
         // --- PULIZIA SESSIONI PRECEDENTI (SOLO SE VECCHIE) ---
@@ -1228,12 +1230,8 @@ window.isValidTelegramId = function(id) {
                 db.ref(`presence/${myId}`).remove();
                 // Fermiamo l'aggiornamento automatico fino alla prossima interazione
             } else if (db && myId && !window.isMandatoryAliasPending && !window.isUserBanned) {
-                // Aggiorna il timestamp sul server ogni minuto solo se il nodo presenza esiste ancora
-                db.ref(`presence/${myId}`).once('value', s => {
-                    if (s.exists()) {
-                        db.ref(`presence/${myId}/lastActive`).set(firebase.database.ServerValue.TIMESTAMP);
-                    }
-                });
+                // Aggiorna il timestamp sul server ogni minuto direttamente (senza lettura preventiva)
+                db.ref(`presence/${myId}/lastActive`).set(firebase.database.ServerValue.TIMESTAMP);
             }
         }, 60000); // Controllo ogni minuto
 
@@ -1512,9 +1510,21 @@ window.setupBugSystem = function() {
             let targetId = null;
             let targetName = inputVal;
 
-            try {
-                // 1. Cerca nei dati di presenza (presence) per Username o Alias / Nome
-                const presenceSnap = await db.ref('presence').once('value');
+            // 1. Controllo diretto se ha inserito l'ID numerico (evita di scaricare tutto il database)
+            if (!isNaN(inputVal) && inputVal.trim() !== '') {
+                targetId = inputVal.trim();
+                try {
+                    const uSnap = await db.ref(`users/${targetId}`).once('value');
+                    if (uSnap.exists()) {
+                        const uVal = uSnap.val() || {};
+                        targetName = uVal.alias || uVal.name || uVal.username || targetId;
+                    }
+                } catch(e) {}
+            }
+
+            // 2. Se non è un ID numerico o non trovato, cerca nei dati di presenza online
+            if (!targetId) {
+                const presenceSnap = await db.ref('presence').limitToLast(50).once('value');
                 const presenceData = presenceSnap.val() || {};
 
                 for (const [id, userObj] of Object.entries(presenceData)) {
@@ -1528,6 +1538,7 @@ window.setupBugSystem = function() {
                         break;
                     }
                 }
+            }
 
                 // 2. Se non trovato in presence, cerca direttamente nel nodo users
                 if (!targetId) {
@@ -1642,9 +1653,25 @@ window.setupBugSystem = function() {
         const cleanVal = inputVal.replace('@', '').trim().toLowerCase();
         let candidates = new Map();
 
-        // 1. Cerca nei dati di presenza online
+        // 0. Se è un ID numerico diretto, cerca direttamente nel profilo senza scaricare il database
+        if (!isNaN(cleanVal) && cleanVal !== '') {
+            try {
+                const uSnap = await db.ref(`users/${cleanVal}`).once('value');
+                if (uSnap.exists()) {
+                    const uObj = uSnap.val() || {};
+                    candidates.set(cleanVal, {
+                        id: cleanVal,
+                        name: uObj.alias || uObj.assignedDefaultName || uObj.username || "Giocatore",
+                        username: uObj.username || ""
+                    });
+                    return candidates;
+                }
+            } catch(e) {}
+        }
+
+        // 1. Cerca nei dati di presenza online (limitato a 50)
         try {
-            const presenceSnap = await db.ref('presence').once('value');
+            const presenceSnap = await db.ref('presence').limitToLast(50).once('value');
             if (presenceSnap.exists()) {
                 for (const [id, userObj] of Object.entries(presenceSnap.val() || {})) {
                     if (!userObj) continue;
