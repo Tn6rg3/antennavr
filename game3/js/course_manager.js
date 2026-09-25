@@ -293,16 +293,26 @@ window.checkStudentAutomaticExpulsion = function(uid, cData) {
         tempDate.setDate(tempDate.getDate() + 1);
     }
 
-    const currentReminders = (cData.progress && cData.progress.reminders_count || 0) + missedTrainingDays;
-    if (currentReminders >= 3) {
-        console.log("Course: Expelling inactive user " + uid + " due to " + currentReminders + " missed reminders.");
-        db.ref("users/" + uid + "/course").update({
-            active_plan: false,
-            "progress/reminders_count": currentReminders,
-            expelled_reason: "Inattività"
-        });
-        db.ref("courseActiveEnrollments/" + uid).remove();
-        return true;
+    if (missedTrainingDays > 0) {
+        const baseReminders = (cData.progress && cData.progress.reminders_count) || 0;
+        const currentReminders = baseReminders + missedTrainingDays;
+
+        if (currentReminders >= 3) {
+            console.log("Course: Expelling inactive user " + uid + " due to " + currentReminders + " missed reminders.");
+            db.ref("users/" + uid + "/course").update({
+                active_plan: false,
+                "progress/reminders_count": 3,
+                expelled_reason: "Inattività - Ricevuto terzo ed ultimo richiamo (3/3)"
+            });
+            db.ref("courseActiveEnrollments/" + uid).remove();
+            return true;
+        } else {
+            // Salva i nuovi richiami su Firebase così il tutor li vede immediatamente
+            db.ref("users/" + uid + "/course/progress").update({
+                reminders_count: currentReminders
+            });
+            if (cData.progress) cData.progress.reminders_count = currentReminders;
+        }
     }
     return false;
 };

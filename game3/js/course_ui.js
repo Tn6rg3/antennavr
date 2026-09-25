@@ -197,7 +197,7 @@ window.renderTutorPanel = function() {
 
             const gridDiv = document.createElement('div');
             gridDiv.style.cssText = "display:grid; grid-template-columns: 1fr 1fr; gap:5px; font-size:0.9em; color:var(--hint-color);";
-            gridDiv.innerHTML = `<span>Lez: ${lesson}</span><span>Acc: ${accuracy}%</span><span>XP: ${p.total_xp || 0}</span><span>Ultima: ${lastSess || '---'}</span>`;
+            gridDiv.innerHTML = `<span>Lez: ${lesson}</span><span>Acc: ${accuracy}%</span><span>💰 Budget: ${p.total_xp || 0} XP</span><span>Ultima: ${lastSess || '---'}</span>`;
 
             row.appendChild(topDiv);
             row.appendChild(gridDiv);
@@ -277,8 +277,32 @@ window.showStudentDetailedStats = function(uid, name) {
         db.ref(`users/${uid}/course/history`).once('value')
     ]).then(([courseSnap, histSnap, courseHistSnap]) => {
         const courseData = courseSnap.val() || {};
+
+        // Controllo ed espulsione/aggiornamento automatico richiami per il tutor in tempo reale
+        if (typeof window.checkStudentAutomaticExpulsion === 'function') {
+            window.checkStudentAutomaticExpulsion(uid, courseData);
+        }
+
         const p = courseData.progress || {};
         const settings = courseData.settings || {};
+
+        // 0. UNIONE STORICO SESSIONI
+        const rawHist1 = histSnap.val() || {};
+        const rawHist2 = courseHistSnap.val() || {};
+
+        let combinedHistory = [
+            ...Object.values(rawHist1).filter(h => h && h.mode === 'course'),
+            ...Object.values(rawHist2).filter(h => h)
+        ];
+
+        // Rimuoviamo eventuali duplicati basati sul timestamp
+        const seenTs = new Set();
+        combinedHistory = combinedHistory.filter(h => {
+            if (!h || !h.date) return false;
+            if (seenTs.has(h.date)) return false;
+            seenTs.add(h.date);
+            return true;
+        }).sort((a,b) => (b.date || 0) - (a.date || 0));
 
         // 1. PROGRAMMA E CONFIGURAZIONE CORSISTA
         if (progCont) {
@@ -292,6 +316,8 @@ window.showStudentDetailedStats = function(uid, name) {
                     Lezione Attuale: <b style="color:var(--link-color);">Lezione ${currentLesson}</b> (Sbloccato fino a '${currentLessonChar}')<br>
                     <small style="color:var(--hint-color);">Caratteri: ${activeChars}</small>
                 </div>
+                <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">💰 Budget / XP: <b style="color:#ffc107;">${p.total_xp || 0} XP</b></div>
+                <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">🎮 Partite / Sessioni: <b>${combinedHistory.length}</b></div>
                 <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Frequenza: <b>${settings.days_per_week || 3} gg/sett.</b></div>
                 <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Velocità: <b>${settings.start_wpm || 15} WPM</b> (Farns: ${settings.farnsworth_wpm || 12})</div>
                 <div style="background:rgba(255,255,255,0.05); padding:6px; border-radius:4px;">Spazio Gruppi: <b>${settings.group_spacing || '3.0'}x</b></div>
