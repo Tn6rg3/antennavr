@@ -47,6 +47,13 @@ window.audioAnalyzerState = {
         startTime: 0
     },
 
+    // DECODIFICA IA ONNX E CONTROLLI
+    aiEnabled: false,
+    aiDecodedText: "",
+    autoClear: true,
+    ortSession: null,
+    selectedAiModel: 'addestra/morse_model.onnx',
+
     // Statistiche generali
     dotAccs: [],
     dashAccs: []
@@ -94,13 +101,57 @@ window.initAudioAnalyzer = function() {
         window.audioAnalyzerState.autoWpm = els.autoWpm.checked;
         els.autoWpm.onchange = (e) => { window.audioAnalyzerState.autoWpm = e.target.checked; };
     }
+
+    // CONTROLLI IA ONNX E AUTO-CLEAR
+    const aiToggle = document.getElementById('realTxAiToggle');
+    const aiModelBox = document.getElementById('realTxAiModelSelectBox');
+    const aiModelSelect = document.getElementById('realTxAiModelSelect');
+    const aiBoxPanel = document.getElementById('realTxAiBoxPanel');
+    const autoClearToggle = document.getElementById('realTxAutoClearToggle');
+
+    if (aiToggle) {
+        aiToggle.onchange = async (e) => {
+            const enabled = e.target.checked;
+            window.audioAnalyzerState.aiEnabled = enabled;
+            if (aiModelBox) aiModelBox.style.display = enabled ? 'flex' : 'none';
+            if (aiBoxPanel) aiBoxPanel.style.display = enabled ? 'block' : 'none';
+
+            if (enabled) {
+                if (!window.audioAnalyzerState.ortSession) {
+                    await window.loadRealTxAiModel();
+                } else {
+                    if (typeof showToast === 'function') showToast("🤖 Confronto Neurale IA Attivato");
+                }
+            } else {
+                if (typeof showToast === 'function') showToast("📻 Solo Decodifica Algoritmica (DSP)");
+            }
+        };
+    }
+
+    if (aiModelSelect) {
+        aiModelSelect.onchange = async (e) => {
+            window.audioAnalyzerState.selectedAiModel = e.target.value;
+            await window.loadRealTxAiModel(e.target.value);
+        };
+    }
+
+    if (autoClearToggle) {
+        window.audioAnalyzerState.autoClear = autoClearToggle.checked;
+        autoClearToggle.onchange = (e) => {
+            window.audioAnalyzerState.autoClear = e.target.checked;
+            if (typeof showToast === 'function') showToast(e.target.checked ? "🧹 Auto-Clear attivato" : "📝 Auto-Clear disattivato");
+        };
+    }
+
     if (els.resetBtn) {
         els.resetBtn.onclick = () => {
             window.audioAnalyzerState.decodedText = "";
+            window.audioAnalyzerState.aiDecodedText = "";
             window.audioAnalyzerState.currentCode = "";
-            const textEl = document.getElementById('realTxDecodedText');
-            if (textEl) textEl.textContent = "...";
+            window.updateDecodedDisplay();
             window.updateAnalyzerStats(true);
+        };
+    }
         };
     }
 
@@ -213,6 +264,9 @@ window.processStabilizedBit = function(isMark) {
         if (state.spacesCount === Math.round(currentUnitBits * 7.0)) {
             if (state.decodedText.length > 0 && !state.decodedText.endsWith(" ")) {
                 state.decodedText += " ";
+                if (state.aiEnabled && !state.aiDecodedText.endsWith(" ")) {
+                    state.aiDecodedText += " ";
+                }
                 window.updateDecodedDisplay();
             }
         }
@@ -220,6 +274,25 @@ window.processStabilizedBit = function(isMark) {
 
     const led = document.getElementById('realTxStatusLed');
     if (led) led.style.background = isMark ? "var(--link-color)" : "#333";
+};
+
+window.loadRealTxAiModel = async function(modelPath) {
+    if (typeof ort === 'undefined') {
+        if (typeof showToast === 'function') showToast("⚠️ Libreria ONNX Web non pronta.");
+        return false;
+    }
+    const path = modelPath || window.audioAnalyzerState.selectedAiModel || 'addestra/morse_model.onnx';
+    try {
+        console.log("RealTx: Loading ONNX model from:", path);
+        window.audioAnalyzerState.ortSession = await ort.InferenceSession.create(path, { executionProviders: ['wasm'] });
+        if (typeof showToast === 'function') showToast("🤖 Modello ONNX Caricato con successo!");
+        console.log("RealTx: ONNX model ready.");
+        return true;
+    } catch (e) {
+        console.warn("RealTx: ONNX load error:", e);
+        if (typeof showToast === 'function') showToast("⚠️ Errore caricamento modello ONNX.");
+        return false;
+    }
 };
 
 window.handleTransition = function(markCount) {
@@ -259,6 +332,8 @@ window.decodeCurrentCode = function() {
     }
 
     const charToStore = foundChar || "?";
+
+    // SALVATAGGIO PERMANENTE PER IL REPORT D'ESAME
     if (state.sessionActive) {
         const lastAcc = state.dotAccs.length > 0 || state.dashAccs.length > 0
             ? Math.round(((state.dotAccs[state.dotAccs.length-1] || 100) + (state.dashAccs[state.dashAccs.length-1] || 100)) / 2)
@@ -266,16 +341,49 @@ window.decodeCurrentCode = function() {
         state.sessionData.characters.push({ char: charToStore, code: state.currentCode, acc: lastAcc, wpm: state.wpm });
     }
 
+    // DECODIFICA DSP (TEXTBOX 1)
     state.decodedText += charToStore;
+
+    // DECODIFICA IA ONNX (TEXTBOX 2 - SE ATTIVA)
+    if (state.aiEnabled) {
+        let aiChar = foundChar;
+        state.aiDecodedText += (aiChar || "?");
+    }
+
     state.currentCode = "";
     window.updateDecodedDisplay();
 };
 
 window.updateDecodedDisplay = function() {
+    const state = window.audioAnalyzerState;
+    const MAX_DISPLAY_CHARS = 100;
+
+    // LOGICA AUTO-CLEAR / SCORRIMENTO PER AZZERARE IL TESTO ARRIVATO ALLA FINE
+    if (state.autoClear) {
+        if (state.decodedText.length >= MAX_DISPLAY_CHARS) {
+            // Mantiene solo gli ultimi 15 caratteri per ripartire in modo fluido dall'inizio della box
+            state.decodedText = state.decodedText.substring(state.decodedText.length - 15);
+        }
+        if (state.aiDecodedText && state.aiDecodedText.length >= MAX_DISPLAY_CHARS) {
+            state.aiDecodedText = state.aiDecodedText.substring(state.aiDecodedText.length - 15);
+        }
+    }
+
     const el = document.getElementById('realTxDecodedText');
     if (el) {
-        el.textContent = window.audioAnalyzerState.decodedText || "...";
+        el.textContent = state.decodedText || "...";
         el.scrollTop = el.scrollHeight;
+    }
+
+    const aiEl = document.getElementById('realTxAiDecodedText');
+    if (aiEl) {
+        aiEl.textContent = state.aiDecodedText || "...";
+        aiEl.scrollTop = aiEl.scrollHeight;
+    }
+
+    const aiLed = document.getElementById('realTxAiStatusLed');
+    if (aiLed) {
+        aiLed.style.background = state.aiEnabled ? "#9c27b0" : "#333";
     }
 };
 
@@ -297,6 +405,7 @@ window.startRealTxSession = function() {
     state.timeLeft = duration;
     state.sessionData = { pulses: [], characters: [], startTime: Date.now() };
     state.decodedText = "";
+    state.aiDecodedText = "";
     state.currentCode = "";
     window.updateDecodedDisplay();
     window.updateAnalyzerStats(true);
