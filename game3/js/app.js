@@ -1510,37 +1510,38 @@ window.setupBugSystem = function() {
             let targetId = null;
             let targetName = inputVal;
 
-            // 1. Controllo diretto se ha inserito l'ID numerico (evita di scaricare tutto il database)
-            if (!isNaN(inputVal) && inputVal.trim() !== '') {
-                targetId = inputVal.trim();
-                try {
-                    const uSnap = await db.ref(`users/${targetId}`).once('value');
-                    if (uSnap.exists()) {
-                        const uVal = uSnap.val() || {};
-                        targetName = uVal.alias || uVal.name || uVal.username || targetId;
-                    }
-                } catch(e) {}
-            }
+            try {
+                // 1. Controllo diretto se ha inserito l'ID numerico (evita di scaricare tutto il database)
+                if (!isNaN(inputVal) && inputVal.trim() !== '') {
+                    targetId = inputVal.trim();
+                    try {
+                        const uSnap = await db.ref(`users/${targetId}`).once('value');
+                        if (uSnap.exists()) {
+                            const uVal = uSnap.val() || {};
+                            targetName = uVal.alias || uVal.name || uVal.username || targetId;
+                        }
+                    } catch(e) {}
+                }
 
-            // 2. Se non è un ID numerico o non trovato, cerca nei dati di presenza online
-            if (!targetId) {
-                const presenceSnap = await db.ref('presence').limitToLast(50).once('value');
-                const presenceData = presenceSnap.val() || {};
+                // 2. Se non è un ID numerico o non trovato, cerca nei dati di presenza online
+                if (!targetId) {
+                    const presenceSnap = await db.ref('presence').limitToLast(50).once('value');
+                    const presenceData = presenceSnap.val() || {};
 
-                for (const [id, userObj] of Object.entries(presenceData)) {
-                    if (!userObj) continue;
-                    const uName = (userObj.username || "").toLowerCase();
-                    const aliasName = (userObj.name || "").toLowerCase();
+                    for (const [id, userObj] of Object.entries(presenceData)) {
+                        if (!userObj) continue;
+                        const uName = (userObj.username || "").toLowerCase();
+                        const aliasName = (userObj.name || "").toLowerCase();
 
-                    if ((uName && uName === cleanVal) || (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)))) {
-                        targetId = id;
-                        targetName = userObj.name || userObj.username || id;
-                        break;
+                        if ((uName && uName === cleanVal) || (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)))) {
+                            targetId = id;
+                            targetName = userObj.name || userObj.username || id;
+                            break;
+                        }
                     }
                 }
-            }
 
-                // 2. Se non trovato in presence, cerca direttamente nel nodo users
+                // 3. Se non trovato in presence, cerca direttamente nel nodo users
                 if (!targetId) {
                     const usersSnap = await db.ref('users').once('value');
                     const usersData = usersSnap.val() || {};
@@ -1555,11 +1556,6 @@ window.setupBugSystem = function() {
                             break;
                         }
                     }
-                }
-
-                // 3. Fallback se ha inserito direttamente l'ID numerico
-                if (!targetId && !isNaN(inputVal)) {
-                    targetId = inputVal;
                 }
 
                 if (!targetId) {
