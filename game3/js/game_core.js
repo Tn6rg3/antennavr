@@ -566,10 +566,26 @@ window.joinRoomLogic = function(isReconnect = false) {
                 matchDetailsArray = pData.matchDetailsFull || pData.matchDetails || [];
                 isRejoining = (wordIndex > 0 || totalScore > 0);
                 window.isRejoining = isRejoining;
+            }
 
-                if (window.isRejoining && typeof showToast === 'function') {
-                    showToast(currentLang === 'en' ? `🔄 Match resumed from word #${wordIndex + 1}!` : `🔄 Partita ripresa dalla parola #${wordIndex + 1}!`);
-                }
+            // SE LA PARTITA E' IN CORSO (O E' UN SINGLE PLAYER DA RIPRENDERE): VAI DIRETTAMENTE AL RESUME!
+            if (rData.status === 'playing' || (rData.type === 'single' && (wordIndex > 0 || totalScore > 0))) {
+                db.ref(`rooms/${roomCode}/game_words`).once('value', wSnap => {
+                    if (wSnap.exists()) {
+                        gameWords = wSnap.val();
+                        window.gameWords = gameWords;
+                    } else if (rData.words) {
+                        gameWords = rData.words;
+                        window.gameWords = gameWords;
+                    }
+
+                    if (window.isRejoining && typeof showToast === 'function') {
+                        showToast(currentLang === 'en' ? `🔄 Match resumed from word #${wordIndex + 1}!` : `🔄 Partita ripresa dalla parola #${wordIndex + 1}!`);
+                    }
+
+                    window.resumeGameSequence();
+                });
+                return;
             }
 
             window.showScreen('lobbyScreen');
