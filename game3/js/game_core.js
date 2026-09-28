@@ -104,19 +104,10 @@ window.showScreen = function(screenId) {
     }
 
     if (screenId === 'setupScreen') {
-        const lastRoom = localStorage.getItem(STORAGE_ROOM_KEY);
-        if (!lastRoom && els.rejoinContainer) {
-            els.rejoinContainer.style.display = 'none';
-        } else if (lastRoom && els.rejoinContainer) {
-            els.rejoinContainer.style.display = 'block';
-            if (els.rejoinGameBtn) {
-                els.rejoinGameBtn.onclick = () => {
-                    roomCode = lastRoom;
-                    isRejoining = true;
-                    window.joinRoomLogic(false);
-                };
-            }
-        }
+        localStorage.removeItem(STORAGE_ROOM_KEY);
+        isRejoining = false;
+        window.isRejoining = false;
+        if (els.rejoinContainer) els.rejoinContainer.style.display = 'none';
 
         // OTTIMIZZAZIONE: Attiviamo i listener solo nel menu principale
         if (typeof window.listenToOnlineUsers === 'function') window.listenToOnlineUsers();
@@ -516,6 +507,8 @@ window.joinSpecificRoom = function(code) {
 
 window.joinRoomLogic = function(isReconnect = false) {
     gameRunning = false;
+    isRejoining = false;
+    window.isRejoining = false;
 
     // 1. Recuperiamo prima i dati della stanza per sapere chi è l'Host
     db.ref(`rooms/${roomCode}`).once('value', roomSnap => {
@@ -529,70 +522,14 @@ window.joinRoomLogic = function(isReconnect = false) {
         roomHostId = rData.hostId;
         window.roomCreatedAt = rData.createdAt || 0;
 
-        const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
-        playerRef.once('value', snapshot => {
-            const pData = snapshot.val();
-
-            if (pData?.finished) {
-                window.showScreen('leaderboardScreen');
-                activeTab = "room";
-                if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabRoomBtn');
-                localStorage.removeItem(STORAGE_ROOM_KEY);
-                return;
-            }
-
-            // CONTROLLO TEMPO DALL'USCITA (MAX 1 MINUTO / 60 SECONDI DALL'ULTIMA PAROLA/AZIONE)
-            const lastExitTime = pData?.lastActive || pData?.ts || rData.startTime || rData.createdAt || 0;
-            const now = Date.now() + (typeof serverTimeOffset !== 'undefined' ? serverTimeOffset : 0);
-            const secondsSinceExit = lastExitTime ? ((now - lastExitTime) / 1000) : 0;
-
-            if ((rData.status === 'playing' || rData.status === 'countdown') && lastExitTime > 0 && secondsSinceExit > 60) {
-                console.warn(`Join Room: Match recovery window expired (${Math.round(secondsSinceExit)}s > 60s since exit). Terminating.`);
-                localStorage.removeItem(STORAGE_ROOM_KEY);
-                window.isRejoining = false;
-                isRejoining = false;
-                if (typeof showToast === 'function') {
-                    showToast(currentLang === 'en' ? "⚠️ Match recovery time expired (> 1 min since exit). Match closed." : "⚠️ Tempo massimo di recupero partita scaduto (più di 1 min dall'uscita). Partita chiusa.");
-                }
-                window.exitRoomCleanly(true);
-                window.showScreen('setupScreen');
-                return;
-            }
-
-            if (pData) {
-                totalScore = pData.score || 0;
-                wordIndex = pData.wordIndex || 0;
-                quizQuestionIndex = pData.wordIndex || 0;
-                const rawDetails = pData.matchDetailsFull || pData.matchDetails || [];
-                matchDetailsArray = Array.isArray(rawDetails) ? rawDetails : (rawDetails ? Object.values(rawDetails) : []);
-                isRejoining = (wordIndex > 0 || totalScore > 0);
-                window.isRejoining = isRejoining;
-            }
-
-            // SE LA PARTITA E' IN CORSO (O E' UN SINGLE PLAYER DA RIPRENDERE): VAI DIRETTAMENTE AL RESUME!
-            if (rData.status === 'playing' || (rData.type === 'single' && (wordIndex > 0 || totalScore > 0))) {
-                db.ref(`rooms/${roomCode}/game_words`).once('value', wSnap => {
-                    const rawWords = wSnap.exists() ? wSnap.val() : (rData.game_words || rData.words || []);
-                    gameWords = Array.isArray(rawWords) ? rawWords : Object.values(rawWords || {});
-                    window.gameWords = gameWords;
-
-                    currentWpm = rData.wpm || currentWpm;
-                    baseWpm = rData.wpm || currentWpm;
-                    window.currentMode = rData.mode || 'standard';
-                    requestedWordCount = rData.wordCount || 10;
-                    window.isSinglePlayer = (rData.type === 'single');
-                    window.isFixedSpeed = !!rData.fixedSpeed;
-                    window.isEasyMode = !!rData.easyMode;
-                    window.isAllowSpectators = !!rData.allowSpectators;
-                    window.isSpeakMode = !!rData.speakMode;
-                    window.isVoiceInputMode = !!rData.voiceInputMode;
-                    window.voiceRate = rData.voiceRate || 1.0;
-                    window.charSpaceWpm = rData.charSpaceWpm || 0;
-                    window.wordSpaceMult = rData.wordSpaceMult || 1.0;
-
-                    if (window.isRejoining && typeof showToast === 'function') {
-                        showToast(currentLang === 'en' ? `🔄 Match resumed from word #${wordIndex + 1}!` : `🔄 Partita ripresa dalla parola #${wordIndex + 1}!`);
-                    }
+        // POLITICA TASSATIVA: Qualsiasi partita interrotta/non finita viene ELIMINATA e NON recuperata!
+        if (rData.status === 'playing' || rData.status === 'countdown' || rData.type === 'single') {
+            console.log("Join Room: Partita interrotta o non terminata scartata e pulita.");
+            localStorage.removeItem(STORAGE_ROOM_KEY);
+            window.exitRoomCleanly(true);
+            window.showScreen('setupScreen');
+            return;
+        }
 
                     window.resumeGameSequence();
                 });
@@ -945,11 +882,12 @@ window.startCountdownSequence = function() {
         els.spectatorsCountDisplay.style.display = 'none';
     }
 
-    if (!isRejoining && !window.isRejoining) {
-        totalScore = 0; currentStreak = 0; wordIndex = 0; quizQuestionIndex = 0; usedReplay = false;
-        peakWpm = currentWpm;
-        matchDetailsArray = [];
-    }
+    // OGNI PARTITA PARTE SEMPRE DA ZERO SENZA ALCUN RECUPERO!
+    totalScore = 0; currentStreak = 0; wordIndex = 0; quizQuestionIndex = 0; usedReplay = false;
+    peakWpm = currentWpm;
+    matchDetailsArray = [];
+    isRejoining = false;
+    window.isRejoining = false;
     if (els.tableBody) els.tableBody.innerHTML = "";
     window.lastPlayedWordId = 0;
     window.lastSeenGuessId = 0;
