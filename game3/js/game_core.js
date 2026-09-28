@@ -563,7 +563,8 @@ window.joinRoomLogic = function(isReconnect = false) {
                 totalScore = pData.score || 0;
                 wordIndex = pData.wordIndex || 0;
                 quizQuestionIndex = pData.wordIndex || 0;
-                matchDetailsArray = pData.matchDetailsFull || pData.matchDetails || [];
+                const rawDetails = pData.matchDetailsFull || pData.matchDetails || [];
+                matchDetailsArray = Array.isArray(rawDetails) ? rawDetails : (rawDetails ? Object.values(rawDetails) : []);
                 isRejoining = (wordIndex > 0 || totalScore > 0);
                 window.isRejoining = isRejoining;
             }
@@ -571,13 +572,23 @@ window.joinRoomLogic = function(isReconnect = false) {
             // SE LA PARTITA E' IN CORSO (O E' UN SINGLE PLAYER DA RIPRENDERE): VAI DIRETTAMENTE AL RESUME!
             if (rData.status === 'playing' || (rData.type === 'single' && (wordIndex > 0 || totalScore > 0))) {
                 db.ref(`rooms/${roomCode}/game_words`).once('value', wSnap => {
-                    if (wSnap.exists()) {
-                        gameWords = wSnap.val();
-                        window.gameWords = gameWords;
-                    } else if (rData.words) {
-                        gameWords = rData.words;
-                        window.gameWords = gameWords;
-                    }
+                    const rawWords = wSnap.exists() ? wSnap.val() : (rData.game_words || rData.words || []);
+                    gameWords = Array.isArray(rawWords) ? rawWords : Object.values(rawWords || {});
+                    window.gameWords = gameWords;
+
+                    currentWpm = rData.wpm || currentWpm;
+                    baseWpm = rData.wpm || currentWpm;
+                    window.currentMode = rData.mode || 'standard';
+                    requestedWordCount = rData.wordCount || 10;
+                    window.isSinglePlayer = (rData.type === 'single');
+                    window.isFixedSpeed = !!rData.fixedSpeed;
+                    window.isEasyMode = !!rData.easyMode;
+                    window.isAllowSpectators = !!rData.allowSpectators;
+                    window.isSpeakMode = !!rData.speakMode;
+                    window.isVoiceInputMode = !!rData.voiceInputMode;
+                    window.voiceRate = rData.voiceRate || 1.0;
+                    window.charSpaceWpm = rData.charSpaceWpm || 0;
+                    window.wordSpaceMult = rData.wordSpaceMult || 1.0;
 
                     if (window.isRejoining && typeof showToast === 'function') {
                         showToast(currentLang === 'en' ? `🔄 Match resumed from word #${wordIndex + 1}!` : `🔄 Partita ripresa dalla parola #${wordIndex + 1}!`);
@@ -1041,32 +1052,41 @@ window.resumeGameSequence = function() {
     // RENDERING GARANTITO DI TUTTE LE PAROLE GIA' FATTE NELLA TABELLA
     if (tableEl) {
         tableEl.innerHTML = "";
-        if (Array.isArray(matchDetailsArray)) {
-            matchDetailsArray.forEach(row => {
-                if (!row) return;
-                const tr = document.createElement('tr');
-                let color = (row.points > 0 || row.pts > 0) ? "#4caf50" : ((row.points === 0 || row.pts === 0) && row.typed !== row.real ? "#d32f2f" : "#999999");
-                const pointsVal = (row.points !== undefined) ? row.points : (row.pts !== undefined ? row.pts : 0);
+        const detailsList = Array.isArray(matchDetailsArray) ? matchDetailsArray : (matchDetailsArray ? Object.values(matchDetailsArray) : []);
+        detailsList.forEach(row => {
+            if (!row) return;
+            const tr = document.createElement('tr');
+            let color = (row.points > 0 || row.pts > 0) ? "#4caf50" : ((row.points === 0 || row.pts === 0) && row.typed !== row.real ? "#d32f2f" : "#999999");
+            const pointsVal = (row.points !== undefined) ? row.points : (row.pts !== undefined ? row.pts : 0);
 
-                const tdTyped = document.createElement('td');
-                tdTyped.textContent = row.typed || row.word || "";
+            const tdTyped = document.createElement('td');
+            tdTyped.textContent = row.typed || row.word || "-";
 
-                const tdReal = document.createElement('td');
-                const bReal = document.createElement('b');
-                bReal.textContent = row.real || row.target || row.word || "";
-                tdReal.appendChild(bReal);
+            const tdReal = document.createElement('td');
+            const bReal = document.createElement('b');
+            bReal.textContent = row.real || row.target || row.word || "";
+            tdReal.appendChild(bReal);
 
-                const tdPoints = document.createElement('td');
-                tdPoints.style.color = color;
-                tdPoints.style.fontWeight = 'bold';
-                tdPoints.textContent = pointsVal;
+            const tdWpm = document.createElement('td');
+            tdWpm.style.textAlign = 'center';
+            tdWpm.style.fontWeight = 'bold';
+            tdWpm.style.color = '#ff9800';
+            tdWpm.style.fontSize = '0.85em';
+            tdWpm.textContent = `${row.wpm || currentWpm} WPM`;
 
-                tr.appendChild(tdTyped);
-                tr.appendChild(tdReal);
-                tr.appendChild(tdPoints);
-                tableEl.appendChild(tr);
-            });
-        }
+            const tdPoints = document.createElement('td');
+            tdPoints.style.textAlign = 'center';
+            tdPoints.style.color = color;
+            tdPoints.style.fontWeight = 'bold';
+            tdPoints.textContent = pointsVal;
+
+            tr.appendChild(tdTyped);
+            tr.appendChild(tdReal);
+            tr.appendChild(tdWpm);
+            tr.appendChild(tdPoints);
+            tableEl.appendChild(tr);
+        });
+        if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
     }
 
     const mode = window.currentMode;
