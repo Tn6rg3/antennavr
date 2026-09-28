@@ -531,12 +531,7 @@ window.joinRoomLogic = function(isReconnect = false) {
             return;
         }
 
-                    window.resumeGameSequence();
-                });
-                return;
-            }
-
-            window.showScreen('lobbyScreen');
+        window.showScreen('lobbyScreen');
             if (els.lobbyTitleText) {
                 if (roomCode.startsWith("TRN_")) {
                     els.lobbyTitleText.textContent = "Lobby Incontro Torneo 🥊";
