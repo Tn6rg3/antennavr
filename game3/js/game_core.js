@@ -1023,24 +1023,48 @@ window.resumeGameSequence = function() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     gameRunning = true;
     isRejoining = false;
+    window.isRejoining = false;
 
     window.isCoopMode = (window.currentMode === 'conquest');
     if (els.coopArea) els.coopArea.style.display = window.isCoopMode ? 'flex' : 'none';
     if (els.tableWrapper) els.tableWrapper.style.display = window.isCoopMode ? 'none' : 'block';
 
-    if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
-    if (domCache.scoreDisplay) domCache.scoreDisplay.textContent = `Punti: ${totalScore}`;
+    const wpmEl = els.wpmDisplay || document.getElementById('wpmDisplay') || domCache.wpmDisplay;
+    const scoreEl = els.scoreDisplay || document.getElementById('scoreDisplay') || domCache.scoreDisplay;
+    const tableEl = els.tableBody || document.getElementById('tableBody') || domCache.tableBody;
 
-    if (domCache.tableBody) {
-        domCache.tableBody.innerHTML = "";
-        matchDetailsArray.forEach(row => {
-            const tr = document.createElement('tr');
-            let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
-            const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed;
-            const tdReal = document.createElement('td'); const bReal = document.createElement('b'); bReal.textContent = row.real; tdReal.appendChild(bReal);
-            const tdPoints = document.createElement('td'); tdPoints.style.color = color; tdPoints.style.fontWeight = 'bold'; tdPoints.textContent = row.points;
-            tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints); domCache.tableBody.appendChild(tr);
-        });
+    if (wpmEl) wpmEl.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
+    if (scoreEl) scoreEl.textContent = `Punti: ${totalScore}`;
+
+    // RENDERING GARANTITO DI TUTTE LE PAROLE GIA' FATTE NELLA TABELLA
+    if (tableEl) {
+        tableEl.innerHTML = "";
+        if (Array.isArray(matchDetailsArray)) {
+            matchDetailsArray.forEach(row => {
+                if (!row) return;
+                const tr = document.createElement('tr');
+                let color = (row.points > 0 || row.pts > 0) ? "#4caf50" : ((row.points === 0 || row.pts === 0) && row.typed !== row.real ? "#d32f2f" : "#999999");
+                const pointsVal = (row.points !== undefined) ? row.points : (row.pts !== undefined ? row.pts : 0);
+
+                const tdTyped = document.createElement('td');
+                tdTyped.textContent = row.typed || row.word || "";
+
+                const tdReal = document.createElement('td');
+                const bReal = document.createElement('b');
+                bReal.textContent = row.real || row.target || row.word || "";
+                tdReal.appendChild(bReal);
+
+                const tdPoints = document.createElement('td');
+                tdPoints.style.color = color;
+                tdPoints.style.fontWeight = 'bold';
+                tdPoints.textContent = pointsVal;
+
+                tr.appendChild(tdTyped);
+                tr.appendChild(tdReal);
+                tr.appendChild(tdPoints);
+                tableEl.appendChild(tr);
+            });
+        }
     }
 
     const mode = window.currentMode;
