@@ -532,24 +532,37 @@ window.joinRoomLogic = function(isReconnect = false) {
         }
 
         window.showScreen('lobbyScreen');
-            if (els.lobbyTitleText) {
-                if (roomCode.startsWith("TRN_")) {
-                    els.lobbyTitleText.textContent = "Lobby Incontro Torneo 🥊";
-                } else {
-                    const m = rData.mode || 'standard';
-                    window.currentMode = m; // Sincronizzazione fondamentale per Guest
-                    const modeCfg = window.GAME_MODES[m];
-                    const modeTitle = modeCfg ? (currentLang === 'it' ? modeCfg.titleIt : modeCfg.titleEn) : "Stanza Libera";
-                    els.lobbyTitleText.textContent = "Lobby " + modeTitle;
+        if (els.lobbyTitleText) {
+            if (roomCode.startsWith("TRN_")) {
+                els.lobbyTitleText.textContent = "Lobby Incontro Torneo 🥊";
+            } else {
+                const m = rData.mode || 'standard';
+                window.currentMode = m; // Sincronizzazione fondamentale per Guest
+                const modeCfg = window.GAME_MODES[m];
+                const modeTitle = modeCfg ? (currentLang === 'it' ? modeCfg.titleIt : modeCfg.titleEn) : "Stanza Libera";
+                els.lobbyTitleText.textContent = "Lobby " + modeTitle;
 
-                    const badge = document.getElementById('lobbyModeBadge');
-                    if (badge) {
-                        badge.innerHTML = `<span style="background:var(--link-color); color:white; padding:2px 8px; border-radius:10px; font-size:0.75em; font-weight:bold; text-transform:uppercase;">MODALITÀ: ${modeTitle}</span>`;
-                    }
+                const badge = document.getElementById('lobbyModeBadge');
+                if (badge) {
+                    badge.innerHTML = `<span style="background:var(--link-color); color:white; padding:2px 8px; border-radius:10px; font-size:0.75em; font-weight:bold; text-transform:uppercase;">MODALITÀ: ${modeTitle}</span>`;
                 }
             }
-            if (els.permanentGameInput) els.permanentGameInput.blur();
-            playerRef.onDisconnect().update({ online: false });
+        }
+        if (els.permanentGameInput) els.permanentGameInput.blur();
+
+        const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
+        playerRef.onDisconnect().update({ online: false });
+
+        playerRef.once('value', snapshot => {
+            const pData = snapshot.val();
+
+            if (pData?.finished) {
+                window.showScreen('leaderboardScreen');
+                activeTab = "room";
+                if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabRoomBtn');
+                localStorage.removeItem(STORAGE_ROOM_KEY);
+                return;
+            }
 
             if (!pData) {
                 // Se sono l'Host o è un invito accettato, accepted è sempre true
