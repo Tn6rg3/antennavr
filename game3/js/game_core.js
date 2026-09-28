@@ -468,22 +468,6 @@ window.listenToRoomInBackground = function() {
         if ((rData.status === 'playing' || rData.status === 'countdown') && !gameRunning) {
             console.log("Room Monitor: Match starting or resuming.");
 
-            // CONTROLLO SCADENZA PARTITA (MAX 1 MINUTO / 60 SECONDI DALL'INIZIO)
-            const matchStartTime = rData.startTime || rData.createdAt || 0;
-            const now = Date.now() + (typeof serverTimeOffset !== 'undefined' ? serverTimeOffset : 0);
-            const elapsedSeconds = matchStartTime ? ((now - matchStartTime) / 1000) : 0;
-
-            if (matchStartTime > 0 && elapsedSeconds > 60) {
-                console.warn(`Room Monitor: Match expired (${Math.round(elapsedSeconds)}s > 60s limit). Closing room.`);
-                localStorage.removeItem(STORAGE_ROOM_KEY);
-                window.isRejoining = false;
-                if (typeof showToast === 'function') {
-                    showToast(currentLang === 'en' ? "⚠️ Match recovery time expired (> 1 min). Match closed." : "⚠️ Tempo massimo di recupero partita scaduto (più di 1 min). Partita chiusa.");
-                }
-                window.exitRoomCleanly(true);
-                return;
-            }
-
             localStorage.setItem(STORAGE_ROOM_KEY, roomCode);
             window.isRoomMonitorActive = false;
 
@@ -515,7 +499,7 @@ window.listenToRoomInBackground = function() {
                     gameWords = rData.words;
                 }
 
-                if (rData.status === 'playing') {
+                if (rData.status === 'playing' || window.isRejoining || isRejoining) {
                     window.resumeGameSequence();
                 } else {
                     window.startCountdownSequence();
@@ -545,23 +529,6 @@ window.joinRoomLogic = function(isReconnect = false) {
         roomHostId = rData.hostId;
         window.roomCreatedAt = rData.createdAt || 0;
 
-        // CONTROLLO SCADENZA RECOVERY PARTITA (MAX 1 MINUTO / 60 SECONDI)
-        const matchStartTime = rData.startTime || rData.createdAt || 0;
-        const now = Date.now() + (typeof serverTimeOffset !== 'undefined' ? serverTimeOffset : 0);
-        const elapsedSeconds = matchStartTime ? ((now - matchStartTime) / 1000) : 0;
-
-        if ((rData.status === 'playing' || rData.status === 'countdown') && matchStartTime > 0 && elapsedSeconds > 60) {
-            console.warn(`Join Room: Match recovery expired (${Math.round(elapsedSeconds)}s > 60s limit). Terminating.`);
-            localStorage.removeItem(STORAGE_ROOM_KEY);
-            window.isRejoining = false;
-            if (typeof showToast === 'function') {
-                showToast(currentLang === 'en' ? "⚠️ Match recovery time expired (> 1 min). Match closed." : "⚠️ Tempo massimo di recupero partita scaduto (più di 1 min). Partita chiusa.");
-            }
-            window.exitRoomCleanly(true);
-            window.showScreen('setupScreen');
-            return;
-        }
-
         const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
         playerRef.once('value', snapshot => {
             const pData = snapshot.val();
@@ -574,12 +541,31 @@ window.joinRoomLogic = function(isReconnect = false) {
                 return;
             }
 
+            // CONTROLLO TEMPO DALL'USCITA (MAX 1 MINUTO / 60 SECONDI DALL'ULTIMA PAROLA/AZIONE)
+            const lastExitTime = pData?.lastActive || pData?.ts || rData.startTime || rData.createdAt || 0;
+            const now = Date.now() + (typeof serverTimeOffset !== 'undefined' ? serverTimeOffset : 0);
+            const secondsSinceExit = lastExitTime ? ((now - lastExitTime) / 1000) : 0;
+
+            if ((rData.status === 'playing' || rData.status === 'countdown') && lastExitTime > 0 && secondsSinceExit > 60) {
+                console.warn(`Join Room: Match recovery window expired (${Math.round(secondsSinceExit)}s > 60s since exit). Terminating.`);
+                localStorage.removeItem(STORAGE_ROOM_KEY);
+                window.isRejoining = false;
+                isRejoining = false;
+                if (typeof showToast === 'function') {
+                    showToast(currentLang === 'en' ? "⚠️ Match recovery time expired (> 1 min since exit). Match closed." : "⚠️ Tempo massimo di recupero partita scaduto (più di 1 min dall'uscita). Partita chiusa.");
+                }
+                window.exitRoomCleanly(true);
+                window.showScreen('setupScreen');
+                return;
+            }
+
             if (pData) {
                 totalScore = pData.score || 0;
                 wordIndex = pData.wordIndex || 0;
                 quizQuestionIndex = pData.wordIndex || 0;
                 matchDetailsArray = pData.matchDetailsFull || pData.matchDetails || [];
-                window.isRejoining = (wordIndex > 0 || totalScore > 0);
+                isRejoining = (wordIndex > 0 || totalScore > 0);
+                window.isRejoining = isRejoining;
 
                 if (window.isRejoining && typeof showToast === 'function') {
                     showToast(currentLang === 'en' ? `🔄 Match resumed from word #${wordIndex + 1}!` : `🔄 Partita ripresa dalla parola #${wordIndex + 1}!`);
@@ -2202,14 +2188,14 @@ window.handleWordSubmission = function(userWord) {
             window.perfectionWordsDone++;
         }
         if (roomCode) {
-            // OTTIMIZZAZIONE: Inviamo solo l'ultimo aggiornamento invece di tutto l'array
+            // Sincronizziamo punteggio, parola corrente, timestamp dell'ultima azione e dettagli
             db.ref(`rooms/${roomCode}/players/${myId}`).update({
                 score: totalScore,
                 wpm: currentWpm,
                 wordIndex: wordIndex,
+                lastActive: Date.now(),
                 lastUpdate: lastEntry
             });
-            // Salviamo l'array completo solo nel nodo storico (una volta a fine match sarebbe ideale, ma per ora lo lasciamo per sicurezza ma in un nodo meno "ascoltato")
             db.ref(`rooms/${roomCode}/players/${myId}/matchDetailsFull`).set(matchDetailsArray);
         }
 
