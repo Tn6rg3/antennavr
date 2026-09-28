@@ -563,11 +563,6 @@ window.joinRoomLogic = function(isReconnect = false) {
                 }
             }
             if (els.permanentGameInput) els.permanentGameInput.blur();
-                activeTab = "room";
-                if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabRoomBtn');
-                localStorage.removeItem(STORAGE_ROOM_KEY);
-                return;
-            }
 
             if (!pData) {
                 // Se sono l'Host o è un invito accettato, accepted è sempre true
