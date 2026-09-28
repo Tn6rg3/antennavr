@@ -522,42 +522,47 @@ window.joinRoomLogic = function(isReconnect = false) {
         roomHostId = rData.hostId;
         window.roomCreatedAt = rData.createdAt || 0;
 
-        // POLITICA TASSATIVA: Qualsiasi partita interrotta/non finita viene ELIMINATA e NON recuperata!
-        if (rData.status === 'playing' || rData.status === 'countdown' || rData.type === 'single') {
-            console.log("Join Room: Partita interrotta o non terminata scartata e pulita.");
-            localStorage.removeItem(STORAGE_ROOM_KEY);
-            window.exitRoomCleanly(true);
-            window.showScreen('setupScreen');
-            return;
-        }
-
-        window.showScreen('lobbyScreen');
-        if (els.lobbyTitleText) {
-            if (roomCode.startsWith("TRN_")) {
-                els.lobbyTitleText.textContent = "Lobby Incontro Torneo 🥊";
-            } else {
-                const m = rData.mode || 'standard';
-                window.currentMode = m; // Sincronizzazione fondamentale per Guest
-                const modeCfg = window.GAME_MODES[m];
-                const modeTitle = modeCfg ? (currentLang === 'it' ? modeCfg.titleIt : modeCfg.titleEn) : "Stanza Libera";
-                els.lobbyTitleText.textContent = "Lobby " + modeTitle;
-
-                const badge = document.getElementById('lobbyModeBadge');
-                if (badge) {
-                    badge.innerHTML = `<span style="background:var(--link-color); color:white; padding:2px 8px; border-radius:10px; font-size:0.75em; font-weight:bold; text-transform:uppercase;">MODALITÀ: ${modeTitle}</span>`;
-                }
-            }
-        }
-        if (els.permanentGameInput) els.permanentGameInput.blur();
-
         const playerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
         playerRef.onDisconnect().update({ online: false });
 
         playerRef.once('value', snapshot => {
             const pData = snapshot.val();
 
+            // POLITICA TASSATIVA: Se e un ricollegamento/re-open di una vecchia partita gia iniziata in passato, la eliminiamo
+            if (isReconnect && pData && (pData.wordIndex > 0 || pData.score > 0)) {
+                console.log("Join Room: Vecchia partita interrotta scartata come da regola.");
+                localStorage.removeItem(STORAGE_ROOM_KEY);
+                window.exitRoomCleanly(true);
+                window.showScreen('setupScreen');
+                return;
+            }
+
             if (pData?.finished) {
                 window.showScreen('leaderboardScreen');
+                activeTab = "room";
+                if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabRoomBtn');
+                localStorage.removeItem(STORAGE_ROOM_KEY);
+                return;
+            }
+
+            window.showScreen('lobbyScreen');
+            if (els.lobbyTitleText) {
+                if (roomCode.startsWith("TRN_")) {
+                    els.lobbyTitleText.textContent = "Lobby Incontro Torneo 🥊";
+                } else {
+                    const m = rData.mode || 'standard';
+                    window.currentMode = m; // Sincronizzazione fondamentale per Guest
+                    const modeCfg = window.GAME_MODES[m];
+                    const modeTitle = modeCfg ? (currentLang === 'it' ? modeCfg.titleIt : modeCfg.titleEn) : "Stanza Libera";
+                    els.lobbyTitleText.textContent = "Lobby " + modeTitle;
+
+                    const badge = document.getElementById('lobbyModeBadge');
+                    if (badge) {
+                        badge.innerHTML = `<span style="background:var(--link-color); color:white; padding:2px 8px; border-radius:10px; font-size:0.75em; font-weight:bold; text-transform:uppercase;">MODALITÀ: ${modeTitle}</span>`;
+                    }
+                }
+            }
+            if (els.permanentGameInput) els.permanentGameInput.blur();
                 activeTab = "room";
                 if (typeof showLeaderboardTab === 'function') showLeaderboardTab('tabRoomBtn');
                 localStorage.removeItem(STORAGE_ROOM_KEY);
