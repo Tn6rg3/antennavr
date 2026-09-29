@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V41 - Ancora Fisica Joypad</title>
+  <title>Antenne AR Pro V39 - Anchors Hardware, Hitbox Ingrandite, Laser</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -67,6 +67,10 @@
             this.calibLocal1 = null; 
             this.calibLocal2 = null;
             
+            // WebXR Hardware Anchor State
+            this.sceneAnchor = null;
+            this.requestingAnchor = false;
+            
             this.pointerMode = 'TOUCH';
             this.hitTestSource = null; this.requestingHitTest = false; this.reticleValid = false;
             this.targetReticlePos = new THREE.Vector3(); this.targetReticleQuat = new THREE.Quaternion(); this.lastFloorY = 0; 
@@ -80,26 +84,23 @@
             this.activeAntIdx = 0;
             this.current = this.antennas[0];
 
-            this.raycasterEl = document.querySelector('#right-controller'); 
+            this.raycasterEl = document.querySelector('#right-controller'); this.leftControllerEl = document.querySelector('#left-controller');
             
-            // LA STRUTTURA DEL MONDO È ORA DENTRO IL LEFT CONTROLLER
+            // Struttura a 3 livelli per massima stabilità
+            this.anchorRootEl = document.querySelector('#anchor-root');
             this.worldPivotEl = document.querySelector('#world-pivot'); 
             this.worldContentEl = document.querySelector('#world-content');
             
             this.verticalCylinder = document.querySelector('#vertical-cylinder'); this.heightText = document.querySelector('#height-text');
             this.menuUI = document.querySelector('#menu-ui'); this.gwUI = document.querySelector('#guy-wires-ui');
 
-            // TUTTI I COMANDI SPOSTATI SUL CONTROLLER DESTRO
-            if (this.raycasterEl) { 
-                this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this)); 
-                this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this)); 
-                // Tasto B per Menu Principale
-                this.raycasterEl.addEventListener('bbuttondown', this.toggleMenu.bind(this));
-                // Tasto A per Menu Tiranti
-                this.raycasterEl.addEventListener('abuttondown', this.toggleGuyWireMode.bind(this));
-            }
+            if (this.raycasterEl) { this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this)); this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this)); }
+            if (this.leftControllerEl) { this.leftControllerEl.addEventListener('ybuttondown', this.toggleMenu.bind(this)); this.leftControllerEl.addEventListener('xbuttondown', this.toggleGuyWireMode.bind(this)); this.leftControllerEl.addEventListener('thumbstickmoved', this.onLeftThumbstick.bind(this)); }
 
-            this.el.sceneEl.addEventListener('exit-vr', () => { this.hitTestSource = null; this.requestingHitTest = false; });
+            this.el.sceneEl.addEventListener('exit-vr', () => { 
+                this.hitTestSource = null; this.requestingHitTest = false; 
+                this.sceneAnchor = null; this.requestingAnchor = false;
+            });
 
             this.initPersistentElements(); this.setupGlobalEventDelegation(); this.setupMmanaFileLoader();
             window.saveAntennaToDB = this.saveAntennaToDB.bind(this); window.loadAntennaFromDB = this.loadAntennaFromDB.bind(this); window.deleteAntennaFromDB = this.deleteAntennaFromDB.bind(this);
@@ -332,6 +333,32 @@
         if(!this.current.state) return;
 
         let sceneEl = this.el.sceneEl; let frame = sceneEl.frame;
+        
+        // ---- GESTIONE WEBXR ANCHORS (ELIMINA IL DRIFT) ----
+        if (sceneEl.is('ar-mode') && frame) {
+            let refSpace = sceneEl.renderer.xr.getReferenceSpace();
+            // 1. Crea un'Ancora di Sistema all'origine alla prima occasione
+            if (!this.sceneAnchor && !this.requestingAnchor && frame.createAnchor) {
+                this.requestingAnchor = true;
+                if(typeof XRRigidTransform !== 'undefined') {
+                    let transform = new XRRigidTransform({x:0, y:0, z:0}, {x:0, y:0, z:0, w:1});
+                    frame.createAnchor(transform, refSpace).then(anchor => {
+                        this.sceneAnchor = anchor;
+                        console.log("WebXR Hardware Spatial Anchor attivato!");
+                    }).catch(e => { console.error("Errore creazione Anchor", e); this.requestingAnchor = false; });
+                }
+            }
+            // 2. Se l'ancora esiste, applica continuamente la sua correzione alla root dell'intera scena
+            if (this.sceneAnchor) {
+                let pose = frame.getPose(this.sceneAnchor.anchorSpace, refSpace);
+                if (pose && this.anchorRootEl) {
+                    this.anchorRootEl.object3D.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+                    this.anchorRootEl.object3D.quaternion.set(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w);
+                }
+            }
+        }
+        // ---------------------------------------------------
+
         let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || (this.gwState && this.gwState.includes('PEGS'));
         if (!isPlacingMode) this.triangState = 0;
         let indicator = document.querySelector('#touch-indicator'); 
@@ -424,29 +451,35 @@
         return { point: pos };
       },
 
+      onLeftThumbstick: function(evt) {
+        if (Math.abs(evt.detail.x) > 0.3) {
+            let delta = evt.detail.x > 0 ? 2.0 : -2.0;
+            if (this.gwState !== 'OFF') return;
+            
+            if (this.current.state === 'SIZE_ROTATE_TRALICCIO') {
+               this.current.traliccio.rotationY += delta; this.refreshAll();
+            } else {
+               this.current.antennaRotationY += delta; this.refreshAll();
+               if(Date.now() - this.lastTriggerTime > 1000) { this.saveToStorage(); this.lastTriggerTime = Date.now(); }
+            }
+        }
+      },
+
       onRightThumbstick: function (evt) {
         let thumbTime = Date.now();
         if (!this.lastThumbTime || thumbTime - this.lastThumbTime > 110) {
           
-          // GESTIONE ASSE X (Triangolazione o Rotazione Unificata)
           if (this.pointerMode === 'TRIANG' && this.triangState > 0) {
-              if (evt.detail.x > 0.4) { this.triangState = Math.max(0, this.triangState - 1); this.refreshAll(); this.lastThumbTime = thumbTime; return; }
-              if (evt.detail.x < -0.4) { this.triangState = 0; this.refreshAll(); this.lastThumbTime = thumbTime; return; }
-          }
-          
-          if (Math.abs(evt.detail.x) > 0.3 && this.pointerMode !== 'TRIANG') {
-              let deltaX = evt.detail.x > 0 ? 2.0 : -2.0;
-              if (this.gwState === 'OFF') {
-                  if (this.current.state === 'SIZE_ROTATE_TRALICCIO') {
-                     this.current.traliccio.rotationY += deltaX; this.refreshAll();
-                  } else {
-                     this.current.antennaRotationY += deltaX; this.refreshAll();
-                     if(Date.now() - this.lastTriggerTime > 1000) { this.saveToStorage(); this.lastTriggerTime = Date.now(); }
-                  }
+              if (evt.detail.x > 0.4) {
+                  this.triangState = Math.max(0, this.triangState - 1);
+                  this.refreshAll(); this.lastThumbTime = thumbTime; return;
+              }
+              if (evt.detail.x < -0.4) {
+                  this.triangState = 0;
+                  this.refreshAll(); this.lastThumbTime = thumbTime; return;
               }
           }
 
-          // GESTIONE ASSE Y (Altezze)
           if (this.current.state === 'SIZE_ROTATE_TRALICCIO') {
              if (Math.abs(evt.detail.y) > 0.3) {
                  let step = evt.detail.y < 0 ? 0.05 : -0.05; 
@@ -660,21 +693,21 @@
         if (this.pointerMode === 'TRIANG' && this.current.state.includes('GROUND')) {
             if (this.triangState === 0) infoTextStr = "TRIANGOLAZIONE: RAGGIO 1\nUsa il CONTROLLER per mirare al bersaglio e premi Grilletto.";
             else if (this.triangState === 1) infoTextStr = "TRIANGOLAZIONE: RAGGIO 2\nSpostati, mira all'incrocio col CONTROLLER. (Joy DX: Annulla)";
-            else if (this.triangState === 2) infoTextStr = "TRIANGOLAZIONE: PUNTO ACQUISITO\n[GRILLETTO] Piazza | Joy DX: Rifai R2 | Joy DX (L/R): Reset";
+            else if (this.triangState === 2) infoTextStr = "TRIANGOLAZIONE: PUNTO ACQUISITO\n[GRILLETTO] Piazza | Joy DX: Rifai R2 | Joy SX: Reset";
         }
         else if (this.current.state === 'REPOSITION_GROUND_C') { infoTextStr = "Punta a terra sotto al Centro C e premi il grilletto\nper fissare la quota."; }
         else if (this.current.state === 'PLACE_TRALICCIO_CENTER') { infoTextStr = "Punta a terra e premi grilletto per\nil CENTRO del Traliccio."; }
-        else if (isTraliccioSetup) { infoTextStr = "JOYSTICK DX (L/R): Ruota | JOYSTICK DX (Su/Giù): Misure\nGRILLETTO: Conferma forma e dimensioni"; let txtTralShape = document.querySelector('#txt-tral-shape'); if(txtTralShape && this.current.traliccio) txtTralShape.setAttribute('value', `FORMA: ${this.current.traliccio.shape === 'square' ? 'QUADRATA' : 'TRIANGOLARE'}`); }
+        else if (isTraliccioSetup) { infoTextStr = "JOYSTICK SX: Ruota | JOYSTICK DX: Misure\nGRILLETTO: Conferma forma e dimensioni"; let txtTralShape = document.querySelector('#txt-tral-shape'); if(txtTralShape && this.current.traliccio) txtTralShape.setAttribute('value', `FORMA: ${this.current.traliccio.shape === 'square' ? 'QUADRATA' : 'TRIANGOLARE'}`); }
         else if (this.current.state === 'PLACE_HEIGHT_TRALICCIO') { infoTextStr = "JOYSTICK DX: Alza o abbassa il traliccio\nGRILLETTO: Conferma altezza traliccio."; }
-        else if (this.current.state === 'AWAITING_CALIB_PT1') { infoTextStr = "CALIBRAZIONE (OPZIONALE):\nPosiziona il Diamante 1 sul VERO PUNTO 1."; }
+        else if (this.current.state === 'AWAITING_CALIB_PT1') { infoTextStr = "CALIBRAZIONE: L'antenna è agganciata al controller.\nPosiziona il Diamante 1 sul VERO PUNTO 1."; }
         else if (this.current.state === 'AWAITING_CALIB_PT2') { infoTextStr = "CALIBRAZIONE: Ruota l'antenna fino ad allineare\nil Diamante 2 sul VERO PUNTO 2."; }
-        else if (this.current.state === 'SET_CALIB_PT1') { infoTextStr = "IMPOSTA CAPISALDI:\nAppoggia il controller destro sul VERO PUNTO 1 e premi grilletto."; }
+        else if (this.current.state === 'SET_CALIB_PT1') { infoTextStr = "IMPOSTA CAPISALDI:\nAppoggia il controller sul VERO PUNTO 1 e premi grilletto."; }
         else if (this.current.state === 'SET_CALIB_PT2') { infoTextStr = "IMPOSTA CAPISALDI:\nOra sul VERO PUNTO 2. (Scompariranno appena confermati)."; }
         else if (type === 'Dipolo') { infoTextStr = `ANTENNA: DIPOLO | BANDA: ${band}\nLUNGHEZZA: ${this.getCalculatedLength().toFixed(2)}m`; } 
         else if (type === 'End Fed') { infoTextStr = `ANTENNA: END FED | BANDA: ${band}\nAC: ${this.current.endFed_AC_Len.toFixed(2)}m | CB: ${this.current.endFed_CB_Len.toFixed(2)}m`; let txtEf = document.querySelector('#txt-ef-values'); if(txtEf) txtEf.setAttribute('value', `AC: ${this.current.endFed_AC_Len.toFixed(2)}m | CB: ${this.current.endFed_CB_Len.toFixed(2)}m`); }
         else if (type === 'Longwire') { infoTextStr = `ANTENNA: LONGWIRE | BANDA: ${band}\nVERTICE: DA ${this.current.longwireVertex} | LUNGH: ${this.current.longwireLen.toFixed(2)}m`; let lwV = document.querySelector('#txt-lw-vertex-val'); if(lwV) lwV.setAttribute('value', `VERTICE: DA ${this.current.longwireVertex}`); let lwL = document.querySelector('#txt-lw-len-val'); if(lwL) lwL.setAttribute('value', `LUNGH: ${this.current.longwireLen.toFixed(2)}m`); }
         else if (type === 'Verticale') { infoTextStr = `ANTENNA: VERTICALE | BANDA: ${band}\nSTILO: ${poleAH.toFixed(2)}m | RADIALI: ${this.current.numRadials} da ${this.current.radialLen.toFixed(1)}m`; let rNum = document.querySelector('#txt-rad-num-val'); if(rNum) rNum.setAttribute('value', `RADIALI: ${this.current.numRadials}`); let rLen = document.querySelector('#txt-rad-len-val'); if(rLen) rLen.setAttribute('value', `LUNGH R: ${this.current.radialLen.toFixed(1)}m`); }
-        else if (type === 'MMANA-GAL') { infoTextStr = `MMANA: ${this.mmanaModels[this.current.mmanaModelIdx]}\nFili conduttori: ${this.current.mmanaWires.length}\nRuota l'antenna col joystick destro (L/R).`; let mM = document.querySelector('#txt-mmana-model-val'); if(mM) mM.setAttribute('value', this.mmanaModels[this.current.mmanaModelIdx].toUpperCase()); }
+        else if (type === 'MMANA-GAL') { infoTextStr = `MMANA: ${this.mmanaModels[this.current.mmanaModelIdx]}\nFili conduttori: ${this.current.mmanaWires.length}\nRuota l'antenna col joystick sinistro.`; let mM = document.querySelector('#txt-mmana-model-val'); if(mM) mM.setAttribute('value', this.mmanaModels[this.current.mmanaModelIdx].toUpperCase()); }
         
         let infoEl = document.querySelector('#info-text'); if(infoEl) infoEl.setAttribute('value', infoTextStr);
       },
@@ -1004,6 +1037,7 @@
              let containerEls = this.worldContentEl.querySelectorAll('.antenna-group');
              containerEls.forEach(el => el.parentNode.removeChild(el));
              this.antennas = [this.createEmptyAntenna()]; this.activeAntIdx = 0; this.current = this.antennas[0];
+             if(this.anchorRootEl) { this.anchorRootEl.object3D.position.set(0,0,0); this.anchorRootEl.object3D.rotation.set(0,0,0); }
              if(this.worldPivotEl) { this.worldPivotEl.object3D.position.set(0,0,0); this.worldPivotEl.object3D.rotation.set(0,0,0); }
              if(this.worldContentEl) { this.worldContentEl.object3D.position.set(0,0,0); this.worldContentEl.setAttribute('visible', 'true'); }
              this.calibLocal1 = null; this.calibLocal2 = null;
@@ -1056,25 +1090,19 @@
     <input type="file" id="file-mmana" accept=".maa">
   </div>
 
-  <a-scene webxr="optionalFeatures: local-floor, hit-test;" vr-mode-ui="enabled: true">
+  <a-scene webxr="optionalFeatures: local-floor, hit-test, anchors;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
       
-      <!-- JOYPAD SINISTRO CHE FA DA ANCORA AL MONDO E AI MENU -->
       <a-entity id="left-controller" oculus-touch-controls="hand: left">
-        
-        <!-- Cartello promemoria sul controller sinistro -->
-        <a-text value="ANCORA FISICA (Non toccare)\nIl menu fluttua qui sopra." position="0 0.05 0" rotation="-90 0 0" align="center" scale="0.08 0.08 0.08" color="#FF1744"></a-text>
-
-        <!-- Menu spostati più in alto e leggermente indietro per restare leggibili dal tavolo -->
-        <a-entity id="menu-ui" visible="false" position="0 0.15 -0.2" rotation="-30 0 0">
+        <a-entity id="menu-ui" visible="false" position="0 0.15 -0.45" rotation="-30 0 0">
           <a-plane width="0.55" height="0.95" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO V40" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
+          <a-text value="CONFIGURATORE ANTENNE PRO V39" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
           
           <a-plane width="0.52" height="0.08" color="#2A2A2A" position="0 0.38 0.01">
-            <a-text id="info-text" value="Usa il controller destro." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
+            <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
           </a-plane>
 
           <a-text value="GESTIONE SCENA E SISTEMA PUNTAMENTO" position="0 0.31 0.01" align="center" scale="0.065 0.065 0.065" color="#00BFFF"></a-text>
@@ -1186,9 +1214,9 @@
           </a-plane>
         </a-entity>
 
-        <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.2" rotation="-30 0 0">
+        <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
           <a-plane width="0.48" height="0.35" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
-          <a-text value="MODALITA' TIRANTI (TASTO A PER USCIRE)" position="0 0.14 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
+          <a-text value="MODALITA' TIRANTI (TASTO X PER USCIRE)" position="0 0.14 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
           
           <a-plane width="0.45" height="0.06" color="#3E2723" position="0 0.07 0.01">
             <a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.045 0.045 0.045" color="#00E676"></a-text>
@@ -1212,24 +1240,21 @@
               </a-plane>
           </a-entity>
         </a-entity>
-        
-        <!-- ============================================== -->
-        <!-- IL MONDO ORA È IMPARENTATO AL CONTROLLER SX  -->
-        <!-- ============================================== -->
-        <a-entity id="anchor-root">
-            <a-entity id="world-pivot" position="0 0 0" rotation="0 0 0">
-                <a-entity id="world-content" position="0 0 0" rotation="0 0 0">
-                    <a-entity id="vertical-cylinder" geometry="primitive: cylinder" material="color: #FFEB3B; shader: flat" visible="false"></a-entity>
-                    <a-text id="height-text" value="" align="center" color="#00FF00" scale="0.35 0.35 0.35" visible="false" look-at-camera></a-text>
-                </a-entity>
-            </a-entity>
-        </a-entity>
-
       </a-entity>
       
       <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg, .antenna-selector, #point-c-hitbox; far: 10">
         <a-sphere id="touch-indicator" radius="0.015" material="color: #00FF00; shader: flat; transparent: true; opacity: 0.8" position="0 -0.07 0.02" visible="false"></a-sphere>
       </a-entity>
+    </a-entity>
+
+    <!-- NUOVA RADICE PER ANCORAGGIO HARDWARE -->
+    <a-entity id="anchor-root">
+        <a-entity id="world-pivot" position="0 0 0" rotation="0 0 0">
+            <a-entity id="world-content" position="0 0 0" rotation="0 0 0">
+                <a-entity id="vertical-cylinder" geometry="primitive: cylinder" material="color: #FFEB3B; shader: flat" visible="false"></a-entity>
+                <a-text id="height-text" value="" align="center" color="#00FF00" scale="0.35 0.35 0.35" visible="false" look-at-camera></a-text>
+            </a-entity>
+        </a-entity>
     </a-entity>
 
     <a-entity ar-antenna-system></a-entity>
