@@ -611,6 +611,18 @@
             if (hitUI) return; 
 
             if (intersects) {
+              // --- NUOVA LOGICA: PLAY/PAUSE VIDEO CON GRILLETTO ---
+              let hitVideo = intersects.find(el => el.classList && el.classList.contains('video-toggle'));
+              if (hitVideo) {
+                  let vidId = hitVideo.getAttribute('data-video-id');
+                  let vidEl = document.querySelector(vidId);
+                  if (vidEl) {
+                      if (vidEl.paused) vidEl.play();
+                      else vidEl.pause();
+                  }
+                  return; // Ferma l'esecuzione qui per non cliccare altro
+              }
+
               let hitSelector = intersects.find(el => el.classList && el.classList.contains('antenna-selector'));
               if (hitSelector) { let targetIdx = parseInt(hitSelector.getAttribute('data-ant-idx')); this.switchAntenna(targetIdx); return; }
 
@@ -808,7 +820,7 @@
         }
         else if (is3D) {
             if (this.current.state === 'SIZE_ROTATE_3D') infoTextStr = "JOY SX (L/R e Su/Giu): Ruota Oggetto\nJOY DX (Su/Giu): Ingrandisci / Riduci\nGRILLETTO: Conferma Piazzamento";
-            else if (this.assetLibrary.length > 0) infoTextStr = "LIBRERIA FILE MULTIMEDIALI PRONTA\nScegli l'oggetto e premi il grilletto a terra.";
+            else if (this.assetLibrary.length > 0) infoTextStr = "LIBRERIA FILE MULTIMEDIALI PRONTA\nScegli l'oggetto e premi il grilletto a terra.\n(Punta un Video + Grilletto per Play/Pausa)";
             else infoTextStr = "ATTENZIONE: NESSUN FILE NELLA LIBRERIA!\nUsa il menu 2D per caricare Modelli 3D, Foto o Video.";
         }
         else if (this.current.state === 'REPOSITION_GROUND_C') { infoTextStr = "Punta a terra sotto al Centro C e premi il grilletto\nper fissare la quota."; }
@@ -994,14 +1006,17 @@
 
           if (type === 'File Custom') {
               if (ant.pointA.base) {
-                  this.createBasePanel(ant.pointA.base, container);
-                  let mediaEl = null;
+                  // --- MODIFICA 1: Mostra il pannello verde SOLO se l'oggetto è in fase di spostamento, NON a riposo ---
+                  if (isCurrent && ant.state !== 'IDLE') {
+                      this.createBasePanel(ant.pointA.base, container);
+                  }
                   
+                  let mediaEl = null;
                   if (!ant.custom3D) ant.custom3D = { scale: 1.0, rotationX: 0, rotationY: 0, rotationZ: 0, assetIdx: 0 };
                   
                   if (this.assetLibrary.length > 0) {
                       let asset = this.assetLibrary[ant.custom3D.assetIdx || 0];
-                      if (!asset) asset = this.assetLibrary[0]; // fallback
+                      if (!asset) asset = this.assetLibrary[0];
 
                       if (asset.format === 'glb') {
                           mediaEl = document.createElement('a-entity');
@@ -1015,7 +1030,6 @@
                           mediaEl = document.createElement('a-entity');
                           mediaEl.setAttribute('stl-model', asset.url);
                       } else if (asset.format === 'image' || asset.format === 'video') {
-                          // Genera piano/video basato sull'asset pre-caricato
                           mediaEl = document.createElement(asset.format === 'video' ? 'a-video' : 'a-plane');
                           let w = 1.0;
                           let h = asset.aspect ? (1.0 / asset.aspect) : 1.0;
@@ -1024,14 +1038,18 @@
                           
                           if (asset.format === 'video') {
                               mediaEl.setAttribute('src', asset.elementId);
-                              mediaEl.setAttribute('material', 'side: double');
-                              // Forza il play per sicurezza quando instanziato
+                              // --- MODIFICA 3: transparent: false + Aggiunta classe per cliccare (Play/Pausa) ---
+                              mediaEl.setAttribute('material', 'shader: flat; side: double; transparent: false');
+                              mediaEl.classList.add('clickable', 'video-toggle');
+                              mediaEl.setAttribute('data-video-id', asset.elementId);
+                              
                               setTimeout(() => {
                                   let v = document.querySelector(asset.elementId);
                                   if (v && v.paused) v.play().catch(e => console.warn('Autoplay bloccato:', e));
                               }, 100);
                           } else {
-                              mediaEl.setAttribute('material', `src: ${asset.elementId}; shader: flat; transparent: true; side: double`);
+                              // --- MODIFICA 3: alphaTest: 0.5 invece di transparent: true. Fixa le mani che scompaiono
+                              mediaEl.setAttribute('material', `src: ${asset.elementId}; shader: flat; transparent: false; alphaTest: 0.5; side: double`);
                           }
                       }
 
@@ -1286,7 +1304,6 @@
                         if(format !== 'unknown') {
                             let assetObj = { name: file.name, url: url, format: format };
                             
-                            // Gestione speciale e sicura per Immagini e Video 2D (creiamo tag <img> o <video> in background)
                             if (format === 'image' || format === 'video') {
                                 let assetsEl = document.querySelector('a-assets');
                                 if (!assetsEl) {
@@ -1308,7 +1325,6 @@
                                     vidEl.setAttribute('id', 'custom-vid-' + Date.now() + i);
                                     vidEl.setAttribute('src', url);
                                     vidEl.setAttribute('crossorigin', 'anonymous');
-                                    // I video su webXR DEVONO essere silenziati se vogliamo l'autoplay
                                     vidEl.setAttribute('autoplay', 'true');
                                     vidEl.setAttribute('loop', 'true');
                                     vidEl.setAttribute('muted', 'true');
@@ -1318,7 +1334,7 @@
                                     
                                     vidEl.onloadedmetadata = () => { 
                                         assetObj.aspect = vidEl.videoWidth / vidEl.videoHeight; 
-                                        vidEl.play().catch(e => console.warn(e)); // Tenta il play
+                                        vidEl.play().catch(e => console.warn(e)); 
                                         this.refreshAll(); 
                                     };
                                 }
@@ -1331,14 +1347,14 @@
                     if (added > 0) {
                         this.current.antIdx = this.antennaTypes.indexOf('File Custom');
                         if(!this.current.custom3D) this.current.custom3D = { assetIdx: 0, scale: 1.0, rotationX: 0, rotationY: 0, rotationZ: 0 };
-                        this.current.custom3D.assetIdx = this.assetLibrary.length - 1; // Auto-seleziona l'ultimo
+                        this.current.custom3D.assetIdx = this.assetLibrary.length - 1; 
                         alert(`${added} File Aggiunti alla Libreria!\nIndossa il visore, apri il menu "Nuova Antenna -> Tipo Oggetto -> File Custom".`);
                         this.refreshAll();
                     } else {
                         alert("Nessun formato supportato trovato.");
                     }
                 }
-                evt.target.value = ''; // Resetta l'input
+                evt.target.value = ''; 
             });
         }
       },
@@ -1367,7 +1383,6 @@
     <div class="import-box">
       <h3>LIBRERIA MULTIMEDIALE</h3>
       <p style="color:#FFF59D;">Carica PIU' file contemporaneamente: <b>.GLB, .OBJ, .STL, .PNG, .JPG, .MP4, .WEBM</b>. <br>I GLB supportano colori e animazioni.</p>
-      <!-- Aggiunto supporto video mp4 e webm -->
       <input type="file" id="file-custom-media" accept=".glb,.gltf,.obj,.stl,.png,.jpg,.jpeg,.mp4,.webm" multiple>
     </div>
     <div class="import-box">
@@ -1537,7 +1552,7 @@
         </a-entity>
       </a-entity>
       
-      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg, .antenna-selector, #point-c-hitbox; far: 10">
+      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg, .antenna-selector, #point-c-hitbox, .video-toggle; far: 10">
         <a-sphere id="touch-indicator" radius="0.015" material="color: #00FF00; shader: flat; transparent: true; opacity: 0.8" position="0 -0.07 0.02" visible="false"></a-sphere>
       </a-entity>
     </a-entity>
