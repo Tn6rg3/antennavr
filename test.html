@@ -39,19 +39,30 @@
           });
         },
 
-        tick: function () {
+       tick: function () {
           const renderer = this.el.sceneEl.renderer;
           if (!renderer.xr.isPresenting) return;
 
           const frame = this.el.sceneEl.frame;
           if (!frame) return;
 
+          // Diagnostica: controlliamo se l'API esiste nel browser
+          if (frame.detectedMeshes === undefined) {
+             this.warningText.setAttribute('value', 'Errore: API Mesh non supportata.\nAssicurati che WebXR Incubations sia Enabled in chrome://flags');
+             return;
+          }
+
           const refSpace = renderer.xr.getReferenceSpace();
           if (!refSpace) return;
 
-          // Usiamo detectedMeshes invece di detectedPlanes
           if (frame.detectedMeshes) {
+            // Se troviamo la mesh, nascondiamo l'avviso
+            if (frame.detectedMeshes.size > 0) {
+                 this.warningText.setAttribute('visible', 'false');
+            }
+
             frame.detectedMeshes.forEach(xrMesh => {
+              // ... qui rimane il codice precedente per creare la geometria ...
               let meshData = this.meshes.get(xrMesh);
 
               if (!meshData) {
@@ -62,7 +73,6 @@
                 
                 meshData = { mesh: threeMesh, lastTime: xrMesh.lastChangedTime };
                 this.meshes.set(xrMesh, meshData);
-                this.warningText.setAttribute('visible', 'false');
               } 
               else if (xrMesh.lastChangedTime > meshData.lastTime) {
                 meshData.mesh.geometry.dispose();
