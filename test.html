@@ -17,6 +17,12 @@
       window.userTexture = null;
 
       document.addEventListener('DOMContentLoaded', () => {
+        
+        // RISOLUZIONE RETTANGOLI TRASPARENTI: Nascondiamo l'interfaccia 2D web durante l'AR
+        const sceneEl = document.querySelector('a-scene');
+        sceneEl.addEventListener('enter-vr', () => { document.getElementById('ui-2d').style.display = 'none'; });
+        sceneEl.addEventListener('exit-vr', () => { document.getElementById('ui-2d').style.display = 'block'; });
+
         // GESTIONE IMMAGINE
         document.getElementById('file-upload').addEventListener('change', function(e) {
           const file = e.target.files[0];
@@ -36,32 +42,27 @@
           }
         });
 
-        // RICEZIONE SCHERMO DAL PC (Logica Invertita)
+        // RICEZIONE SCHERMO DAL PC
         document.getElementById('btn-connetti-pc').addEventListener('click', () => {
           const btn = document.getElementById('btn-connetti-pc');
           btn.innerText = "Attivazione canale...";
           btn.style.background = "#FF9800";
           
-          // Diamo al Quest il codice segreto fisso
           const peerQuest = new Peer('quest-italia-pro-847291'); 
           
           peerQuest.on('open', () => {
             btn.innerText = "⏳ In attesa del PC... (Apri il PC ora)";
           });
 
-          // Quando il PC telefona, il Quest risponde e accende il monitor
           peerQuest.on('call', call => {
-            call.answer(); // Risponde
-            
+            call.answer(); 
             call.on('stream', flussoVideoRemoto => {
               const videoElemento = document.getElementById('video-pc-ricevuto');
               videoElemento.srcObject = flussoVideoRemoto;
               
-              // TENTA LA RIPRODUZIONE (muted assicura che funzioni!)
               videoElemento.play().then(() => {
                 btn.innerText = "✅ PC Connesso!";
                 btn.style.background = "#4CAF50";
-                // Mostra il televisore AR
                 document.querySelector('#schermo-virtuale').setAttribute('visible', 'true');
               }).catch(e => {
                 btn.innerText = "Errore Riproduzione. Riprova.";
@@ -77,7 +78,7 @@
         });
       });
 
-      // CORE AR (Piani, Mesh, Triplanar Mapping, Z-Fighting)
+      // CORE AR (Piani, Mesh, Texture)
       AFRAME.registerComponent('gestore-spazio', {
         init: function () {
           this.planes = new Map(); this.meshes = new Map();
@@ -186,19 +187,25 @@
         }
       });
 
-      // BOLLA MAGICA
-      AFRAME.registerComponent('strumento-buco', {
+      // STRUMENTO CONTROLLER: Ora gestisce BOLLE (Grilletto) e SPOSTAMENTI SCHERMO (Grip)
+      AFRAME.registerComponent('strumenti-controller', {
         init: function () {
-          this.bollaAttiva = null; this.azione = null;
+          this.bollaAttiva = null; 
+          this.azione = null;
+          this.oggettoAfferrato = null; // Memorizza cosa stiamo spostando
+          
           this.geomSfera = new THREE.SphereGeometry(1, 32, 32);
           this.matBuco = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true });
 
+          // AZIONE 1: GRILLETTO (Crea e Ingrandisci Bolle sui muri)
           this.el.addEventListener('triggerdown', () => {
             const hit = this.el.components.raycaster.intersections[0];
             if (!hit) return;
+            
             if (hit.object.el && hit.object.el.classList.contains('bolla-buco')) {
               this.bollaAttiva = hit.object.el.object3D; this.azione = 'cresce';
-            } else if (hit.object.el && hit.object.el.classList.contains('superficie')) {
+            } 
+            else if (hit.object.el && hit.object.el.classList.contains('superficie')) {
               const bollaEl = document.createElement('a-entity');
               bollaEl.classList.add('bolla-buco');
               const mesh = new THREE.Mesh(this.geomSfera, this.matBuco);
@@ -210,13 +217,33 @@
             }
           });
           this.el.addEventListener('triggerup', () => { this.bollaAttiva = null; });
+
+          // AZIONE 2: GRIP/PRESA LATERALE (Riduci Bolle O Sposta lo Schermo)
           this.el.addEventListener('gripdown', () => {
             const hit = this.el.components.raycaster.intersections[0];
-            if (hit && hit.object.el && hit.object.el.classList.contains('bolla-buco')) {
+            if (!hit) return;
+            
+            // Se miriamo a una bolla, rimpiccioliamola
+            if (hit.object.el && hit.object.el.classList.contains('bolla-buco')) {
               this.bollaAttiva = hit.object.el.object3D; this.azione = 'riduce';
+            } 
+            // Se miriamo allo schermo (spostabile), AFFERRIAMOLO!
+            else if (hit.object.el && hit.object.el.classList.contains('spostabile')) {
+              this.oggettoAfferrato = hit.object.el.object3D;
+              // Magia 3D: Attaccandolo al controller, seguirà la tua mano e si inclinerà col polso!
+              this.el.object3D.attach(this.oggettoAfferrato);
             }
           });
-          this.el.addEventListener('gripup', () => { this.bollaAttiva = null; });
+          
+          this.el.addEventListener('gripup', () => { 
+            this.bollaAttiva = null; 
+            
+            // Rilascia lo schermo nel punto esatto dove si trova ora
+            if (this.oggettoAfferrato) {
+              this.el.sceneEl.object3D.attach(this.oggettoAfferrato);
+              this.oggettoAfferrato = null;
+            }
+          });
         },
         tick: function (time, delta) {
           if (this.bollaAttiva) {
@@ -236,11 +263,24 @@
 
       AFRAME.registerComponent('controlli-base', {
         init: function () {
+          // Tasti A o X: Mostra/Nascondi Mesh
           this.el.addEventListener('abuttondown', () => this.attivaToggleMesh());
           this.el.addEventListener('xbuttondown', () => this.attivaToggleMesh());
+          
+          // Tasto Y: Mostra/Nascondi Menu
           this.el.addEventListener('ybuttondown', () => {
             const pannello = document.querySelector('#pannello-ar');
-            if (pannello) pannello.object3D.visible = !pannello.object3D.visible;
+            if (pannello) {
+              // RISOLUZIONE BUG TESTI AFRAME: Rimpicciolirlo a zero è il metodo 100% infallibile
+              const scalaAttuale = pannello.getAttribute('scale');
+              if (scalaAttuale.x === 1) {
+                pannello.setAttribute('scale', '0 0 0');
+                pannello.setAttribute('position', '0 -1000 0'); // Spediamolo sotto terra per evitare urti col laser
+              } else {
+                pannello.setAttribute('scale', '1 1 1');
+                pannello.setAttribute('position', '0 1.2 -1.5'); // Torna alla posizione normale
+              }
+            }
           });
         },
         attivaToggleMesh: function() {
@@ -268,20 +308,20 @@
     <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" gestore-spazio>
       
       <a-assets>
-        <!-- AGGIUNTO MUTED: Fondamentale per far partire il video in automatico -->
         <video id="video-pc-ricevuto" autoplay muted playsinline crossorigin="anonymous"></video>
       </a-assets>
 
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
 
-      <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .interfaccia, .superficie, .bolla-buco; far: 10;" controlli-base strumento-buco></a-entity>
-      <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .interfaccia, .superficie, .bolla-buco; far: 10;" controlli-base strumento-buco></a-entity>
+      <!-- CONTROLLER (Aggiunta classe .spostabile al Raycaster) -->
+      <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .interfaccia, .superficie, .bolla-buco, .spostabile; far: 10;" controlli-base strumenti-controller></a-entity>
+      <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .interfaccia, .superficie, .bolla-buco, .spostabile; far: 10;" controlli-base strumenti-controller></a-entity>
 
-      <!-- MONITOR VIRTUALE (Si accende da solo all'arrivo del segnale) -->
-      <a-video id="schermo-virtuale" src="#video-pc-ricevuto" width="1.6" height="0.9" position="0 1.2 -2.5" class="superficie" visible="false"></a-video>
+      <!-- MONITOR VIRTUALE SPOSTABILE (Aggiunta classe 'spostabile') -->
+      <a-video id="schermo-virtuale" class="spostabile" src="#video-pc-ricevuto" width="1.6" height="0.9" position="0 1.2 -2.5" visible="false"></a-video>
 
-      <!-- PANNELLO AR FLUTTUANTE -->
-      <a-entity id="pannello-ar" position="0 1.2 -1.5">
+      <!-- PANNELLO AR FLUTTUANTE (Menu) -->
+      <a-entity id="pannello-ar" position="0 1.2 -1.5" scale="1 1 1">
         <a-text value="Nascondi con Y" align="center" position="0 0.4 0" color="#FFFFFF" scale="0.7 0.7 0.7"></a-text>
         <a-entity id="btn-immagine" class="interfaccia" geometry="primitive: plane; width: 1.2; height: 0.3" material="color: #4CAF50" position="0 0.1 0">
           <a-text id="testo-btn-img" value="Applica Immagine" align="center" color="#FFF" z-offset="0.01"></a-text>
