@@ -2,106 +2,186 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Stanza Verde AR - Piani + Mesh</title>
+    <title>AR Mesh & Texture Manager</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <style>
+      /* Stile per l'interfaccia 2D prima di entrare in AR */
+      #ui-2d {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        z-index: 999;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 20px;
+        border-radius: 10px;
+        font-family: sans-serif;
+      }
+    </style>
     <script>
-      AFRAME.registerComponent('scanner-verde', {
+      // Variabile globale per salvare la texture caricata dall'utente
+      window.userTexture = null;
+
+      // Gestione del caricamento dell'immagine (File Picker 2D)
+      document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('file-upload').addEventListener('change', function(e) {
+          const file = e.target.files[0];
+          if (file) {
+            const url = URL.createObjectURL(file);
+            window.userTexture = new THREE.TextureLoader().load(url);
+            // Facciamo ripetere l'immagine se il muro è molto grande
+            window.userTexture.wrapS = THREE.RepeatWrapping;
+            window.userTexture.wrapT = THREE.RepeatWrapping;
+            document.getElementById('status').innerText = "Immagine caricata! Ora puoi entrare in AR.";
+          }
+        });
+      });
+
+      AFRAME.registerComponent('gestore-mesh', {
         init: function () {
-          // Teniamo traccia sia dei piani che delle mesh
           this.planes = new Map();
           this.meshes = new Map();
+          this.usaImmagine = false; // Stato per sapere se usare la griglia o l'immagine
           
-          // Materiale Stile "Matrix" / Cyberpunk
-          this.material = new THREE.MeshBasicMaterial({
-            color: 0x00FF00, // Verde brillante
+          // Materiale 1: Griglia Verde (Default)
+          this.matWireframe = new THREE.MeshBasicMaterial({
+            color: 0x00FF00,
             transparent: true,
             opacity: 0.6,
             side: THREE.DoubleSide,
-            wireframe: true // Modifica in 'false' per riavere i pannelli solidi semi-trasparenti
+            wireframe: true
           });
+
+          // Materiale 2: Immagine Caricata
+          this.matImmagine = new THREE.MeshBasicMaterial({
+            color: 0xFFFFFF,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.8 // Un po' trasparente per non accecare
+          });
+
+          // Logica per i bottoni 3D in AR
+          const btnImmagine = document.querySelector('#btn-immagine');
+          const btnAggiorna = document.querySelector('#btn-aggiorna');
+
+          btnImmagine.addEventListener('click', () => {
+            if (window.userTexture) {
+              this.usaImmagine = !this.usaImmagine; // Alterna tra griglia e immagine
+              if (this.usaImmagine) {
+                this.matImmagine.map = window.userTexture;
+                this.matImmagine.needsUpdate = true;
+                this.aggiornaTuttiIMateriali(this.matImmagine);
+                btnImmagine.querySelector('a-text').setAttribute('value', 'Rimetti Griglia');
+              } else {
+                this.aggiornaTuttiIMateriali(this.matWireframe);
+                btnImmagine.querySelector('a-text').setAttribute('value', 'Applica Immagine');
+              }
+            } else {
+              btnImmagine.querySelector('a-text').setAttribute('value', 'Nessuna Immagine!');
+              setTimeout(() => btnImmagine.querySelector('a-text').setAttribute('value', 'Applica Immagine'), 2000);
+            }
+          });
+
+          btnAggiorna.addEventListener('click', () => {
+            this.cancellaTutto();
+            btnAggiorna.querySelector('a-text').setAttribute('value', 'Fatto!');
+            setTimeout(() => btnAggiorna.querySelector('a-text').setAttribute('value', 'Aggiorna Mesh'), 1000);
+          });
+        },
+
+        aggiornaTuttiIMateriali: function(nuovoMateriale) {
+          this.planes.forEach(data => data.mesh.material = nuovoMateriale);
+          this.meshes.forEach(data => data.mesh.material = nuovoMateriale);
+        },
+
+        cancellaTutto: function() {
+          // Rimuove tutte le mesh per forzare il sistema a ricostruirle al prossimo frame
+          this.planes.forEach(data => {
+            this.el.object3D.remove(data.mesh);
+            data.mesh.geometry.dispose();
+          });
+          this.meshes.forEach(data => {
+            this.el.object3D.remove(data.mesh);
+            data.mesh.geometry.dispose();
+          });
+          this.planes.clear();
+          this.meshes.clear();
         },
 
         tick: function () {
           const renderer = this.el.sceneEl.renderer;
           if (!renderer.xr.isPresenting) return;
-
           const frame = this.el.sceneEl.frame;
           if (!frame) return;
-
           const refSpace = renderer.xr.getReferenceSpace();
           if (!refSpace) return;
 
-          // 1. GESTIONE DEI PIANI (Muri, Pavimento, Soffitto)
+          const materialeAttuale = this.usaImmagine ? this.matImmagine : this.matWireframe;
+
+          // Gestione Piani
           if (frame.detectedPlanes) {
             frame.detectedPlanes.forEach(plane => {
-              let planeData = this.planes.get(plane);
-
-              if (!planeData) {
-                const geometry = this.createPlaneGeometry(plane);
-                const mesh = new THREE.Mesh(geometry, this.material);
+              let pData = this.planes.get(plane);
+              if (!pData) {
+                const geom = this.createPlaneGeometry(plane);
+                const mesh = new THREE.Mesh(geom, materialeAttuale);
                 mesh.matrixAutoUpdate = false;
                 this.el.object3D.add(mesh);
-                
-                planeData = { mesh: mesh, lastTime: plane.lastChangedTime };
-                this.planes.set(plane, planeData);
-              } else if (plane.lastChangedTime > planeData.lastTime) {
-                planeData.mesh.geometry.dispose();
-                planeData.mesh.geometry = this.createPlaneGeometry(plane);
-                planeData.lastTime = plane.lastChangedTime;
+                this.planes.set(plane, { mesh: mesh, lastTime: plane.lastChangedTime });
+              } else if (plane.lastChangedTime > pData.lastTime) {
+                pData.mesh.geometry.dispose();
+                pData.mesh.geometry = this.createPlaneGeometry(plane);
+                pData.lastTime = plane.lastChangedTime;
               }
-              
               const pose = frame.getPose(plane.planeSpace, refSpace);
-              if (pose) planeData.mesh.matrix.fromArray(pose.transform.matrix);
+              if (pose) pData.mesh.matrix.fromArray(pose.transform.matrix);
             });
           }
 
-          // 2. GESTIONE DELLE MESH (Mobili, oggetti complessi)
+          // Gestione Mesh
           if (frame.detectedMeshes) {
             frame.detectedMeshes.forEach(xrMesh => {
-              let meshData = this.meshes.get(xrMesh);
-
-              if (!meshData) {
-                const geometry = this.createMeshGeometry(xrMesh);
-                const threeMesh = new THREE.Mesh(geometry, this.material);
-                threeMesh.matrixAutoUpdate = false;
-                this.el.object3D.add(threeMesh);
-                
-                meshData = { mesh: threeMesh, lastTime: xrMesh.lastChangedTime };
-                this.meshes.set(xrMesh, meshData);
-              } else if (xrMesh.lastChangedTime > meshData.lastTime) {
-                meshData.mesh.geometry.dispose();
-                meshData.mesh.geometry = this.createMeshGeometry(xrMesh);
-                meshData.lastTime = xrMesh.lastChangedTime;
+              let mData = this.meshes.get(xrMesh);
+              if (!mData) {
+                const geom = this.createMeshGeometry(xrMesh);
+                const mesh = new THREE.Mesh(geom, materialeAttuale);
+                mesh.matrixAutoUpdate = false;
+                this.el.object3D.add(mesh);
+                this.meshes.set(xrMesh, { mesh: mesh, lastTime: xrMesh.lastChangedTime });
+              } else if (xrMesh.lastChangedTime > mData.lastTime) {
+                mData.mesh.geometry.dispose();
+                mData.mesh.geometry = this.createMeshGeometry(xrMesh);
+                mData.lastTime = xrMesh.lastChangedTime;
               }
-              
               const pose = frame.getPose(xrMesh.meshSpace, refSpace);
-              if (pose) meshData.mesh.matrix.fromArray(pose.transform.matrix);
+              if (pose) mData.mesh.matrix.fromArray(pose.transform.matrix);
             });
           }
         },
 
-        // Geometria per i Piani 2D
         createPlaneGeometry: function(plane) {
           const shape = new THREE.Shape();
           if (plane.polygon.length > 0) {
             shape.moveTo(plane.polygon[0].x, plane.polygon[0].z);
-            for (let i = 1; i < plane.polygon.length; i++) {
-              shape.lineTo(plane.polygon[i].x, plane.polygon[i].z);
-            }
+            for (let i = 1; i < plane.polygon.length; i++) shape.lineTo(plane.polygon[i].x, plane.polygon[i].z);
           }
           const geometry = new THREE.ShapeGeometry(shape);
           geometry.rotateX(Math.PI / 2); 
           return geometry;
         },
 
-        // Geometria per le Mesh 3D
         createMeshGeometry: function(xrMesh) {
           const geometry = new THREE.BufferGeometry();
-          const vertices = new Float32Array(xrMesh.vertices);
-          const indices = new Uint32Array(xrMesh.indices);
+          geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(xrMesh.vertices), 3));
+          geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(xrMesh.indices), 1));
           
-          geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-          geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+          // Genera coordinate UV base (serve per applicare le immagini!)
+          const uvs = new Float32Array(xrMesh.vertices.length / 3 * 2);
+          for(let i=0; i<uvs.length; i+=2) {
+              uvs[i] = xrMesh.vertices[(i/2)*3]; // x
+              uvs[i+1] = xrMesh.vertices[(i/2)*3 + 1]; // y
+          }
+          geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+          
           geometry.computeVertexNormals();
           return geometry;
         }
@@ -109,12 +189,39 @@
     </script>
   </head>
   <body>
-    <!-- Richiediamo TUTTE le funzionalità spaziali per coprire ogni elemento della stanza -->
-    <a-scene 
-      webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" 
-      scanner-verde>
+    
+    <!-- MENU 2D (Visibile nel browser prima di entrare in AR) -->
+    <div id="ui-2d">
+      <h2>1. Scegli un'immagine dal Quest</h2>
+      <input type="file" id="file-upload" accept="image/*"><br><br>
+      <span id="status" style="color: green; font-weight: bold;">In attesa...</span>
+      <p><i>Dopo aver scelto, clicca il bottone 'Enter AR' in basso a destra.</i></p>
+    </div>
+
+    <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" gestore-mesh>
       
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
+
+      <!-- CONTROLLER VR per cliccare i bottoni (Raycaster laser) -->
+      <a-entity laser-controls="hand: right" raycaster="objects: .clickable; far: 5;"></a-entity>
+      <a-entity laser-controls="hand: left" raycaster="objects: .clickable; far: 5;"></a-entity>
+
+      <!-- PANNELLO FLUTTUANTE IN AR -->
+      <a-entity position="0 1.2 -1.5">
+        <!-- Titolo del pannello -->
+        <a-text value="Pannello di Controllo" align="center" position="0 0.4 0" color="#FFFFFF" scale="0.8 0.8 0.8"></a-text>
+
+        <!-- Bottone 1: Applica Immagine -->
+        <a-entity id="btn-immagine" class="clickable" geometry="primitive: plane; width: 1.2; height: 0.3" material="color: #4CAF50" position="0 0.1 0">
+          <a-text value="Applica Immagine" align="center" color="#FFF" z-offset="0.01"></a-text>
+        </a-entity>
+
+        <!-- Bottone 2: Aggiorna Mesh -->
+        <a-entity id="btn-aggiorna" class="clickable" geometry="primitive: plane; width: 1.2; height: 0.3" material="color: #2196F3" position="0 -0.3 0">
+          <a-text value="Aggiorna Mesh" align="center" color="#FFF" z-offset="0.01"></a-text>
+        </a-entity>
+      </a-entity>
+
     </a-scene>
   </body>
 </html>
