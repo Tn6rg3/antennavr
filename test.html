@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio - Mesh, Texture e Spawn</title>
+    <title>AR Studio - Immagine Espansa</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <style>
       #ui-2d {
@@ -13,7 +13,6 @@
       }
     </style>
     <script>
-      // 1. GESTIONE DEL CARICAMENTO IMMAGINE (Risolto il problema del mancato caricamento)
       window.userTexture = null;
 
       document.addEventListener('DOMContentLoaded', () => {
@@ -23,11 +22,8 @@
             const url = URL.createObjectURL(file);
             document.getElementById('status').innerText = "Caricamento in corso...";
             
-            // Usiamo una callback per assicurarci che l'immagine sia 100% caricata nella memoria grafica
             new THREE.TextureLoader().load(url, function(texture) {
-              texture.wrapS = THREE.RepeatWrapping;
-              texture.wrapT = THREE.RepeatWrapping;
-              texture.repeat.set(2, 2); // Moltiplica l'immagine per non sgranarla troppo sui muri grandi
+              // RIMOSSO IL REPEAT: Ora l'immagine si spalmerà (ClampToEdge è il default)
               window.userTexture = texture;
               document.getElementById('status').innerText = "✅ Immagine pronta! Entra in AR.";
             });
@@ -35,7 +31,6 @@
         });
       });
 
-      // 2. GESTORE DELLO SPAZIO (Mesh, Piani e Materiali)
       AFRAME.registerComponent('gestore-spazio', {
         init: function () {
           this.planes = new Map();
@@ -53,13 +48,12 @@
             side: THREE.DoubleSide
           });
 
-          // Eventi per i bottoni fluttuanti 3D
           document.querySelector('#btn-immagine').addEventListener('click', () => {
             if (window.userTexture) {
               this.usaImmagine = !this.usaImmagine;
               if (this.usaImmagine) {
                 this.matImmagine.map = window.userTexture;
-                this.matImmagine.needsUpdate = true; // Forza l'aggiornamento della scheda video
+                this.matImmagine.needsUpdate = true;
                 this.aggiornaMateriali(this.matImmagine);
                 document.querySelector('#testo-btn-img').setAttribute('value', 'Rimetti Griglia');
               } else {
@@ -79,16 +73,10 @@
           });
         },
 
-        // Funzione chiamata dal Controller quando premi il tasto "A"
         toggleVisibilita: function() {
           this.meshVisibile = !this.meshVisibile;
-          // TRUCCO: Invece di nasconderla, azzeriamo l'opacità. 
-          // Così è invisibile, ma il laser ci sbatte ancora contro per appoggiare gli oggetti!
-          const opacitaGriglia = this.meshVisibile ? 0.6 : 0.0;
-          const opacitaImmagine = this.meshVisibile ? 0.9 : 0.0;
-          
-          this.matWireframe.opacity = opacitaGriglia;
-          this.matImmagine.opacity = opacitaImmagine;
+          this.matWireframe.opacity = this.meshVisibile ? 0.6 : 0.0;
+          this.matImmagine.opacity = this.meshVisibile ? 0.9 : 0.0;
         },
 
         aggiornaMateriali: function(nuovoMateriale) {
@@ -112,7 +100,6 @@
 
           const materialeAttuale = this.usaImmagine ? this.matImmagine : this.matWireframe;
 
-          // Generazione Piani
           if (frame.detectedPlanes) {
             frame.detectedPlanes.forEach(plane => {
               let pData = this.planes.get(plane);
@@ -130,7 +117,6 @@
             });
           }
 
-          // Generazione Mesh
           if (frame.detectedMeshes) {
             frame.detectedMeshes.forEach(xrMesh => {
               let mData = this.meshes.get(xrMesh);
@@ -159,7 +145,44 @@
           return entity;
         },
 
-        // GEOMETRIE CON MAPPA UV AGGIUNTA (Ora le immagini si vedono!)
+        // NUOVA FUNZIONE: Calcola i bordi estremi della forma e stira l'immagine (0 a 1)
+        applicaUVEspanse: function(geometry) {
+          geometry.computeBoundingBox();
+          const box = geometry.boundingBox;
+          const pos = geometry.attributes.position;
+          const uvs = new Float32Array(pos.count * 2);
+          
+          const dimX = box.max.x - box.min.x;
+          const dimY = box.max.y - box.min.y;
+          const dimZ = box.max.z - box.min.z;
+
+          // Trova le due dimensioni più grandi per capire l'orientamento (es. muro verticale vs pavimento)
+          let asseU = 'x', asseV = 'y';
+          if (dimZ > dimY && dimX > dimY) { asseU = 'x'; asseV = 'z'; }
+          else if (dimZ > dimX && dimY > dimX) { asseU = 'y'; asseV = 'z'; }
+
+          for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i);
+            const y = pos.getY(i);
+            const z = pos.getZ(i);
+
+            let valU = asseU === 'x' ? x : (asseU === 'y' ? y : z);
+            let valV = asseV === 'x' ? x : (asseV === 'y' ? y : z);
+            
+            let dimU = asseU === 'x' ? dimX : (asseU === 'y' ? dimY : dimZ);
+            let dimV = asseV === 'x' ? dimX : (asseV === 'y' ? dimY : dimZ);
+            
+            let minU = asseU === 'x' ? box.min.x : (asseU === 'y' ? box.min.y : box.min.z);
+            let minV = asseV === 'x' ? box.min.x : (asseV === 'y' ? box.min.y : box.min.z);
+
+            // Stira la coordinata da 0.0 (inizio foto) a 1.0 (fine foto)
+            uvs[i * 2] = dimU === 0 ? 0 : (valU - minU) / dimU;
+            uvs[i * 2 + 1] = dimV === 0 ? 0 : (valV - minV) / dimV;
+          }
+          
+          geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+        },
+
         createPlaneGeometry: function(plane) {
           const shape = new THREE.Shape();
           if (plane.polygon.length > 0) {
@@ -168,15 +191,7 @@
           }
           const geometry = new THREE.ShapeGeometry(shape);
           geometry.rotateX(Math.PI / 2); 
-          
-          // Generatore Coordinate UV per le immagini
-          const pos = geometry.attributes.position;
-          const uvs = new Float32Array(pos.count * 2);
-          for(let i=0; i<pos.count; i++) {
-              uvs[i*2] = pos.getX(i);     // Asse U
-              uvs[i*2+1] = pos.getZ(i);   // Asse V
-          }
-          geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+          this.applicaUVEspanse(geometry); // Applica la stiratura
           return geometry;
         },
 
@@ -184,40 +199,24 @@
           const geometry = new THREE.BufferGeometry();
           geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(xrMesh.vertices), 3));
           geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(xrMesh.indices), 1));
-          
-          // Generatore Coordinate UV per la mesh
-          const uvs = new Float32Array(xrMesh.vertices.length / 3 * 2);
-          for(let i=0; i<uvs.length; i+=2) {
-              uvs[i] = xrMesh.vertices[(i/2)*3]; 
-              uvs[i+1] = xrMesh.vertices[(i/2)*3 + 2]; 
-          }
-          geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
           geometry.computeVertexNormals();
+          this.applicaUVEspanse(geometry); // Applica la stiratura
           return geometry;
         }
       });
 
-      // 3. LOGICA DEI CONTROLLER (Tasto A e Grilletto)
       AFRAME.registerComponent('controlli-avanzati', {
         init: function () {
-          // Quando premi il Tasto A (o X sul sinistro) nasconde/mostra la maglia
           this.el.addEventListener('abuttondown', () => this.attivaToggle());
           this.el.addEventListener('xbuttondown', () => this.attivaToggle());
 
-          // Quando premi il grilletto, valuta dove spara il laser
           this.el.addEventListener('click', (evento) => {
             if (!evento.detail.intersectedEl) return;
-            
-            // Se spariamo alla stanza, creiamo un oggetto
             if (evento.detail.intersectedEl.classList.contains('superficie')) {
               const punto = evento.detail.intersection.point;
-              
               const cubo = document.createElement('a-entity');
-              // Sostituisci la riga sotto con un gltf-model se vuoi usare un file 3D
               cubo.setAttribute('geometry', 'primitive: box; width: 0.15; height: 0.15; depth: 0.15');
               cubo.setAttribute('material', 'color: #FF2255');
-              
-              // Alziamo il cubo di metà della sua altezza (0.075) così appoggia alla perfezione
               cubo.setAttribute('position', `${punto.x} ${punto.y + 0.075} ${punto.z}`);
               this.el.sceneEl.appendChild(cubo);
             }
@@ -233,9 +232,8 @@
   </head>
   <body>
 
-    <!-- INTERFACCIA WEB (Prima di entrare in AR) -->
     <div id="ui-2d">
-      <h2>1. Scegli una texture per la stanza</h2>
+      <h2>1. Scegli una foto per la stanza</h2>
       <input type="file" id="file-upload" accept="image/*"><br><br>
       <span id="status" style="color: #4CAF50; font-weight: bold;">In attesa dell'immagine...</span>
     </div>
@@ -243,32 +241,14 @@
     <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" gestore-spazio>
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
 
-      <!-- CONTROLLER CON SUPPORTO AI TASTI OCULUS -->
-      <!-- Aggiunto 'oculus-touch-controls' per far funzionare il tasto A e X -->
-      <a-entity 
-        laser-controls="hand: right" 
-        oculus-touch-controls="hand: right"
-        raycaster="objects: .interfaccia, .superficie; far: 10;" 
-        controlli-avanzati>
-      </a-entity>
-      
-      <a-entity 
-        laser-controls="hand: left" 
-        oculus-touch-controls="hand: left"
-        raycaster="objects: .interfaccia, .superficie; far: 10;" 
-        controlli-avanzati>
-      </a-entity>
+      <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .interfaccia, .superficie; far: 10;" controlli-avanzati></a-entity>
+      <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .interfaccia, .superficie; far: 10;" controlli-avanzati></a-entity>
 
-      <!-- PANNELLO FLUTTUANTE IN AR -->
       <a-entity position="0 1.2 -1.5">
         <a-text value="Menu AR" align="center" position="0 0.4 0" color="#FFFFFF" scale="0.8 0.8 0.8"></a-text>
-
-        <!-- Bottone 1: Immagine -->
         <a-entity id="btn-immagine" class="interfaccia" geometry="primitive: plane; width: 1.2; height: 0.3" material="color: #4CAF50" position="0 0.1 0">
           <a-text id="testo-btn-img" value="Applica Immagine" align="center" color="#FFF" z-offset="0.01"></a-text>
         </a-entity>
-
-        <!-- Bottone 2: Aggiorna -->
         <a-entity id="btn-aggiorna" class="interfaccia" geometry="primitive: plane; width: 1.2; height: 0.3" material="color: #2196F3" position="0 -0.3 0">
           <a-text id="testo-btn-agg" value="Aggiorna Mesh" align="center" color="#FFF" z-offset="0.01"></a-text>
         </a-entity>
