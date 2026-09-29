@@ -611,7 +611,6 @@
             if (hitUI) return; 
 
             if (intersects) {
-              // --- NUOVA LOGICA: PLAY/PAUSE VIDEO CON GRILLETTO ---
               let hitVideo = intersects.find(el => el.classList && el.classList.contains('video-toggle'));
               if (hitVideo) {
                   let vidId = hitVideo.getAttribute('data-video-id');
@@ -620,7 +619,7 @@
                       if (vidEl.paused) vidEl.play();
                       else vidEl.pause();
                   }
-                  return; // Ferma l'esecuzione qui per non cliccare altro
+                  return; // Interrompe qui così non piazza altri oggetti per errore
               }
 
               let hitSelector = intersects.find(el => el.classList && el.classList.contains('antenna-selector'));
@@ -1006,7 +1005,6 @@
 
           if (type === 'File Custom') {
               if (ant.pointA.base) {
-                  // --- MODIFICA 1: Mostra il pannello verde SOLO se l'oggetto è in fase di spostamento, NON a riposo ---
                   if (isCurrent && ant.state !== 'IDLE') {
                       this.createBasePanel(ant.pointA.base, container);
                   }
@@ -1038,8 +1036,7 @@
                           
                           if (asset.format === 'video') {
                               mediaEl.setAttribute('src', asset.elementId);
-                              // --- MODIFICA 3: transparent: false + Aggiunta classe per cliccare (Play/Pausa) ---
-                              mediaEl.setAttribute('material', 'shader: flat; side: double; transparent: false');
+                              mediaEl.setAttribute('material', 'shader: flat; side: double; transparent: false; depthWrite: true');
                               mediaEl.classList.add('clickable', 'video-toggle');
                               mediaEl.setAttribute('data-video-id', asset.elementId);
                               
@@ -1048,12 +1045,10 @@
                                   if (v && v.paused) v.play().catch(e => console.warn('Autoplay bloccato:', e));
                               }, 100);
                           } else {
-                              // --- MODIFICA 3: alphaTest: 0.5 invece di transparent: true. Fixa le mani che scompaiono
-                              mediaEl.setAttribute('material', `src: ${asset.elementId}; shader: flat; transparent: false; alphaTest: 0.5; side: double`);
+                              mediaEl.setAttribute('material', `src: ${asset.elementId}; shader: flat; transparent: true; depthWrite: true; alphaTest: 0.5; side: double`);
                           }
                       }
 
-                      // Auto-centratura solo per GLB e OBJ
                       if (mediaEl && (asset.format === 'glb' || asset.format === 'obj')) {
                           mediaEl.addEventListener('model-loaded', () => {
                               let obj3D = mediaEl.getObject3D('mesh');
@@ -1391,7 +1386,8 @@
     </div>
   </div>
 
-  <a-scene webxr="optionalFeatures: local-floor, hit-test, anchors;" vr-mode-ui="enabled: true">
+  <!-- Aggiunto depth-sensing alle API WebXR -->
+  <a-scene webxr="optionalFeatures: local-floor, hit-test, anchors, depth-sensing;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
