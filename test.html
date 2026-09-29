@@ -2,29 +2,47 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Stanza Verde AR - Meta Quest</title>
+    <title>Stanza Verde AR - Controllo Configurazione</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script>
-      // Questo componente legge la stanza scansionata e la copre di verde
       AFRAME.registerComponent('colora-stanza-verde', {
         init: function () {
-          // Creiamo un registro per tenere traccia dei muri/pavimenti trovati
           this.planes = new Map();
           
-          // Definiamo il colore verde semi-trasparente
           this.material = new THREE.MeshBasicMaterial({
-            color: 0x00FF00, // Verde puro
+            color: 0x00FF00,
             transparent: true,
-            opacity: 0.5,    // 50% di opacità per vedere la stanza dietro il verde
+            opacity: 0.5,
             side: THREE.DoubleSide,
-            wireframe: false // Metti 'true' se preferisci vedere una griglia stile Matrix
+            wireframe: false
+          });
+
+          // Riferimento al testo di avviso
+          this.warningText = document.querySelector('#avviso-stanza');
+          this.checkTimer = null;
+
+          // Quando inizia la sessione AR, facciamo partire un timer di 3 secondi
+          this.el.sceneEl.addEventListener('enter-vr', () => {
+            if (this.el.sceneEl.is('ar-mode')) {
+              this.checkTimer = setTimeout(() => {
+                // Se dopo 3 secondi non abbiamo trovato nessun muro, mostriamo l'avviso
+                if (this.planes.size === 0) {
+                  this.warningText.setAttribute('visible', 'true');
+                }
+              }, 3000);
+            }
+          });
+
+          // Quando usciamo dall'AR, nascondiamo l'avviso
+          this.el.sceneEl.addEventListener('exit-vr', () => {
+            clearTimeout(this.checkTimer);
+            this.warningText.setAttribute('visible', 'false');
           });
         },
 
-        // Questa funzione viene chiamata decine di volte al secondo
         tick: function () {
           const renderer = this.el.sceneEl.renderer;
-          if (!renderer.xr.isPresenting) return; // Assicuriamoci di essere in AR
+          if (!renderer.xr.isPresenting) return;
 
           const frame = this.el.sceneEl.frame;
           if (!frame) return;
@@ -32,29 +50,28 @@
           const refSpace = renderer.xr.getReferenceSpace();
           if (!refSpace) return;
 
-          // Se il sistema trova dei piani fisici scansionati (muri, tavoli, pavimento)
           if (frame.detectedPlanes) {
             frame.detectedPlanes.forEach(plane => {
               let planeData = this.planes.get(plane);
 
-              // Se è un piano nuovo, creiamo la forma geometrica
               if (!planeData) {
                 const geometry = this.createGeometry(plane);
                 const mesh = new THREE.Mesh(geometry, this.material);
-                mesh.matrixAutoUpdate = false; // Gestiamo la posizione manualmente
+                mesh.matrixAutoUpdate = false;
                 this.el.object3D.add(mesh);
                 
                 planeData = { mesh: mesh, lastTime: plane.lastChangedTime };
                 this.planes.set(plane, planeData);
+
+                // Abbiamo trovato almeno un piano! Nascondiamo l'avviso di errore
+                this.warningText.setAttribute('visible', 'false');
               } 
-              // Se il visore ha scansionato un pezzo in più di un muro già noto, aggiorniamo la forma
               else if (plane.lastChangedTime > planeData.lastTime) {
-                planeData.mesh.geometry.dispose(); // Cancelliamo la vecchia forma
-                planeData.mesh.geometry = this.createGeometry(plane); // Creiamo quella aggiornata
+                planeData.mesh.geometry.dispose();
+                planeData.mesh.geometry = this.createGeometry(plane);
                 planeData.lastTime = plane.lastChangedTime;
               }
               
-              // Allineiamo il piano verde esattamente dove si trova il muro reale
               const pose = frame.getPose(plane.planeSpace, refSpace);
               if (pose) {
                 planeData.mesh.matrix.fromArray(pose.transform.matrix);
@@ -63,7 +80,6 @@
           }
         },
 
-        // Funzione per convertire le coordinate WebXR in una forma visibile (Three.js)
         createGeometry: function(plane) {
           const shape = new THREE.Shape();
           if (plane.polygon.length > 0) {
@@ -73,7 +89,6 @@
             }
           }
           const geometry = new THREE.ShapeGeometry(shape);
-          // Ruotiamo la geometria per farla combaciare con lo spazio tridimensionale di WebXR
           geometry.rotateX(Math.PI / 2); 
           return geometry;
         }
@@ -81,10 +96,26 @@
     </script>
   </head>
   <body>
-    <!-- Richiediamo 'plane-detection' per ottenere la geometria della stanza -->
-    <a-scene webxr="optionalFeatures: hit-test, local-floor, plane-detection;" colora-stanza-verde>
-      <!-- Rimuoviamo il cielo virtuale per vedere le telecamere AR -->
+    <!-- NOTA BENE: Abbiamo spostato 'plane-detection' dentro requiredFeatures -->
+    <a-scene 
+      webxr="requiredFeatures: local-floor, plane-detection; optionalFeatures: hit-test;" 
+      colora-stanza-verde>
+      
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
+
+      <!-- Cartello di avviso: posizionato davanti all'utente, ma nascosto di default -->
+      <a-entity id="avviso-stanza" visible="false" position="0 1.5 -1.5">
+        <!-- Sfondo nero per far leggere bene il testo -->
+        <a-plane color="#000" opacity="0.8" width="2" height="0.6" position="0 0 -0.01"></a-plane>
+        <a-text 
+          value="Stanza non configurata!\n\nEsci dall'AR e usa il menu del Quest:\nImpostazioni > Spazio Fisico > Configurazione" 
+          align="center" 
+          color="#FF3333" 
+          width="4"
+          position="0 0 0">
+        </a-text>
+      </a-entity>
+
     </a-scene>
   </body>
 </html>
