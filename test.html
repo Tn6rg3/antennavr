@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio - Immagine Espansa</title>
+    <title>AR Studio - Immagine Espansa Fix</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <style>
       #ui-2d {
@@ -22,16 +22,21 @@
             const url = URL.createObjectURL(file);
             document.getElementById('status').innerText = "Caricamento in corso...";
             
-            new THREE.TextureLoader().load(url, function(texture) {
-              // RISOLUZIONE PROBLEMA IMMAGINE:
-              // Disattiviamo i mipmaps per permettere foto di QUALSIASI dimensione (non solo potenze di 2)
-              texture.generateMipmaps = false;
+            // METODO CORAZZATO PER LE FOTO LOCALI:
+            // Creiamo un'immagine HTML nativa prima di passarla al motore 3D
+            const img = new Image();
+            img.onload = function() {
+              const texture = new THREE.Texture(img);
+              // Diciamo al motore 3D di stirare i bordi se serve, ignorando i limiti delle proporzioni
+              texture.wrapS = THREE.ClampToEdgeWrapping;
+              texture.wrapT = THREE.ClampToEdgeWrapping;
               texture.minFilter = THREE.LinearFilter;
-              texture.magFilter = THREE.LinearFilter;
+              texture.needsUpdate = true; // Forza il caricamento nella memoria grafica
               
               window.userTexture = texture;
               document.getElementById('status').innerText = "✅ Immagine pronta! Entra in AR.";
-            });
+            };
+            img.src = url;
           }
         });
       });
@@ -49,7 +54,7 @@
           });
 
           this.matImmagine = new THREE.MeshBasicMaterial({
-            color: 0xFFFFFF, transparent: true, opacity: 0.9,
+            color: 0xFFFFFF, transparent: true, opacity: 0.95,
             side: THREE.DoubleSide
           });
 
@@ -81,7 +86,7 @@
         toggleVisibilita: function() {
           this.meshVisibile = !this.meshVisibile;
           this.matWireframe.opacity = this.meshVisibile ? 0.6 : 0.0;
-          this.matImmagine.opacity = this.meshVisibile ? 0.9 : 0.0;
+          this.matImmagine.opacity = this.meshVisibile ? 0.95 : 0.0;
         },
 
         aggiornaMateriali: function(nuovoMateriale) {
@@ -150,41 +155,43 @@
           return entity;
         },
 
-        // NUOVA LOGICA UV: Adatta l'immagine stirandola agli estremi della superficie scansionata
+        // NUOVA LOGICA UV MATEMATICA SICURA (Anti-Crash)
         applicaUVEspanse: function(geometry) {
           geometry.computeBoundingBox();
-          const min = geometry.boundingBox.min;
-          const max = geometry.boundingBox.max;
-          
-          const sizeX = max.x - min.x;
-          const sizeY = max.y - min.y;
-          const sizeZ = max.z - min.z;
+          const box = geometry.boundingBox;
+          if (!box) return; // Sicurezza anti-crash
 
           const pos = geometry.attributes.position;
           const uvs = new Float32Array(pos.count * 2);
 
-          // Identifichiamo quali sono i due assi principali della superficie (es: muro = X,Y | pavimento = X,Z)
-          let uAxis = 'x', vAxis = 'y';
-          if (sizeZ > sizeY && sizeX > sizeY) { uAxis = 'x'; vAxis = 'z'; }
-          else if (sizeZ > sizeX && sizeY > sizeX) { uAxis = 'y'; vAxis = 'z'; }
+          const sizeX = box.max.x - box.min.x;
+          const sizeY = box.max.y - box.min.y;
+          const sizeZ = box.max.z - box.min.z;
 
           for (let i = 0; i < pos.count; i++) {
             const x = pos.getX(i);
             const y = pos.getY(i);
             const z = pos.getZ(i);
 
-            let valU = uAxis === 'x' ? x : (uAxis === 'y' ? y : z);
-            let valV = vAxis === 'x' ? x : (vAxis === 'y' ? y : z);
-            
-            let minU = uAxis === 'x' ? min.x : (uAxis === 'y' ? min.y : min.z);
-            let minV = vAxis === 'x' ? min.x : (vAxis === 'y' ? min.y : min.z);
-            
-            let rangeU = uAxis === 'x' ? sizeX : (uAxis === 'y' ? sizeY : sizeZ);
-            let rangeV = vAxis === 'x' ? sizeX : (vAxis === 'y' ? sizeY : sizeZ);
+            let u = 0, v = 0;
 
-            // Evita divisioni per zero
-            uvs[i * 2] = rangeU === 0 ? 0 : (valU - minU) / rangeU;
-            uvs[i * 2 + 1] = rangeV === 0 ? 0 : (valV - minV) / rangeV;
+            // Capiamo in automatico se è un pavimento o un muro in base allo spessore
+            if (sizeY < 0.1) {
+              // È un piano orizzontale (es. pavimento o tavolo) -> Usiamo X e Z
+              u = sizeX > 0 ? (x - box.min.x) / sizeX : 0;
+              v = sizeZ > 0 ? (z - box.min.z) / sizeZ : 0;
+            } else {
+              // È un muro o un oggetto verticale -> Usiamo X e Y (o Z e Y)
+              const orizzontale = sizeX > sizeZ ? sizeX : sizeZ;
+              const asseOrizzontale = sizeX > sizeZ ? x : z;
+              const minOrizzontale = sizeX > sizeZ ? box.min.x : box.min.z;
+
+              u = orizzontale > 0 ? (asseOrizzontale - minOrizzontale) / orizzontale : 0;
+              v = sizeY > 0 ? (y - box.min.y) / sizeY : 0;
+            }
+
+            uvs[i * 2] = u;
+            uvs[i * 2 + 1] = v;
           }
           
           geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
@@ -212,7 +219,6 @@
         }
       });
 
-      // CONTROLLO TASTI (Solo per nascondere la mesh, RIMOSSO LO SPAWNER DEI CUBI)
       AFRAME.registerComponent('controlli-base', {
         init: function () {
           this.el.addEventListener('abuttondown', () => this.attivaToggle());
@@ -237,7 +243,6 @@
     <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" gestore-spazio>
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
 
-      <!-- Controller con controlli base: non generano più oggetti -->
       <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .interfaccia; far: 10;" controlli-base></a-entity>
       <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .interfaccia; far: 10;" controlli-base></a-entity>
 
