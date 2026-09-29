@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V45 - Libreria Media Stabile + Auto-Scale STL</title>
+  <title>Antenne AR Pro V46 - Fix Crash Importazioni + AutoScale</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <!-- Aframe Extras per abilitare il supporto alle Animazioni dei modelli GLB -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
@@ -54,7 +54,7 @@
       }
     });
 
-    // Parser STL con Auto-Scale Intelligente
+    // Parser STL con Auto-Scale Intelligente BLINDATO
     function parseSTLGeometry(buffer) {
         let geom = new THREE.BufferGeometry();
         try {
@@ -90,20 +90,22 @@
                 }
             }
 
-            // AUTO-SCALE INTELLIGENTE
+            // AUTO-SCALE E CENTRATURA SICURA
             geom.computeBoundingBox();
-            if (geom.boundingBox) {
+            if (geom.boundingBox && geom.boundingBox.min.x !== Infinity) {
                 let size = new THREE.Vector3();
                 geom.boundingBox.getSize(size);
                 let maxDim = Math.max(size.x, size.y, size.z);
-                // Se l'oggetto è più grande di 20 unità, significa che è stato esportato in millimetri. Lo riduciamo a metri.
+                // Se è più grande di 20 unità, converte i millimetri in metri.
                 if (maxDim > 20) {
                     geom.scale(0.001, 0.001, 0.001);
-                    geom.computeBoundingBox(); // Ricalcola dopo aver scalato
+                    geom.computeBoundingBox(); 
                 }
                 geom.center(); 
                 geom.computeBoundingBox();
-                geom.translate(0, -geom.boundingBox.min.y, 0); // Poggia a terra
+                if (geom.boundingBox) {
+                    geom.translate(0, -geom.boundingBox.min.y, 0); // Lo poggia perfettamente a terra
+                }
             }
         } catch (e) {
             console.error("Errore Parse STL:", e);
@@ -119,9 +121,11 @@
           .then(res => res.arrayBuffer())
           .then(buf => {
             let geom = parseSTLGeometry(buf);
-            let mat = new THREE.MeshStandardMaterial({ color: 0x90A4AE, metalness: 0.4, roughness: 0.5 });
-            let mesh = new THREE.Mesh(geom, mat);
-            this.el.setObject3D('mesh', mesh);
+            if(geom) {
+                let mat = new THREE.MeshStandardMaterial({ color: 0x90A4AE, metalness: 0.4, roughness: 0.5 });
+                let mesh = new THREE.Mesh(geom, mat);
+                this.el.setObject3D('mesh', mesh);
+            }
           }).catch(err => console.error("Errore fetch STL:", err));
       }
     });
@@ -424,7 +428,7 @@
             }
         }
 
-        let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || (this.gwState && this.gwState.includes('PEGS'));
+        let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || this.current.state.startsWith('SIZE_ROTATE_3D') || (this.gwState && this.gwState.includes('PEGS'));
         if (!isPlacingMode) this.triangState = 0;
         let indicator = document.querySelector('#touch-indicator'); 
         if (indicator) indicator.setAttribute('visible', isPlacingMode && this.pointerMode === 'TOUCH');
@@ -600,7 +604,7 @@
             let now = Date.now(); if (now - this.lastTriggerTime < 300) return; this.lastTriggerTime = now;
             let intersects = null; if (this.raycasterEl && this.raycasterEl.components && this.raycasterEl.components.raycaster) intersects = this.raycasterEl.components.raycaster.intersectedEls;
             
-            let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || (this.gwState && this.gwState.includes('PEGS'));
+            let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || this.current.state.startsWith('SIZE_ROTATE_3D') || (this.gwState && this.gwState.includes('PEGS'));
             
             let hitUI = false;
             if (intersects) {
@@ -667,10 +671,12 @@
                this.currentHeight = 1.0; this.current.state = 'PLACE_HEIGHT_A'; this.setupVerticalPreviewMode(this.current.pointA.base); this.refreshAll(); return;
             }
 
+            // CONFERMA PIAZZAMENTO MODELLO 3D/FOTO
             if (this.current.state === 'SIZE_ROTATE_3D') {
                 this.current.state = 'IDLE'; 
                 if(this.menuUI) this.menuUI.setAttribute('visible', true); 
                 this.refreshAll(); 
+                if (this.triangState === 2) this.triangState = 0;
                 return; 
             }
 
@@ -1002,12 +1008,12 @@
                   
                   if (this.assetLibrary.length > 0) {
                       let asset = this.assetLibrary[ant.custom3D.assetIdx || 0];
-                      if (!asset) asset = this.assetLibrary[0]; // fallback
+                      if (!asset) asset = this.assetLibrary[0]; 
 
                       if (asset.format === 'glb') {
                           mediaEl = document.createElement('a-entity');
                           mediaEl.setAttribute('gltf-model', asset.url);
-                          mediaEl.setAttribute('animation-mixer', ''); // Attiva le animazioni interne del GLB!
+                          mediaEl.setAttribute('animation-mixer', ''); 
                       } else if (asset.format === 'obj') {
                           mediaEl = document.createElement('a-entity');
                           mediaEl.setAttribute('obj-model', `obj: ${asset.url}`);
@@ -1016,25 +1022,20 @@
                           mediaEl = document.createElement('a-entity');
                           mediaEl.setAttribute('stl-model', asset.url);
                       } else if (asset.format === 'image') {
-                          // Piano su cui spalmare l'immagine creata in <a-assets>
                           mediaEl = document.createElement('a-plane');
-                          let w = 1.0;
-                          let h = asset.aspect ? (1.0 / asset.aspect) : 1.0;
+                          let w = 1.0; let h = asset.aspect ? (1.0 / asset.aspect) : 1.0;
                           mediaEl.setAttribute('width', w);
                           mediaEl.setAttribute('height', h);
-                          mediaEl.setAttribute('material', `src: ${asset.elementId}; shader: flat; transparent: true; side: double`);
+                          mediaEl.setAttribute('material', `src: url(${asset.url}); shader: flat; transparent: true; side: double`);
                       }
 
-                      // Auto-centratura solo per GLB e OBJ
                       if (mediaEl && (asset.format === 'glb' || asset.format === 'obj')) {
                           mediaEl.addEventListener('model-loaded', () => {
                               let obj3D = mediaEl.getObject3D('mesh');
                               if (obj3D) {
                                   let box = new THREE.Box3().setFromObject(obj3D);
                                   let center = new THREE.Vector3(); box.getCenter(center);
-                                  obj3D.position.x -= center.x;
-                                  obj3D.position.y -= box.min.y; 
-                                  obj3D.position.z -= center.z;
+                                  obj3D.position.x -= center.x; obj3D.position.y -= box.min.y; obj3D.position.z -= center.z;
                               }
                           });
                       }
@@ -1042,7 +1043,7 @@
                       mediaEl = document.createElement('a-entity');
                       mediaEl.setAttribute('geometry', 'primitive: box; width: 0.4; height: 0.4; depth: 0.4');
                       mediaEl.setAttribute('material', 'color: #9C27B0; wireframe: true');
-                      this.createLabel('NESSUN FILE IMPORTATO\nUSA IL MENU 2D', {x: ant.pointA.base.x, y: ant.pointA.base.y + 0.6, z: ant.pointA.base.z}, '#FF1744', this.globalTextScale, container);
+                      this.createLabel('NESSUN FILE IMPORTATO\nUSA IL MENU SU SCHERMO', {x: ant.pointA.base.x, y: ant.pointA.base.y + 0.6, z: ant.pointA.base.z}, '#FF1744', this.globalTextScale, container);
                   }
                   
                   if (mediaEl) {
@@ -1222,6 +1223,7 @@
           else if (id === 'btn-repo-a') { this.current.state = 'REPOSITION_GROUND_A'; if(this.menuUI) this.menuUI.setAttribute('visible', false); } 
           else if (id === 'btn-repo-b') { this.current.state = 'REPOSITION_GROUND_B'; if(this.menuUI) this.menuUI.setAttribute('visible', false); }
           else if (id === 'btn-global-reset') {
+             // Sgancia completamente la scena
              let containerEls = this.worldContentEl.querySelectorAll('.antenna-group');
              containerEls.forEach(el => el.parentNode.removeChild(el));
              this.antennas = [this.createEmptyAntenna()]; this.activeAntIdx = 0; this.current = this.antennas[0];
@@ -1230,7 +1232,9 @@
              if(this.worldContentEl) { this.worldContentEl.object3D.position.set(0,0,0); this.worldContentEl.setAttribute('visible', 'true'); }
              this.calibLocal1 = null; this.calibLocal2 = null;
              if(this.diamondRef1) this.diamondRef1.setAttribute('visible', 'false'); if(this.diamondRef2) this.diamondRef2.setAttribute('visible', 'false');
-             localStorage.removeItem('antennaArProV21'); this.refreshAll();
+             localStorage.removeItem('antennaArProV21'); 
+             if(this.menuUI) this.menuUI.setAttribute('visible', 'true');
+             this.refreshAll();
           }
         });
       },
@@ -1251,7 +1255,7 @@
                   if (this.importedMmanaWires.length > 0) { this.current.mmanaWires = this.importedMmanaWires; this.current.mmanaModelIdx = this.mmanaModels.indexOf('Modello Importato'); this.current.antIdx = this.antennaTypes.indexOf('MMANA-GAL'); this.refreshAll(); alert(`Caricati ${this.current.mmanaWires.length} fili!`); }
               };
               reader.readAsText(file);
-              evt.target.value = ''; // Resetta l'input per permettere di ricaricare
+              evt.target.value = '';
             });
         }
         
@@ -1275,21 +1279,14 @@
                         if(format !== 'unknown') {
                             let assetObj = { name: file.name, url: url, format: format };
                             
-                            // Gestione speciale e sicura per Immagini 2D (creiamo un tag <img> in background)
+                            // CARICAMENTO SICURO IMMAGINI (No Crash DOM)
                             if (format === 'image') {
-                                let assetsEl = document.querySelector('a-assets');
-                                if (!assetsEl) {
-                                    assetsEl = document.createElement('a-assets');
-                                    document.querySelector('a-scene').appendChild(assetsEl);
-                                }
-                                let imgEl = document.createElement('img');
-                                imgEl.setAttribute('id', 'custom-img-' + Date.now() + i);
-                                imgEl.setAttribute('src', url);
-                                imgEl.setAttribute('crossorigin', 'anonymous');
-                                assetsEl.appendChild(imgEl);
-                                assetObj.elementId = '#' + imgEl.id;
-                                
-                                imgEl.onload = () => { assetObj.aspect = imgEl.naturalWidth / imgEl.naturalHeight; this.refreshAll(); };
+                                let img = new Image();
+                                img.onload = () => { 
+                                    assetObj.aspect = img.naturalWidth / img.naturalHeight; 
+                                    this.refreshAll(); 
+                                };
+                                img.src = url;
                             }
                             
                             this.assetLibrary.push(assetObj);
@@ -1299,14 +1296,14 @@
                     if (added > 0) {
                         this.current.antIdx = this.antennaTypes.indexOf('File Custom');
                         if(!this.current.custom3D) this.current.custom3D = { assetIdx: 0, scale: 1.0, rotationX: 0, rotationY: 0, rotationZ: 0 };
-                        this.current.custom3D.assetIdx = this.assetLibrary.length - 1; // Auto-seleziona l'ultimo
+                        this.current.custom3D.assetIdx = this.assetLibrary.length - 1;
                         alert(`${added} File Aggiunti alla Libreria!\nIndossa il visore, apri il menu "Nuova Antenna -> Tipo Oggetto -> File Custom".`);
                         this.refreshAll();
                     } else {
                         alert("Nessun formato supportato trovato.");
                     }
                 }
-                evt.target.value = ''; // Resetta l'input
+                evt.target.value = ''; 
             });
         }
       },
@@ -1335,7 +1332,6 @@
     <div class="import-box">
       <h3>LIBRERIA MULTIMEDIALE</h3>
       <p style="color:#FFF59D;">Carica PIU' file contemporaneamente: <b>.GLB, .OBJ, .STL, .PNG, .JPG</b>. <br>I GLB supportano colori e animazioni.</p>
-      <!-- "multiple" permette di selezionare più file -->
       <input type="file" id="file-custom-media" accept=".glb,.gltf,.obj,.stl,.png,.jpg,.jpeg" multiple>
     </div>
     <div class="import-box">
@@ -1355,7 +1351,7 @@
         <a-entity id="menu-ui" visible="false" position="0 0.15 -0.2" rotation="-30 0 0">
           <a-plane width="0.55" height="0.95" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO V45" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
+          <a-text value="CONFIGURATORE ANTENNE PRO V46" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
           
           <a-plane width="0.52" height="0.08" color="#2A2A2A" position="0 0.38 0.01">
             <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
@@ -1385,6 +1381,7 @@
             <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
+          <!-- MENU LIBRERIA MEDIA CUSTOM -->
           <a-entity id="sub-media" position="0 0.02 0" visible="false">
             <a-text value="LIBRERIA FILE (MODELLI 3D E IMMAGINI)" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-media-prev" class="clickable" btn-interaction width="0.1" height="0.03" color="#006064" position="-0.16 -0.01 0.01"><a-text value="< PREV" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
@@ -1477,7 +1474,7 @@
           </a-plane>
         </a-entity>
 
-        <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.2" rotation="-30 0 0">
+        <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
           <a-plane width="0.48" height="0.35" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
           <a-text value="MODALITA' TIRANTI (TASTO A PER USCIRE)" position="0 0.14 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
           
