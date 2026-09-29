@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V45 - Libreria Media Stabile + Auto-Scale STL</title>
+  <title>Antenne AR Pro V45 - Libreria Media Stabile + Auto-Scale STL + VIDEO</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <!-- Aframe Extras per abilitare il supporto alle Animazioni dei modelli GLB -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
@@ -96,10 +96,9 @@
                 let size = new THREE.Vector3();
                 geom.boundingBox.getSize(size);
                 let maxDim = Math.max(size.x, size.y, size.z);
-                // Se l'oggetto è più grande di 20 unità, significa che è stato esportato in millimetri. Lo riduciamo a metri.
                 if (maxDim > 20) {
                     geom.scale(0.001, 0.001, 0.001);
-                    geom.computeBoundingBox(); // Ricalcola dopo aver scalato
+                    geom.computeBoundingBox();
                 }
                 geom.center(); 
                 geom.computeBoundingBox();
@@ -810,7 +809,7 @@
         else if (is3D) {
             if (this.current.state === 'SIZE_ROTATE_3D') infoTextStr = "JOY SX (L/R e Su/Giu): Ruota Oggetto\nJOY DX (Su/Giu): Ingrandisci / Riduci\nGRILLETTO: Conferma Piazzamento";
             else if (this.assetLibrary.length > 0) infoTextStr = "LIBRERIA FILE MULTIMEDIALI PRONTA\nScegli l'oggetto e premi il grilletto a terra.";
-            else infoTextStr = "ATTENZIONE: NESSUN FILE NELLA LIBRERIA!\nUsa il menu 2D per caricare Modelli 3D o Immagini.";
+            else infoTextStr = "ATTENZIONE: NESSUN FILE NELLA LIBRERIA!\nUsa il menu 2D per caricare Modelli 3D, Foto o Video.";
         }
         else if (this.current.state === 'REPOSITION_GROUND_C') { infoTextStr = "Punta a terra sotto al Centro C e premi il grilletto\nper fissare la quota."; }
         else if (this.current.state === 'PLACE_TRALICCIO_CENTER') { infoTextStr = "Punta a terra e premi grilletto per\nil CENTRO del Traliccio."; }
@@ -1007,7 +1006,7 @@
                       if (asset.format === 'glb') {
                           mediaEl = document.createElement('a-entity');
                           mediaEl.setAttribute('gltf-model', asset.url);
-                          mediaEl.setAttribute('animation-mixer', ''); // Attiva le animazioni interne del GLB!
+                          mediaEl.setAttribute('animation-mixer', '');
                       } else if (asset.format === 'obj') {
                           mediaEl = document.createElement('a-entity');
                           mediaEl.setAttribute('obj-model', `obj: ${asset.url}`);
@@ -1015,14 +1014,25 @@
                       } else if (asset.format === 'stl') {
                           mediaEl = document.createElement('a-entity');
                           mediaEl.setAttribute('stl-model', asset.url);
-                      } else if (asset.format === 'image') {
-                          // Piano su cui spalmare l'immagine creata in <a-assets>
-                          mediaEl = document.createElement('a-plane');
+                      } else if (asset.format === 'image' || asset.format === 'video') {
+                          // Genera piano/video basato sull'asset pre-caricato
+                          mediaEl = document.createElement(asset.format === 'video' ? 'a-video' : 'a-plane');
                           let w = 1.0;
                           let h = asset.aspect ? (1.0 / asset.aspect) : 1.0;
                           mediaEl.setAttribute('width', w);
                           mediaEl.setAttribute('height', h);
-                          mediaEl.setAttribute('material', `src: ${asset.elementId}; shader: flat; transparent: true; side: double`);
+                          
+                          if (asset.format === 'video') {
+                              mediaEl.setAttribute('src', asset.elementId);
+                              mediaEl.setAttribute('material', 'side: double');
+                              // Forza il play per sicurezza quando instanziato
+                              setTimeout(() => {
+                                  let v = document.querySelector(asset.elementId);
+                                  if (v && v.paused) v.play().catch(e => console.warn('Autoplay bloccato:', e));
+                              }, 100);
+                          } else {
+                              mediaEl.setAttribute('material', `src: ${asset.elementId}; shader: flat; transparent: true; side: double`);
+                          }
                       }
 
                       // Auto-centratura solo per GLB e OBJ
@@ -1271,25 +1281,47 @@
                         else if (name.endsWith('.obj')) format = 'obj';
                         else if (name.endsWith('.stl')) format = 'stl';
                         else if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg')) format = 'image';
+                        else if (name.endsWith('.mp4') || name.endsWith('.webm')) format = 'video';
                         
                         if(format !== 'unknown') {
                             let assetObj = { name: file.name, url: url, format: format };
                             
-                            // Gestione speciale e sicura per Immagini 2D (creiamo un tag <img> in background)
-                            if (format === 'image') {
+                            // Gestione speciale e sicura per Immagini e Video 2D (creiamo tag <img> o <video> in background)
+                            if (format === 'image' || format === 'video') {
                                 let assetsEl = document.querySelector('a-assets');
                                 if (!assetsEl) {
                                     assetsEl = document.createElement('a-assets');
                                     document.querySelector('a-scene').appendChild(assetsEl);
                                 }
-                                let imgEl = document.createElement('img');
-                                imgEl.setAttribute('id', 'custom-img-' + Date.now() + i);
-                                imgEl.setAttribute('src', url);
-                                imgEl.setAttribute('crossorigin', 'anonymous');
-                                assetsEl.appendChild(imgEl);
-                                assetObj.elementId = '#' + imgEl.id;
                                 
-                                imgEl.onload = () => { assetObj.aspect = imgEl.naturalWidth / imgEl.naturalHeight; this.refreshAll(); };
+                                if (format === 'image') {
+                                    let imgEl = document.createElement('img');
+                                    imgEl.setAttribute('id', 'custom-img-' + Date.now() + i);
+                                    imgEl.setAttribute('src', url);
+                                    imgEl.setAttribute('crossorigin', 'anonymous');
+                                    assetsEl.appendChild(imgEl);
+                                    assetObj.elementId = '#' + imgEl.id;
+                                    
+                                    imgEl.onload = () => { assetObj.aspect = imgEl.naturalWidth / imgEl.naturalHeight; this.refreshAll(); };
+                                } else {
+                                    let vidEl = document.createElement('video');
+                                    vidEl.setAttribute('id', 'custom-vid-' + Date.now() + i);
+                                    vidEl.setAttribute('src', url);
+                                    vidEl.setAttribute('crossorigin', 'anonymous');
+                                    // I video su webXR DEVONO essere silenziati se vogliamo l'autoplay
+                                    vidEl.setAttribute('autoplay', 'true');
+                                    vidEl.setAttribute('loop', 'true');
+                                    vidEl.setAttribute('muted', 'true');
+                                    vidEl.setAttribute('playsinline', 'true');
+                                    assetsEl.appendChild(vidEl);
+                                    assetObj.elementId = '#' + vidEl.id;
+                                    
+                                    vidEl.onloadedmetadata = () => { 
+                                        assetObj.aspect = vidEl.videoWidth / vidEl.videoHeight; 
+                                        vidEl.play().catch(e => console.warn(e)); // Tenta il play
+                                        this.refreshAll(); 
+                                    };
+                                }
                             }
                             
                             this.assetLibrary.push(assetObj);
@@ -1334,9 +1366,9 @@
     <hr>
     <div class="import-box">
       <h3>LIBRERIA MULTIMEDIALE</h3>
-      <p style="color:#FFF59D;">Carica PIU' file contemporaneamente: <b>.GLB, .OBJ, .STL, .PNG, .JPG</b>. <br>I GLB supportano colori e animazioni.</p>
-      <!-- "multiple" permette di selezionare più file -->
-      <input type="file" id="file-custom-media" accept=".glb,.gltf,.obj,.stl,.png,.jpg,.jpeg" multiple>
+      <p style="color:#FFF59D;">Carica PIU' file contemporaneamente: <b>.GLB, .OBJ, .STL, .PNG, .JPG, .MP4, .WEBM</b>. <br>I GLB supportano colori e animazioni.</p>
+      <!-- Aggiunto supporto video mp4 e webm -->
+      <input type="file" id="file-custom-media" accept=".glb,.gltf,.obj,.stl,.png,.jpg,.jpeg,.mp4,.webm" multiple>
     </div>
     <div class="import-box">
       <h3>MMANA-GAL (.maa)</h3>
