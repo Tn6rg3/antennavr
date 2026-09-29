@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Test AR Verde - Meta Quest</title>
+    <!-- Importiamo A-Frame -->
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script>
+      // Componente custom per leggere i piani scansionati e colorarli di verde
+      AFRAME.registerComponent('colora-stanza-verde', {
+        init: function () {
+          this.el.sceneEl.renderer.xr.addEventListener('sessionstart', () => {
+            const session = this.el.sceneEl.renderer.xr.getSession();
+            // Qui andrebbe inserita la logica avanzata di WebXR 
+            // per intercettare i "detectedPlanes" o le "meshes" del Quest
+            // e generare dei poligoni verdi (Three.js Mesh) sulle loro coordinate.
+            console.log("Sessione AR avviata. Pronti a leggere i confini!");
+          });
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <!-- Configurazione della scena AR -->
+    <!-- Richiediamo 'plane-detection' e 'mesh' per accedere alla geometria della stanza -->
+    <a-scene 
+      webxr="optionalFeatures: hit-test, local-floor, plane-detection, mesh;" 
+      colora-stanza-verde>
+      
+      <!-- In AR, non usiamo uno skybox solido altrimenti blocchiamo le telecamere -->
+      <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
+
+      <!-- Oggetto di test verde a 1 metro davanti all'utente per verificare il colore -->
+      <a-box position="0 1.5 -1" color="#00FF00" opacity="0.8"></a-box>
+
+    </a-scene>
+  </body>
+</html>
