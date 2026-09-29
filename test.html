@@ -109,8 +109,9 @@
   </head>
   <body>
     <!-- Richiediamo 'mesh' per avere la topologia 3D esatta -->
-   <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, mesh, plane-detection;" colora-mesh-verde>
-      
+<a-scene 
+  webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, mesh, mesh-detection, plane-detection;" 
+  colora-mesh-verde>      
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
 
       <a-entity id="avviso-stanza" visible="false" position="0 1.5 -1.5">
