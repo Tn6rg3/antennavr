@@ -2,37 +2,89 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Test AR Verde - Meta Quest</title>
-    <!-- Importiamo A-Frame -->
+    <title>Stanza Verde AR - Meta Quest</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script>
-      // Componente custom per leggere i piani scansionati e colorarli di verde
+      // Questo componente legge la stanza scansionata e la copre di verde
       AFRAME.registerComponent('colora-stanza-verde', {
         init: function () {
-          this.el.sceneEl.renderer.xr.addEventListener('sessionstart', () => {
-            const session = this.el.sceneEl.renderer.xr.getSession();
-            // Qui andrebbe inserita la logica avanzata di WebXR 
-            // per intercettare i "detectedPlanes" o le "meshes" del Quest
-            // e generare dei poligoni verdi (Three.js Mesh) sulle loro coordinate.
-            console.log("Sessione AR avviata. Pronti a leggere i confini!");
+          // Creiamo un registro per tenere traccia dei muri/pavimenti trovati
+          this.planes = new Map();
+          
+          // Definiamo il colore verde semi-trasparente
+          this.material = new THREE.MeshBasicMaterial({
+            color: 0x00FF00, // Verde puro
+            transparent: true,
+            opacity: 0.5,    // 50% di opacità per vedere la stanza dietro il verde
+            side: THREE.DoubleSide,
+            wireframe: false // Metti 'true' se preferisci vedere una griglia stile Matrix
           });
+        },
+
+        // Questa funzione viene chiamata decine di volte al secondo
+        tick: function () {
+          const renderer = this.el.sceneEl.renderer;
+          if (!renderer.xr.isPresenting) return; // Assicuriamoci di essere in AR
+
+          const frame = this.el.sceneEl.frame;
+          if (!frame) return;
+
+          const refSpace = renderer.xr.getReferenceSpace();
+          if (!refSpace) return;
+
+          // Se il sistema trova dei piani fisici scansionati (muri, tavoli, pavimento)
+          if (frame.detectedPlanes) {
+            frame.detectedPlanes.forEach(plane => {
+              let planeData = this.planes.get(plane);
+
+              // Se è un piano nuovo, creiamo la forma geometrica
+              if (!planeData) {
+                const geometry = this.createGeometry(plane);
+                const mesh = new THREE.Mesh(geometry, this.material);
+                mesh.matrixAutoUpdate = false; // Gestiamo la posizione manualmente
+                this.el.object3D.add(mesh);
+                
+                planeData = { mesh: mesh, lastTime: plane.lastChangedTime };
+                this.planes.set(plane, planeData);
+              } 
+              // Se il visore ha scansionato un pezzo in più di un muro già noto, aggiorniamo la forma
+              else if (plane.lastChangedTime > planeData.lastTime) {
+                planeData.mesh.geometry.dispose(); // Cancelliamo la vecchia forma
+                planeData.mesh.geometry = this.createGeometry(plane); // Creiamo quella aggiornata
+                planeData.lastTime = plane.lastChangedTime;
+              }
+              
+              // Allineiamo il piano verde esattamente dove si trova il muro reale
+              const pose = frame.getPose(plane.planeSpace, refSpace);
+              if (pose) {
+                planeData.mesh.matrix.fromArray(pose.transform.matrix);
+              }
+            });
+          }
+        },
+
+        // Funzione per convertire le coordinate WebXR in una forma visibile (Three.js)
+        createGeometry: function(plane) {
+          const shape = new THREE.Shape();
+          if (plane.polygon.length > 0) {
+            shape.moveTo(plane.polygon[0].x, plane.polygon[0].z);
+            for (let i = 1; i < plane.polygon.length; i++) {
+              shape.lineTo(plane.polygon[i].x, plane.polygon[i].z);
+            }
+          }
+          const geometry = new THREE.ShapeGeometry(shape);
+          // Ruotiamo la geometria per farla combaciare con lo spazio tridimensionale di WebXR
+          geometry.rotateX(Math.PI / 2); 
+          return geometry;
         }
       });
     </script>
   </head>
   <body>
-    <!-- Configurazione della scena AR -->
-    <!-- Richiediamo 'plane-detection' e 'mesh' per accedere alla geometria della stanza -->
-    <a-scene 
-      webxr="optionalFeatures: hit-test, local-floor, plane-detection, mesh;" 
-      colora-stanza-verde>
-      
-      <!-- In AR, non usiamo uno skybox solido altrimenti blocchiamo le telecamere -->
+    <!-- Richiediamo 'plane-detection' per ottenere la geometria della stanza -->
+    <a-scene webxr="optionalFeatures: hit-test, local-floor, plane-detection;" colora-stanza-verde>
+      <!-- Rimuoviamo il cielo virtuale per vedere le telecamere AR -->
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
-
-      <!-- Oggetto di test verde a 1 metro davanti all'utente per verificare il colore -->
-      <a-box position="0 1.5 -1" color="#00FF00" opacity="0.8"></a-box>
-
     </a-scene>
   </body>
 </html>
