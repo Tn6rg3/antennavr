@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V44 - Libreria Media (3D Animati, Immagini) Multipla</title>
+  <title>Antenne AR Pro V45 - Libreria Media Stabile + Auto-Scale STL</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <!-- Aframe Extras per abilitare il supporto alle Animazioni dei modelli GLB -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
@@ -54,43 +54,60 @@
       }
     });
 
-    // Parser STL
+    // Parser STL con Auto-Scale Intelligente
     function parseSTLGeometry(buffer) {
-        let reader = new DataView(buffer);
-        let isBinary = true;
-        let numFaces = 0;
-        if (buffer.byteLength > 84) {
-            numFaces = reader.getUint32(80, true);
-            let expectedSize = 84 + numFaces * 50;
-            if (buffer.byteLength !== expectedSize) {
-                let sample = new TextDecoder().decode(new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 512)));
-                if (sample.trim().startsWith('solid') && !sample.includes('\0')) { isBinary = false; }
-            }
-        } else { isBinary = false; }
-
         let geom = new THREE.BufferGeometry();
-        if (isBinary) {
-            let pos = []; let normals = []; let offset = 84;
-            for (let i = 0; i < numFaces; i++) {
-                let nx = reader.getFloat32(offset, true); let ny = reader.getFloat32(offset + 4, true); let nz = reader.getFloat32(offset + 8, true); offset += 12;
-                for (let v = 0; v < 3; v++) {
-                    pos.push(reader.getFloat32(offset, true), reader.getFloat32(offset + 4, true), reader.getFloat32(offset + 8, true)); normals.push(nx, ny, nz); offset += 12;
+        try {
+            let reader = new DataView(buffer);
+            let isBinary = true;
+            let numFaces = 0;
+            if (buffer.byteLength > 84) {
+                numFaces = reader.getUint32(80, true);
+                let expectedSize = 84 + numFaces * 50;
+                if (buffer.byteLength !== expectedSize) {
+                    let sample = new TextDecoder().decode(new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 512)));
+                    if (sample.trim().startsWith('solid') && !sample.includes('\0')) { isBinary = false; }
                 }
-                offset += 2;
+            } else { isBinary = false; }
+
+            if (isBinary) {
+                let pos = []; let normals = []; let offset = 84;
+                for (let i = 0; i < numFaces; i++) {
+                    let nx = reader.getFloat32(offset, true); let ny = reader.getFloat32(offset + 4, true); let nz = reader.getFloat32(offset + 8, true); offset += 12;
+                    for (let v = 0; v < 3; v++) {
+                        pos.push(reader.getFloat32(offset, true), reader.getFloat32(offset + 4, true), reader.getFloat32(offset + 8, true)); normals.push(nx, ny, nz); offset += 12;
+                    }
+                    offset += 2;
+                }
+                geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+                if (normals.length > 0 && normals[0] === 0 && normals[1] === 0 && normals[2] === 0) { geom.computeVertexNormals(); } else { geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3)); }
+            } else {
+                let text = new TextDecoder().decode(new Uint8Array(buffer)); let pos = [];
+                let vertexMatches = text.match(/vertex\s+([\d.\-+eE]+)\s+([\d.\-+eE]+)\s+([\d.\-+eE]+)/g);
+                if (vertexMatches) {
+                    vertexMatches.forEach(str => { let parts = str.trim().split(/\s+/); pos.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])); });
+                    geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geom.computeVertexNormals();
+                }
             }
-            geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-            if (normals.length > 0 && normals[0] === 0 && normals[1] === 0 && normals[2] === 0) { geom.computeVertexNormals(); } else { geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3)); }
-        } else {
-            let text = new TextDecoder().decode(new Uint8Array(buffer)); let pos = [];
-            let vertexMatches = text.match(/vertex\s+([\d.\-+eE]+)\s+([\d.\-+eE]+)\s+([\d.\-+eE]+)/g);
-            if (vertexMatches) {
-                vertexMatches.forEach(str => { let parts = str.trim().split(/\s+/); pos.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])); });
-                geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geom.computeVertexNormals();
+
+            // AUTO-SCALE INTELLIGENTE
+            geom.computeBoundingBox();
+            if (geom.boundingBox) {
+                let size = new THREE.Vector3();
+                geom.boundingBox.getSize(size);
+                let maxDim = Math.max(size.x, size.y, size.z);
+                // Se l'oggetto è più grande di 20 unità, significa che è stato esportato in millimetri. Lo riduciamo a metri.
+                if (maxDim > 20) {
+                    geom.scale(0.001, 0.001, 0.001);
+                    geom.computeBoundingBox(); // Ricalcola dopo aver scalato
+                }
+                geom.center(); 
+                geom.computeBoundingBox();
+                geom.translate(0, -geom.boundingBox.min.y, 0); // Poggia a terra
             }
+        } catch (e) {
+            console.error("Errore Parse STL:", e);
         }
-        geom.scale(0.001, 0.001, 0.001); 
-        geom.center(); geom.computeBoundingBox();
-        if (geom.boundingBox) { geom.translate(0, -geom.boundingBox.min.y, 0); }
         return geom;
     }
 
@@ -105,7 +122,7 @@
             let mat = new THREE.MeshStandardMaterial({ color: 0x90A4AE, metalness: 0.4, roughness: 0.5 });
             let mesh = new THREE.Mesh(geom, mat);
             this.el.setObject3D('mesh', mesh);
-          }).catch(err => console.error("Errore caricamento STL:", err));
+          }).catch(err => console.error("Errore fetch STL:", err));
       }
     });
 
@@ -125,10 +142,8 @@
             this.calibLocal1 = null; 
             this.calibLocal2 = null;
             
-            // Libreria Media Multipla
-            this.assetLibrary = [];
+            this.assetLibrary = []; // Libreria media
             
-            // WebXR Spatial Anchors
             this.sceneAnchor = null;
             this.requestingAnchor = false;
             
@@ -506,6 +521,7 @@
         let deltaY = evt.detail.y > 0 ? 2.0 : -2.0;
         
         if (this.current.state === 'SIZE_ROTATE_3D') {
+            if(!this.current.custom3D) return;
             if (Math.abs(evt.detail.x) > 0.3) { this.current.custom3D.rotationY += deltaX; this.refreshAll(); }
             if (Math.abs(evt.detail.y) > 0.3) { this.current.custom3D.rotationX += deltaY; this.refreshAll(); }
             return;
@@ -532,6 +548,7 @@
           }
 
           if (this.current.state === 'SIZE_ROTATE_3D') {
+              if(!this.current.custom3D) return;
               if (Math.abs(evt.detail.y) > 0.3) {
                  let scaleMult = this.current.custom3D.scale > 2 ? 0.2 : 0.05;
                  let step = evt.detail.y < 0 ? scaleMult : -scaleMult; 
@@ -773,10 +790,10 @@
             if (this.assetLibrary.length === 0) {
                 if(txtMedia) txtMedia.setAttribute('value', 'NESSUN FILE IMPORTATO');
             } else {
-                let asset = this.assetLibrary[this.current.custom3D.assetIdx || 0];
+                let asset = this.assetLibrary[this.current.custom3D ? (this.current.custom3D.assetIdx || 0) : 0];
                 if(txtMedia && asset) {
                     let shortName = asset.name.length > 15 ? asset.name.substring(0, 15) + '...' : asset.name;
-                    txtMedia.setAttribute('value', `${(this.current.custom3D.assetIdx||0)+1}/${this.assetLibrary.length} ${shortName}`);
+                    txtMedia.setAttribute('value', `${((this.current.custom3D ? this.current.custom3D.assetIdx : 0)||0)+1}/${this.assetLibrary.length} ${shortName}`);
                 }
             }
         }
@@ -976,7 +993,6 @@
           
           let type = this.antennaTypes[ant.antIdx];
 
-          // ----- RENDER FILE CUSTOM (GLB, OBJ, STL, PNG, JPG) -----
           if (type === 'File Custom') {
               if (ant.pointA.base) {
                   this.createBasePanel(ant.pointA.base, container);
@@ -986,12 +1002,12 @@
                   
                   if (this.assetLibrary.length > 0) {
                       let asset = this.assetLibrary[ant.custom3D.assetIdx || 0];
-                      if (!asset) asset = this.assetLibrary[0];
+                      if (!asset) asset = this.assetLibrary[0]; // fallback
 
                       if (asset.format === 'glb') {
                           mediaEl = document.createElement('a-entity');
                           mediaEl.setAttribute('gltf-model', asset.url);
-                          mediaEl.setAttribute('animation-mixer', ''); // Attiva animazioni incorporate
+                          mediaEl.setAttribute('animation-mixer', ''); // Attiva le animazioni interne del GLB!
                       } else if (asset.format === 'obj') {
                           mediaEl = document.createElement('a-entity');
                           mediaEl.setAttribute('obj-model', `obj: ${asset.url}`);
@@ -1000,13 +1016,16 @@
                           mediaEl = document.createElement('a-entity');
                           mediaEl.setAttribute('stl-model', asset.url);
                       } else if (asset.format === 'image') {
-                          mediaEl = document.createElement('a-image');
-                          mediaEl.setAttribute('src', asset.url);
-                          mediaEl.setAttribute('width', '1');
-                          mediaEl.setAttribute('height', '1');
-                          // Le immagini in aframe di default guardano verso z+.
+                          // Piano su cui spalmare l'immagine creata in <a-assets>
+                          mediaEl = document.createElement('a-plane');
+                          let w = 1.0;
+                          let h = asset.aspect ? (1.0 / asset.aspect) : 1.0;
+                          mediaEl.setAttribute('width', w);
+                          mediaEl.setAttribute('height', h);
+                          mediaEl.setAttribute('material', `src: ${asset.elementId}; shader: flat; transparent: true; side: double`);
                       }
 
+                      // Auto-centratura solo per GLB e OBJ
                       if (mediaEl && (asset.format === 'glb' || asset.format === 'obj')) {
                           mediaEl.addEventListener('model-loaded', () => {
                               let obj3D = mediaEl.getObject3D('mesh');
@@ -1023,7 +1042,7 @@
                       mediaEl = document.createElement('a-entity');
                       mediaEl.setAttribute('geometry', 'primitive: box; width: 0.4; height: 0.4; depth: 0.4');
                       mediaEl.setAttribute('material', 'color: #9C27B0; wireframe: true');
-                      this.createLabel('NESSUN FILE IMPORTATO\nUSA IL MENU SU SCHERMO', {x: ant.pointA.base.x, y: ant.pointA.base.y + 0.6, z: ant.pointA.base.z}, '#FF1744', this.globalTextScale, container);
+                      this.createLabel('NESSUN FILE IMPORTATO\nUSA IL MENU 2D', {x: ant.pointA.base.x, y: ant.pointA.base.y + 0.6, z: ant.pointA.base.z}, '#FF1744', this.globalTextScale, container);
                   }
                   
                   if (mediaEl) {
@@ -1181,7 +1200,9 @@
           else if (id === 'btn-ar-save') { if (!this.calibLocal1 || !this.calibLocal2) return; let timeStr = new Date().getHours() + "-" + new Date().getMinutes() + "-" + new Date().getSeconds(); document.querySelector('#info-text').setAttribute('value', this.executeSave("SCENA_" + timeStr)); }
           else if (id === 'btn-height-a') { if(!this.current.pointA.base) return; this.current.state = 'REPOSITION_HEIGHT_A'; this.currentHeight = this.current.pointA.top.y - this.current.pointA.base.y; this.setupVerticalPreviewMode(this.current.pointA.base); if(this.menuUI) this.menuUI.setAttribute('visible', false); }
           else if (id === 'btn-height-b') { if(!this.current.pointB.base) return; this.current.state = 'REPOSITION_HEIGHT_B'; this.currentHeight = this.current.pointB.top.y - this.current.pointB.base.y; this.setupVerticalPreviewMode(this.current.pointB.base); if(this.menuUI) this.menuUI.setAttribute('visible', false); }
+          
           else if (id === 'btn-ant') { this.current.antIdx = (this.current.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll(); } 
+          
           else if (id === 'btn-band') { this.current.bandIdx = (this.current.bandIdx + 1) % this.bands.length; this.resetAntennaLengths(); if (this.antennaTypes[this.current.antIdx] === 'Verticale' && this.current.pointA.top) { this.current.pointA.top.y = this.current.pointA.base.y + this.getCalculatedLength(); } this.refreshAll(); } 
           else if (id === 'btn-c-left') { this.current.pointC.percent = Math.max(0.02, mathRound(this.current.pointC.percent - 0.05)); this.refreshAll(); } 
           else if (id === 'btn-c-right') { this.current.pointC.percent = Math.min(0.98, mathRound(this.current.pointC.percent + 0.05)); this.refreshAll(); } 
@@ -1230,10 +1251,10 @@
                   if (this.importedMmanaWires.length > 0) { this.current.mmanaWires = this.importedMmanaWires; this.current.mmanaModelIdx = this.mmanaModels.indexOf('Modello Importato'); this.current.antIdx = this.antennaTypes.indexOf('MMANA-GAL'); this.refreshAll(); alert(`Caricati ${this.current.mmanaWires.length} fili!`); }
               };
               reader.readAsText(file);
+              evt.target.value = ''; // Resetta l'input per permettere di ricaricare
             });
         }
         
-        // MULTI ASSET UPLOADER
         let fileInputCustom = document.querySelector('#file-custom-media');
         if(fileInputCustom) {
             fileInputCustom.addEventListener('change', (evt) => {
@@ -1252,21 +1273,40 @@
                         else if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg')) format = 'image';
                         
                         if(format !== 'unknown') {
-                            this.assetLibrary.push({ name: file.name, url: url, format: format });
+                            let assetObj = { name: file.name, url: url, format: format };
+                            
+                            // Gestione speciale e sicura per Immagini 2D (creiamo un tag <img> in background)
+                            if (format === 'image') {
+                                let assetsEl = document.querySelector('a-assets');
+                                if (!assetsEl) {
+                                    assetsEl = document.createElement('a-assets');
+                                    document.querySelector('a-scene').appendChild(assetsEl);
+                                }
+                                let imgEl = document.createElement('img');
+                                imgEl.setAttribute('id', 'custom-img-' + Date.now() + i);
+                                imgEl.setAttribute('src', url);
+                                imgEl.setAttribute('crossorigin', 'anonymous');
+                                assetsEl.appendChild(imgEl);
+                                assetObj.elementId = '#' + imgEl.id;
+                                
+                                imgEl.onload = () => { assetObj.aspect = imgEl.naturalWidth / imgEl.naturalHeight; this.refreshAll(); };
+                            }
+                            
+                            this.assetLibrary.push(assetObj);
                             added++;
                         }
                     }
                     if (added > 0) {
                         this.current.antIdx = this.antennaTypes.indexOf('File Custom');
                         if(!this.current.custom3D) this.current.custom3D = { assetIdx: 0, scale: 1.0, rotationX: 0, rotationY: 0, rotationZ: 0 };
-                        // Seleziona automaticamente l'ultimo file caricato
-                        this.current.custom3D.assetIdx = this.assetLibrary.length - 1;
-                        alert(`${added} File Multimediali Aggiunti alla Libreria!\nIndossa il visore. Potrai piazzarne infiniti selezionando "Nuova Antenna -> File Custom".`);
+                        this.current.custom3D.assetIdx = this.assetLibrary.length - 1; // Auto-seleziona l'ultimo
+                        alert(`${added} File Aggiunti alla Libreria!\nIndossa il visore, apri il menu "Nuova Antenna -> Tipo Oggetto -> File Custom".`);
                         this.refreshAll();
                     } else {
                         alert("Nessun formato supportato trovato.");
                     }
                 }
+                evt.target.value = ''; // Resetta l'input
             });
         }
       },
@@ -1310,10 +1350,12 @@
       <a-camera id="camera" position="0 1.6 0"></a-camera>
       
       <a-entity id="left-controller" oculus-touch-controls="hand: left">
-        <a-entity id="menu-ui" visible="false" position="0 0.15 -0.45" rotation="-30 0 0">
+        <a-text value="ANCORA FISICA (Non toccare)\nIl menu fluttua qui sopra." position="0 0.05 0" rotation="-90 0 0" align="center" scale="0.08 0.08 0.08" color="#FF1744"></a-text>
+
+        <a-entity id="menu-ui" visible="false" position="0 0.15 -0.2" rotation="-30 0 0">
           <a-plane width="0.55" height="0.95" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO V44" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
+          <a-text value="CONFIGURATORE ANTENNE PRO V45" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
           
           <a-plane width="0.52" height="0.08" color="#2A2A2A" position="0 0.38 0.01">
             <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
@@ -1343,7 +1385,6 @@
             <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <!-- MENU LIBRERIA MEDIA CUSTOM -->
           <a-entity id="sub-media" position="0 0.02 0" visible="false">
             <a-text value="LIBRERIA FILE (MODELLI 3D E IMMAGINI)" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-media-prev" class="clickable" btn-interaction width="0.1" height="0.03" color="#006064" position="-0.16 -0.01 0.01"><a-text value="< PREV" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
@@ -1436,9 +1477,9 @@
           </a-plane>
         </a-entity>
 
-        <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.4" rotation="-30 0 0">
+        <a-entity id="guy-wires-ui" visible="false" position="0 0.15 -0.2" rotation="-30 0 0">
           <a-plane width="0.48" height="0.35" color="#4E342E" material="opacity: 0.98; shader: flat"></a-plane>
-          <a-text value="MODALITA' TIRANTI (TASTO X PER USCIRE)" position="0 0.14 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
+          <a-text value="MODALITA' TIRANTI (TASTO A PER USCIRE)" position="0 0.14 0.01" align="center" scale="0.08 0.08 0.08" color="#FFEB3B"></a-text>
           
           <a-plane width="0.45" height="0.06" color="#3E2723" position="0 0.07 0.01">
             <a-text id="txt-gw-status" value="STATUS" position="0 0 0.01" align="center" scale="0.045 0.045 0.045" color="#00E676"></a-text>
