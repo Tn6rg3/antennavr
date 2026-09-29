@@ -2,25 +2,30 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio - Pro</title>
+    <title>AR Studio Pro - Texture, Bolle e PC</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <style>
       #ui-2d {
         position: absolute; top: 20px; left: 20px; z-index: 999;
         background: rgba(255, 255, 255, 0.95); padding: 20px;
         border-radius: 10px; font-family: sans-serif;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px;
       }
+      .btn-ui { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; }
     </style>
     <script>
       window.userTexture = null;
 
+      // GESTIONE INTERFACCIA 2D (Foto + Connessione PC)
       document.addEventListener('DOMContentLoaded', () => {
+        
+        // 1. Caricamento Foto
         document.getElementById('file-upload').addEventListener('change', function(e) {
           const file = e.target.files[0];
           if (file) {
             const url = URL.createObjectURL(file);
-            document.getElementById('status').innerText = "Caricamento in corso...";
+            document.getElementById('status-img').innerText = "Caricamento in corso...";
             
             const img = new Image();
             img.onload = function() {
@@ -33,13 +38,36 @@
               texture.needsUpdate = true;
               
               window.userTexture = texture;
-              document.getElementById('status').innerText = "✅ Immagine pronta! Entra in AR.";
+              document.getElementById('status-img').innerText = "✅ Immagine pronta!";
             };
             img.src = url;
           }
         });
+
+        // 2. Connessione PC (WebRTC)
+        document.getElementById('btn-connetti-pc').addEventListener('click', () => {
+          const btn = document.getElementById('btn-connetti-pc');
+          btn.innerText = "Connessione in corso...";
+          btn.style.background = "#FF9800";
+          
+          const peerQuest = new Peer(); 
+          peerQuest.on('open', () => {
+            const chiamata = peerQuest.call('schermo-quest-secreto-123', null);
+            
+            chiamata.on('stream', flussoVideoRemoto => {
+              const videoElemento = document.getElementById('video-pc-ricevuto');
+              videoElemento.srcObject = flussoVideoRemoto;
+              
+              videoElemento.play().then(() => {
+                btn.innerText = "✅ PC Connesso!";
+                btn.style.background = "#4CAF50";
+              }).catch(e => console.error("Errore video:", e));
+            });
+          });
+        });
       });
 
+      // GESTORE SPAZIO (Mesh, Texture e Muri)
       AFRAME.registerComponent('gestore-spazio', {
         init: function () {
           this.planes = new Map();
@@ -47,25 +75,10 @@
           this.meshVisibile = true;
           this.usaImmagine = false;
           
-          // RISOLTO LO SFARFALLIO: Offset 3 per i Piani (Spinti indietro)
-          this.matWirePiani = new THREE.MeshBasicMaterial({
-            color: 0x00FF00, transparent: true, opacity: 0.6, side: THREE.DoubleSide, wireframe: true,
-            polygonOffset: true, polygonOffsetFactor: 3, polygonOffsetUnits: 3
-          });
-          this.matImgPiani = new THREE.MeshBasicMaterial({
-            color: 0xFFFFFF, transparent: true, opacity: 0.95, side: THREE.DoubleSide,
-            polygonOffset: true, polygonOffsetFactor: 3, polygonOffsetUnits: 3
-          });
-
-          // Offset 1 per le Mesh (Tenute in primo piano)
-          this.matWireMesh = new THREE.MeshBasicMaterial({
-            color: 0x00FF00, transparent: true, opacity: 0.6, side: THREE.DoubleSide, wireframe: true,
-            polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
-          });
-          this.matImgMesh = new THREE.MeshBasicMaterial({
-            color: 0xFFFFFF, transparent: true, opacity: 0.95, side: THREE.DoubleSide,
-            polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
-          });
+          this.matWirePiani = new THREE.MeshBasicMaterial({ color: 0x00FF00, transparent: true, opacity: 0.6, side: THREE.DoubleSide, wireframe: true, polygonOffset: true, polygonOffsetFactor: 3, polygonOffsetUnits: 3 });
+          this.matImgPiani = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.95, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 3, polygonOffsetUnits: 3 });
+          this.matWireMesh = new THREE.MeshBasicMaterial({ color: 0x00FF00, transparent: true, opacity: 0.6, side: THREE.DoubleSide, wireframe: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+          this.matImgMesh = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.95, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
 
           document.querySelector('#btn-immagine').addEventListener('click', () => {
             if (window.userTexture) {
@@ -74,33 +87,23 @@
               this.matImgMesh.map = window.userTexture;
               this.matImgPiani.needsUpdate = true;
               this.matImgMesh.needsUpdate = true;
-              
               this.aggiornaMateriali();
-              
-              const txt = this.usaImmagine ? 'Rimetti Griglia' : 'Applica Immagine';
-              document.querySelector('#testo-btn-img').setAttribute('value', txt);
+              document.querySelector('#testo-btn-img').setAttribute('value', this.usaImmagine ? 'Rimetti Griglia' : 'Applica Immagine');
             }
           });
         },
 
         toggleVisibilitaMesh: function() {
           this.meshVisibile = !this.meshVisibile;
-          const opacitaGriglia = this.meshVisibile ? 0.6 : 0.0;
-          const opacitaImg = this.meshVisibile ? 0.95 : 0.0;
-          
-          this.matWirePiani.opacity = opacitaGriglia;
-          this.matWireMesh.opacity = opacitaGriglia;
-          this.matImgPiani.opacity = opacitaImg;
-          this.matImgMesh.opacity = opacitaImg;
+          const oGriglia = this.meshVisibile ? 0.6 : 0.0;
+          const oImg = this.meshVisibile ? 0.95 : 0.0;
+          this.matWirePiani.opacity = oGriglia; this.matWireMesh.opacity = oGriglia;
+          this.matImgPiani.opacity = oImg; this.matImgMesh.opacity = oImg;
         },
 
         aggiornaMateriali: function() {
-          this.planes.forEach(d => {
-            d.entity.getObject3D('mesh').material = this.usaImmagine ? this.matImgPiani : this.matWirePiani;
-          });
-          this.meshes.forEach(d => {
-            d.entity.getObject3D('mesh').material = this.usaImmagine ? this.matImgMesh : this.matWireMesh;
-          });
+          this.planes.forEach(d => { d.entity.getObject3D('mesh').material = this.usaImmagine ? this.matImgPiani : this.matWirePiani; });
+          this.meshes.forEach(d => { d.entity.getObject3D('mesh').material = this.usaImmagine ? this.matImgMesh : this.matWireMesh; });
         },
 
         tick: function () {
@@ -158,35 +161,20 @@
           return entity;
         },
 
-        // RISOLTO LO STIRAMENTO (Triplanar Mapping perfetto) + SCALA 4 METRI
         applicaUVScalate: function(geometry) {
           geometry.computeVertexNormals();
           const pos = geometry.attributes.position;
           const norm = geometry.attributes.normal;
           const uvs = new Float32Array(pos.count * 2);
-
-          const grandezzaMetri = 4.0; // Immagine impostata a 4 Metri
+          const grandezzaMetri = 4.0; // Scala 4 Metri
 
           for (let i = 0; i < pos.count; i++) {
-            const nx = Math.abs(norm.getX(i));
-            const ny = Math.abs(norm.getY(i));
-            const nz = Math.abs(norm.getZ(i));
-            
-            const x = pos.getX(i);
-            const y = pos.getY(i);
-            const z = pos.getZ(i);
+            const nx = Math.abs(norm.getX(i)), ny = Math.abs(norm.getY(i)), nz = Math.abs(norm.getZ(i));
+            const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
 
-            // Calcola quale asse è predominante (es. Soffitto/Pavimento vs Muri Laterali vs Muri Frontali)
-            if (ny >= nx && ny >= nz) {
-              uvs[i * 2] = x / grandezzaMetri;
-              uvs[i * 2 + 1] = z / grandezzaMetri;
-            } else if (nx >= ny && nx >= nz) {
-              uvs[i * 2] = z / grandezzaMetri;
-              uvs[i * 2 + 1] = y / grandezzaMetri;
-            } else {
-              uvs[i * 2] = x / grandezzaMetri;
-              uvs[i * 2 + 1] = y / grandezzaMetri;
-            }
+            if (ny >= nx && ny >= nz) { uvs[i*2] = x / grandezzaMetri; uvs[i*2+1] = z / grandezzaMetri; } 
+            else if (nx >= ny && nx >= nz) { uvs[i*2] = z / grandezzaMetri; uvs[i*2+1] = y / grandezzaMetri; } 
+            else { uvs[i*2] = x / grandezzaMetri; uvs[i*2+1] = y / grandezzaMetri; }
           }
           geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
         },
@@ -198,49 +186,39 @@
             for (let i = 1; i < plane.polygon.length; i++) shape.lineTo(plane.polygon[i].x, plane.polygon[i].z);
           }
           const geometry = new THREE.ShapeGeometry(shape);
-          geometry.rotateX(Math.PI / 2); 
-          this.applicaUVScalate(geometry); 
-          return geometry;
+          geometry.rotateX(Math.PI / 2); this.applicaUVScalate(geometry); return geometry;
         },
-
         createMeshGeometry: function(xrMesh) {
           const geometry = new THREE.BufferGeometry();
           geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(xrMesh.vertices), 3));
           geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(xrMesh.indices), 1));
-          this.applicaUVScalate(geometry); 
-          return geometry;
+          this.applicaUVScalate(geometry); return geometry;
         }
       });
 
-      // STRUMENTO BOLLA MIGLIORATO (Grilletto per allargare, Grip per chiudere)
+      // STRUMENTO BOLLA (Eraser)
       AFRAME.registerComponent('strumento-buco', {
         init: function () {
           this.bollaAttiva = null;
-          this.azione = null; // 'cresce' o 'riduce'
+          this.azione = null;
           this.geomSfera = new THREE.SphereGeometry(1, 32, 32);
           this.matBuco = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true });
 
-          // GRILLETTO: Crea o ingrandisce
           this.el.addEventListener('triggerdown', () => {
             const hit = this.el.components.raycaster.intersections[0];
             if (!hit) return;
 
-            // Se miriamo a una bolla già esistente
             if (hit.object.el && hit.object.el.classList.contains('bolla-buco')) {
               this.bollaAttiva = hit.object.el.object3D;
               this.azione = 'cresce';
-            } 
-            // Se miriamo a un muro nuovo
-            else if (hit.object.el && hit.object.el.classList.contains('superficie')) {
+            } else if (hit.object.el && hit.object.el.classList.contains('superficie')) {
               const bollaEl = document.createElement('a-entity');
-              bollaEl.classList.add('bolla-buco'); // Aggiunto per essere trovata dal laser
-              
+              bollaEl.classList.add('bolla-buco');
               const mesh = new THREE.Mesh(this.geomSfera, this.matBuco);
               mesh.renderOrder = -1;
               bollaEl.setObject3D('mesh', mesh);
               bollaEl.object3D.position.copy(hit.point);
               bollaEl.object3D.scale.set(0.05, 0.05, 0.05);
-              
               this.el.sceneEl.appendChild(bollaEl);
               this.bollaAttiva = bollaEl.object3D;
               this.azione = 'cresce';
@@ -248,7 +226,6 @@
           });
           this.el.addEventListener('triggerup', () => { this.bollaAttiva = null; });
 
-          // TASTO LATERALE (Grip/Presa): Rimpicciolisce ed elimina
           this.el.addEventListener('gripdown', () => {
             const hit = this.el.components.raycaster.intersections[0];
             if (hit && hit.object.el && hit.object.el.classList.contains('bolla-buco')) {
@@ -258,19 +235,15 @@
           });
           this.el.addEventListener('gripup', () => { this.bollaAttiva = null; });
         },
-
         tick: function (time, delta) {
           if (this.bollaAttiva) {
-            const velocitaScale = (0.8 * delta) / 1000;
-            
+            const velocita = (0.8 * delta) / 1000;
             if (this.azione === 'cresce') {
-              this.bollaAttiva.scale.addScalar(velocitaScale);
-              if (this.bollaAttiva.scale.x > 3.0) this.bollaAttiva.scale.set(3, 3, 3); // Limite max 3 metri
-            } 
-            else if (this.azione === 'riduce') {
-              this.bollaAttiva.scale.subScalar(velocitaScale);
+              this.bollaAttiva.scale.addScalar(velocita);
+              if (this.bollaAttiva.scale.x > 3.0) this.bollaAttiva.scale.set(3, 3, 3);
+            } else if (this.azione === 'riduce') {
+              this.bollaAttiva.scale.subScalar(velocita);
               if (this.bollaAttiva.scale.x <= 0.02) {
-                // Se la bolla diventa troppo piccola, eliminala del tutto
                 const entita = this.bollaAttiva.el;
                 entita.parentNode.removeChild(entita);
                 this.bollaAttiva = null;
@@ -280,17 +253,14 @@
         }
       });
 
+      // CONTROLLI BOTTONI
       AFRAME.registerComponent('controlli-base', {
         init: function () {
           this.el.addEventListener('abuttondown', () => this.attivaToggleMesh());
           this.el.addEventListener('xbuttondown', () => this.attivaToggleMesh());
-          
           this.el.addEventListener('ybuttondown', () => {
             const pannello = document.querySelector('#pannello-ar');
-            if (pannello) {
-              const visibile = pannello.getAttribute('visible');
-              pannello.setAttribute('visible', !visibile);
-            }
+            if (pannello) pannello.setAttribute('visible', !pannello.getAttribute('visible'));
           });
         },
         attivaToggleMesh: function() {
@@ -302,21 +272,41 @@
   </head>
   <body>
 
+    <!-- UI 2D PRIMA DELL'AR -->
     <div id="ui-2d">
-      <h2>1. Scegli una foto per la stanza (4 Metri)</h2>
-      <input type="file" id="file-upload" accept="image/*"><br><br>
-      <span id="status" style="color: #4CAF50; font-weight: bold;">In attesa dell'immagine...</span>
+      <h3 style="margin-top:0;">1. Foto Stanza (4 Metri)</h3>
+      <input type="file" id="file-upload" accept="image/*" style="width:100%">
+      <div id="status-img" style="color: #4CAF50; font-weight: bold; margin-top:5px; font-size:14px;">In attesa...</div>
+      
+      <hr style="margin: 15px 0;">
+      
+      <h3 style="margin-top:0;">2. Schermo PC</h3>
+      <button id="btn-connetti-pc" class="btn-ui" style="background: #2196F3;">Connetti al PC</button>
+      
+      <p style="font-size:12px; color:#555; margin-bottom:0;">Entra in AR solo dopo aver fatto questi passaggi.</p>
     </div>
 
+    <!-- SCENA AR -->
     <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" gestore-spazio>
+      
+      <a-assets>
+        <!-- Elemento video invisibile che riceve lo stream dal PC -->
+        <video id="video-pc-ricevuto" autoplay playsinline crossorigin="anonymous"></video>
+      </a-assets>
+
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
 
-      <!-- Aggiunta della classe .bolla-buco al laser per poterle mirare e rimpicciolire -->
+      <!-- CONTROLLER -->
       <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .interfaccia, .superficie, .bolla-buco; far: 10;" controlli-base strumento-buco></a-entity>
       <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .interfaccia, .superficie, .bolla-buco; far: 10;" controlli-base strumento-buco></a-entity>
 
+      <!-- MONITOR VIRTUALE DEL PC -->
+      <!-- Usa la classe .superficie così puoi bucarlo con le bolle come fosse un muro! -->
+      <a-video src="#video-pc-ricevuto" width="1.6" height="0.9" position="0 1.2 -2.5" class="superficie"></a-video>
+
+      <!-- PANNELLO AR FLUTTUANTE -->
       <a-entity id="pannello-ar" position="0 1.2 -1.5">
-        <a-text value="Menu AR (Nascondi con Y)" align="center" position="0 0.4 0" color="#FFFFFF" scale="0.7 0.7 0.7"></a-text>
+        <a-text value="Nascondi con Y" align="center" position="0 0.4 0" color="#FFFFFF" scale="0.7 0.7 0.7"></a-text>
         <a-entity id="btn-immagine" class="interfaccia" geometry="primitive: plane; width: 1.2; height: 0.3" material="color: #4CAF50" position="0 0.1 0">
           <a-text id="testo-btn-img" value="Applica Immagine" align="center" color="#FFF" z-offset="0.01"></a-text>
         </a-entity>
