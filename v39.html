@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V45 - Libreria Media Stabile + Portali AR</title>
+  <title>Antenne AR Pro V46 - Libreria Media, Portali AR e Occlusione Stanza</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <!-- Aframe Extras per abilitare il supporto alle Animazioni dei modelli GLB -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
@@ -89,6 +89,64 @@
         };
         this.el.addEventListener('model-loaded', apply);
         if (this.el.getObject3D('mesh')) apply();
+      }
+    });
+
+    // --- NUOVO COMPONENTE PER OCCLUSIONE STANZA (MESH DETECTION) ---
+    AFRAME.registerComponent('ar-room-occlusion', {
+      init: function () {
+        this.meshes = new Map();
+        // Materiale Fantasma: Invisibile agli occhi, ma "copre" gli oggetti virtuali dietro
+        this.occlusionMaterial = new THREE.MeshBasicMaterial({
+          colorWrite: false, // Non disegna nessun colore (trasparente)
+          depthWrite: true   // MA registra la sua forma nella profondità dello schermo!
+        });
+      },
+      tick: function () {
+        let sceneEl = this.el.sceneEl;
+        let frame = sceneEl.frame;
+        if (!frame || !sceneEl.is('ar-mode')) return;
+
+        // Se il browser supporta la Mesh Detection (il setup della stanza del Quest)
+        if (frame.detectedMeshes) {
+          frame.detectedMeshes.forEach(xrMesh => {
+            if (!this.meshes.has(xrMesh)) {
+              // Quando trova un nuovo mobile/muro reale, crea una copia 3D invisibile
+              let geometry = new THREE.BufferGeometry();
+              let vertices = xrMesh.vertices;
+              let indices = xrMesh.indices;
+              
+              geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+              geometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
+              
+              let mesh = new THREE.Mesh(geometry, this.occlusionMaterial);
+              
+              // Ottieni la posizione reale dell'oggetto nella stanza
+              let refSpace = sceneEl.renderer.xr.getReferenceSpace();
+              if(refSpace) {
+                  let pose = frame.getPose(xrMesh.meshSpace, refSpace);
+                  if (pose) {
+                    mesh.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+                    mesh.quaternion.set(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w);
+                  }
+              }
+              
+              this.el.object3D.add(mesh);
+              this.meshes.set(xrMesh, mesh);
+            } else {
+              // Aggiorna posizione se necessario
+              let mesh = this.meshes.get(xrMesh);
+              let refSpace = sceneEl.renderer.xr.getReferenceSpace();
+              if(refSpace) {
+                  let pose = frame.getPose(xrMesh.meshSpace, refSpace);
+                  if (pose) {
+                    mesh.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+                    mesh.quaternion.set(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w);
+                  }
+              }
+            }
+          });
+        }
       }
     });
 
@@ -1501,7 +1559,7 @@
     </div>
   </div>
 
-  <a-scene webxr="optionalFeatures: local-floor, hit-test, anchors, depth-sensing;" vr-mode-ui="enabled: true">
+  <a-scene webxr="optionalFeatures: local-floor, hit-test, anchors, depth-sensing, plane-detection, mesh-detection;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
@@ -1512,7 +1570,7 @@
         <a-entity id="menu-ui" visible="false" position="0 0.15 -0.2" rotation="-30 0 0">
           <a-plane width="0.55" height="0.95" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO V45" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
+          <a-text value="CONFIGURATORE ANTENNE PRO V46" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
           
           <a-plane width="0.52" height="0.08" color="#2A2A2A" position="0 0.38 0.01">
             <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
@@ -1674,6 +1732,9 @@
     </a-entity>
 
     <a-entity id="anchor-root">
+        <!-- COMPONENTE CHE TRADUCE LA STANZA REALE IN OSTACOLI VIRTUALI INVISIBILI -->
+        <a-entity ar-room-occlusion></a-entity>
+
         <a-entity id="world-pivot" position="0 0 0" rotation="0 0 0">
             <a-entity id="world-content" position="0 0 0" rotation="0 0 0">
                 <a-entity id="vertical-cylinder" geometry="primitive: cylinder" material="color: #FFEB3B; shader: flat" visible="false"></a-entity>
