@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio OS - Finestre, Tagli e Foto</title>
+    <title>AR Studio Pro - Versione Finale Corretta</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <style>
@@ -14,10 +14,10 @@
       .btn-ui { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; }
     </style>
     <script>
-      // Variabili Globali
+      // Variabili Globali di Stato
       window.userTexture = null; 
-      window.fotoAggiuntive = []; // Array per i quadri/foto da appendere
-      window.modalitaStrumento = 'taglio'; // Può essere 'taglio' o 'foto'
+      window.fotoAggiuntive = []; 
+      window.modalitaStrumento = 'taglio'; // 'taglio' oppure 'foto'
 
       document.addEventListener('DOMContentLoaded', () => {
         const sceneEl = document.querySelector('a-scene');
@@ -28,33 +28,47 @@
         document.getElementById('file-sfondo').addEventListener('change', function(e) {
           if (e.target.files[0]) {
             document.getElementById('status-sfondo').innerText = "Caricamento...";
-            const img = new Image();
-            img.onload = function() {
-              const tex = new THREE.Texture(img);
-              tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-              tex.minFilter = tex.magFilter = THREE.LinearFilter;
-              tex.generateMipmaps = false; tex.needsUpdate = true;
-              window.userTexture = tex;
-              document.getElementById('status-sfondo').innerText = "✅ Sfondo pronto!";
+            const reader = new FileReader();
+            reader.onload = function(event) {
+              const img = new Image();
+              img.onload = function() {
+                const tex = new THREE.Texture(img);
+                tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+                tex.minFilter = tex.magFilter = THREE.LinearFilter;
+                tex.generateMipmaps = false; tex.needsUpdate = true;
+                window.userTexture = tex;
+                document.getElementById('status-sfondo').innerText = "✅ Sfondo pronto!";
+              };
+              img.src = event.target.result;
             };
-            img.src = URL.createObjectURL(e.target.files[0]);
+            reader.readAsDataURL(e.target.files[0]);
           }
         });
 
-        // 2. CARICAMENTO FOTO DA APPENDERE (Quadri)
+        // 2. CARICAMENTO FOTO MULTIPLE (Quadri)
         document.getElementById('file-foto').addEventListener('change', function(e) {
           const files = e.target.files;
-          window.fotoAggiuntive = []; // Resetta
+          window.fotoAggiuntive = [];
+          if (files.length === 0) return;
+          
+          let caricati = 0;
           for(let i=0; i<files.length; i++) {
-            const img = new Image();
-            img.onload = function() {
-              const tex = new THREE.Texture(img);
-              tex.minFilter = tex.magFilter = THREE.LinearFilter;
-              tex.generateMipmaps = false; tex.needsUpdate = true;
-              window.fotoAggiuntive.push(tex);
-              document.getElementById('status-foto').innerText = `✅ ${window.fotoAggiuntive.length} Foto caricate!`;
-            };
-            img.src = URL.createObjectURL(files[i]);
+            const reader = new FileReader();
+            reader.onload = (function(file) {
+              return function(event) {
+                const img = new Image();
+                img.onload = function() {
+                  const tex = new THREE.Texture(img);
+                  tex.minFilter = tex.magFilter = THREE.LinearFilter;
+                  tex.generateMipmaps = false; tex.needsUpdate = true;
+                  window.fotoAggiuntive.push(tex);
+                  caricati++;
+                  document.getElementById('status-foto').innerText = `✅ ${caricati}/${files.length} Foto pronte!`;
+                };
+                img.src = event.target.result;
+              };
+            })(files[i]);
+            reader.readAsDataURL(files[i]);
           }
         });
 
@@ -78,7 +92,7 @@
         });
       });
 
-      // CORE AR (Gestione Spazio)
+      // CORE AR (Gestione Spazio e Mesh)
       AFRAME.registerComponent('gestore-spazio', {
         init: function () {
           this.planes = new Map(); this.meshes = new Map();
@@ -184,90 +198,77 @@
         }
       });
 
-      // IL SUPER CONTROLLER: Ergonomia, Taglio Rettangolare, Quadri e Grab Avanzato
+      // CONTROLLER LOGIC: Taglierino, Inserimento Foto, Grab e Joystick
       AFRAME.registerComponent('strumenti-controller', {
         init: function () {
-          // Stato Grab (Per Finestre e Foto)
           this.oggettoAfferrato = null;
+          this.puntoInizioTaglio = null;
+          this.meshTaglioCorrente = null;
           
-          // Stato Rettangolo di Taglio
-          this.inizioTaglio = null;
-          this.entitaTaglio = null;
           this.matTaglio = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true });
 
-          // Label UI sul controller
+          // Testo olografico di stato sopra il controller
           this.testoUI = document.createElement('a-text');
           this.testoUI.setAttribute('value', 'Mod: TAGLIO');
-          this.testoUI.setAttribute('position', '0 0.1 -0.1');
-          this.testoUI.setAttribute('scale', '0.2 0.2 0.2');
-          this.testoUI.setAttribute('color', '#00FFFF');
+          this.testoUI.setAttribute('position', '0 0.12 -0.1');
+          this.testoUI.setAttribute('scale', '0.18 0.18 0.18');
+          this.testoUI.setAttribute('color', '#00FFCC');
           this.testoUI.setAttribute('align', 'center');
           this.el.appendChild(this.testoUI);
 
-          // TASTI BASE
+          // Tasto A e X: Mostra/Nascondi Mesh
           this.el.addEventListener('abuttondown', () => this.attivaToggleMesh());
           this.el.addEventListener('xbuttondown', () => this.attivaToggleMesh());
+          
+          // Tasto B: Applica/Togli Immagine di sfondo
           this.el.addEventListener('bbuttondown', () => {
             const gestore = this.el.sceneEl.components['gestore-spazio'];
             if (gestore) gestore.toggleImmagineSfondo();
           });
           
-          // TASTO Y: Cambia Modalità (Taglio o Foto)
+          // Tasto Y: Cambia Modalità (Taglio <-> Foto)
           this.el.addEventListener('ybuttondown', () => {
             window.modalitaStrumento = window.modalitaStrumento === 'taglio' ? 'foto' : 'taglio';
-            this.aggiornaTestiUI();
+            this.testoUI.setAttribute('value', window.modalitaStrumento === 'taglio' ? 'Mod: TAGLIO' : 'Mod: FOTO');
           });
 
-          // GRILLETTO: Azione principale (Disegna taglio o Appendi foto)
+          // GRILLETTO: Inizia Taglio o Posiziona Foto
           this.el.addEventListener('triggerdown', () => {
             const hit = this.el.components.raycaster.intersections[0];
             if (!hit || !hit.object.el.classList.contains('superficie')) return;
 
             if (window.modalitaStrumento === 'taglio') {
-              // INIZIA A DISEGNARE IL RETTANGOLO
-              this.entitaTaglio = document.createElement('a-entity');
-              this.entitaTaglio.classList.add('buco');
-              const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.01, 1), this.matTaglio); // 1m di profondità per tagliare bene
+              // Crea un rettangolo geometrico invisibile per il taglio
+              const entitaBuco = document.createElement('a-entity');
+              entitaBuco.classList.add('buco');
+              
+              const geom = new THREE.BoxGeometry(0.01, 0.01, 0.2);
+              const mesh = new THREE.Mesh(geom, this.matTaglio);
               mesh.renderOrder = -1;
-              this.entitaTaglio.setObject3D('mesh', mesh);
+              entitaBuco.setObject3D('mesh', mesh);
               
-              // Posiziona e orienta basandosi sulla normale della superficie
-              const normale = hit.face.normal.clone();
-              const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
-              normale.applyMatrix3(normalMatrix).normalize();
+              entitaBuco.object3D.position.copy(hit.point);
+              this.el.sceneEl.appendChild(entitaBuco);
               
-              this.entitaTaglio.object3D.position.copy(hit.point);
-              this.entitaTaglio.object3D.lookAt(hit.point.clone().add(normale));
-              
-              this.el.sceneEl.appendChild(this.entitaTaglio);
-              
-              this.inizioTaglio = {
-                puntoNelMondo: hit.point.clone(),
-                oggettoBuco: this.entitaTaglio.object3D
-              };
+              this.puntoInizioTaglio = hit.point.clone();
+              this.meshTaglioCorrente = entitaBuco.object3D;
             } 
             else if (window.modalitaStrumento === 'foto') {
-              // APPENDI FOTO
               if (window.fotoAggiuntive.length > 0) {
-                // Scegli una foto a caso dall'array caricato
                 const texFoto = window.fotoAggiuntive[Math.floor(Math.random() * window.fotoAggiuntive.length)];
                 
                 const fotoEl = document.createElement('a-entity');
-                fotoEl.classList.add('spostabile'); // Rende la foto afferrabile col GRIP!
+                fotoEl.classList.add('spostabile');
                 
                 const mat = new THREE.MeshBasicMaterial({ map: texFoto, transparent: true, side: THREE.DoubleSide });
-                const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), mat); // Default 50cm
+                const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6), mat);
                 fotoEl.setObject3D('mesh', mesh);
                 
-                // Orienta sul muro
                 const normale = hit.face.normal.clone();
                 const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
                 normale.applyMatrix3(normalMatrix).normalize();
                 
-                // Offset per non compenetrare il muro (Z-fighting)
-                const offsetPunto = hit.point.clone().add(normale.multiplyScalar(0.02));
-                
-                fotoEl.object3D.position.copy(offsetPunto);
+                fotoEl.object3D.position.copy(hit.point.clone().add(normale.multiplyScalar(0.02)));
                 fotoEl.object3D.lookAt(hit.point.clone().add(normale));
                 
                 this.el.sceneEl.appendChild(fotoEl);
@@ -275,78 +276,62 @@
             }
           });
 
-          this.el.addEventListener('triggerup', () => { 
-            this.inizioTaglio = null; // Finito di disegnare il rettangolo
+          this.el.addEventListener('triggerup', () => {
+            this.puntoInizioTaglio = null;
+            this.meshTaglioCorrente = null;
           });
 
-          // GRIP: Prendi Schermo / Foto / Cancella
+          // GRIP: Afferra Schermo/Foto o Elimina Taglio
           this.el.addEventListener('gripdown', () => {
             const hits = this.el.components.raycaster.intersections;
             
-            // Cancella i buchi disegnati se li afferriamo
             const hitBuco = hits.find(h => h.object.el && h.object.el.classList.contains('buco'));
             if (hitBuco) {
                hitBuco.object.el.parentNode.removeChild(hitBuco.object.el);
                return;
             }
 
-            // AFFERRA SCHERMO O FOTO
             const hitSpostabile = hits.find(h => h.object.el && h.object.el.classList.contains('spostabile'));
             if (hitSpostabile) {
               this.oggettoAfferrato = hitSpostabile.object.el.object3D;
-              // Magia dell'Ergonomia: Attacchiamo l'oggetto al controller mantenendo la sua posa!
               this.el.object3D.attach(this.oggettoAfferrato);
             }
           });
           
           this.el.addEventListener('gripup', () => { 
             if (this.oggettoAfferrato) {
-              // Rilascia l'oggetto nel mondo
               this.el.sceneEl.object3D.attach(this.oggettoAfferrato);
               this.oggettoAfferrato = null;
             }
           });
 
-          // JOYSTICK: Allontana/Avvicina e Ingrandisci/Rimpicciolisci
+          // JOYSTICK: Avvicina/Allontana e Ridimensiona Oggetti Afferrati
           this.el.addEventListener('thumbstickmoved', (e) => {
             if (this.oggettoAfferrato) {
-              // Y: Sposta l'oggetto avanti e indietro (Lungo l'asse Z locale)
               if (Math.abs(e.detail.y) > 0.1) {
                 this.oggettoAfferrato.translateZ(e.detail.y * 0.05);
               }
-              // X: Scala l'oggetto (Più grande o più piccolo)
               if (Math.abs(e.detail.x) > 0.1) {
-                const scaleFactor = 1 + (e.detail.x * 0.05);
-                this.oggettoAfferrato.scale.multiplyScalar(scaleFactor);
+                const s = 1 + (e.detail.x * 0.04);
+                this.oggettoAfferrato.scale.multiplyScalar(Math.max(0.1, s));
               }
             }
           });
         },
 
-        aggiornaTestiUI: function() {
-          const controllers = document.querySelectorAll('[strumenti-controller]');
-          controllers.forEach(c => {
-            const txt = c.querySelector('a-text');
-            if (txt) txt.setAttribute('value', window.modalitaStrumento === 'taglio' ? 'Mod: TAGLIO' : 'Mod: FOTO');
-          });
-        },
-
         tick: function () {
-          // DISEGNO DEL RETTANGOLO IN TEMPO REALE
-          if (this.inizioTaglio) {
+          // Trascina il rettangolo di taglio in tempo reale
+          if (this.puntoInizioTaglio && this.meshTaglioCorrente) {
             const hit = this.el.components.raycaster.intersections[0];
             if (hit) {
-              // Convertiamo il punto attuale nello spazio locale dell'angolo di inizio
-              const currentLocal = this.inizioTaglio.oggettoBuco.worldToLocal(hit.point.clone());
+              const centro = new THREE.Vector3().addVectors(this.puntoInizioTaglio, hit.point).multiplyScalar(0.5);
+              const distanza = this.puntoInizioTaglio.distanceTo(hit.point);
               
-              // Troviamo larghezza e altezza del rettangolo trascinato
-              const sizeX = Math.abs(currentLocal.x);
-              const sizeY = Math.abs(currentLocal.y);
-              
-              // Centriamo il cubo a metà strada tra inizio e fine
-              const mesh = this.inizioTaglio.oggettoBuco.getObject3D('mesh');
-              mesh.scale.set(Math.max(sizeX, 0.01), Math.max(sizeY, 0.01), 1);
-              mesh.position.set(currentLocal.x / 2, currentLocal.y / 2, 0); 
+              this.meshTaglioCorrente.position.copy(centro);
+              const meshObj = this.meshTaglioCorrente.getObject3D('mesh');
+              if (meshObj) {
+                meshObj.scale.set(Math.max(distanza, 0.05), Math.max(distanza, 0.05), 1);
+              }
             }
           }
         },
@@ -360,17 +345,17 @@
   </head>
   <body>
 
-    <!-- INTERFACCIA 2D -->
+    <!-- INTERFACCIA 2D (Spare in AR) -->
     <div id="ui-2d">
-      <h3 style="margin-top:0;">1. Sfondo Globale</h3>
+      <h3 style="margin-top:0;">1. Sfondo Muri</h3>
       <input type="file" id="file-sfondo" accept="image/*" style="width:100%">
-      <div id="status-sfondo" style="color: #4CAF50; font-size:12px; margin-top:5px;">Sfondo Muri</div>
+      <div id="status-sfondo" style="color: #4CAF50; font-size:12px; margin-top:5px;">In attesa...</div>
       
       <hr style="margin: 10px 0;">
 
-      <h3 style="margin-top:0;">2. Quadri (Più file ammessi)</h3>
+      <h3 style="margin-top:0;">2. Quadri (Multipli)</h3>
       <input type="file" id="file-foto" accept="image/*" multiple style="width:100%">
-      <div id="status-foto" style="color: #4CAF50; font-size:12px; margin-top:5px;">Foto da posizionare</div>
+      <div id="status-foto" style="color: #4CAF50; font-size:12px; margin-top:5px;">In attesa...</div>
       
       <hr style="margin: 10px 0;">
       
@@ -387,7 +372,7 @@
 
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
 
-      <!-- I SUPER CONTROLLER -->
+      <!-- CONTROLLER -->
       <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .superficie, .buco, .spostabile; far: 10;" strumenti-controller></a-entity>
       <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .superficie, .buco, .spostabile; far: 10;" strumenti-controller></a-entity>
 
