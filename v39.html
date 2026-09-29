@@ -1231,9 +1231,12 @@
 
           setupGlobalEventDelegation: function() {
             let scene = this.el.sceneEl; this.lastClickTime = 0;
-            scene.addEventListener('mousedown', (evt) => {
-              let now = Date.now(); if (now - this.lastClickTime < 250) return;
-              let target = evt.target.closest('.clickable'); if(!target) return;
+            let handleUIClick = (evt) => {
+              let now = Date.now(); if (now - this.lastClickTime < 200) return;
+              let targetEl = (evt.detail && evt.detail.intersectedEl) ? evt.detail.intersectedEl : evt.target;
+              if (!targetEl) return;
+              let target = targetEl.closest ? targetEl.closest('.clickable') : null;
+              if (!target) return;
 
               let isVisibleInHierarchy = (el) => {
                   if (!el || el.tagName === 'A-SCENE') return true;
@@ -1253,13 +1256,13 @@
                   let txt = document.querySelector('#txt-laser-toggle'); let btn = document.querySelector('#btn-laser-toggle');
                   if (this.pointerMode === 'TOUCH') {
                       this.pointerMode = 'LIDAR';
-                      txt.setAttribute('value', "PUNTAMENTO: LIDAR + TOCCO"); btn.setAttribute('color', '#D81B60');
+                      if(txt) txt.setAttribute('value', "PUNTAMENTO: LIDAR + TOCCO"); if(btn) btn.setAttribute('color', '#D81B60');
                   } else if (this.pointerMode === 'LIDAR') {
                       this.pointerMode = 'TRIANG'; this.hitTestSource = null;
-                      txt.setAttribute('value', "PUNTAMENTO: TRIANGOLAZIONE (CONTROLLER)"); btn.setAttribute('color', '#FF1744');
+                      if(txt) txt.setAttribute('value', "PUNTAMENTO: TRIANGOLAZIONE (CONTROLLER)"); if(btn) btn.setAttribute('color', '#FF1744');
                   } else {
                       this.pointerMode = 'TOUCH'; this.hitTestSource = null; this.triangState = 0;
-                      txt.setAttribute('value', "PUNTAMENTO: SOLO TOCCO"); btn.setAttribute('color', '#5E35B1');
+                      if(txt) txt.setAttribute('value', "PUNTAMENTO: SOLO TOCCO"); if(btn) btn.setAttribute('color', '#5E35B1');
                   }
                   this.refreshAll();
               }
@@ -1269,24 +1272,24 @@
               else if (id === 'btn-scene-prev') { if (this.antennas.length <= 1) return; this.switchAntenna((this.activeAntIdx - 1 + this.antennas.length) % this.antennas.length); }
               else if (id === 'btn-scene-next') { if (this.antennas.length <= 1) return; this.switchAntenna((this.activeAntIdx + 1) % this.antennas.length); }
               else if (id === 'btn-delete-antenna') {
-                  this.removeAnchor('ant_' + this.activeAntIdx + '_pointA_base');
-                  this.removeAnchor('ant_' + this.activeAntIdx + '_pointB_base');
-                  this.removeAnchor('ant_' + this.activeAntIdx + '_traliccio_center');
+                  this.removeSpatialPanelAnchor('ant_' + this.activeAntIdx + '_pointA_base');
+                  this.removeSpatialPanelAnchor('ant_' + this.activeAntIdx + '_pointB_base');
+                  this.removeSpatialPanelAnchor('ant_' + this.activeAntIdx + '_traliccio_center');
                   if (this.antennas.length > 1) { this.antennas.splice(this.activeAntIdx, 1); this.activeAntIdx = Math.max(0, this.activeAntIdx - 1); this.current = this.antennas[this.activeAntIdx]; } else { this.antennas = [this.createEmptyAntenna()]; this.activeAntIdx = 0; this.current = this.antennas[0]; }
                   this.refreshAll();
               }
               else if (id === 'btn-tral-shape') { this.current.traliccio.shape = this.current.traliccio.shape === 'square' ? 'triangle' : 'square'; this.refreshAll(); }
               else if (id === 'btn-gw-new-tral') { let newAnchor = { type: 'traliccio', height: 3.0 }; this.current.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR'; this.updateGWUI(); this.refreshAll(); this.saveToStorage(); }
-              else if (id === 'btn-gw-new-a') { let maxH = this.current.pointA.top.y - this.current.pointA.base.y; let newAnchor = { pole: 'A', height: maxH / 2, pegs: [] }; this.current.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR'; this.updateGWUI(); this.refreshAll(); this.saveToStorage(); }
-              else if (id === 'btn-gw-new-b') { let maxH = this.current.pointB.top.y - this.current.pointB.base.y; let newAnchor = { pole: 'B', height: maxH / 2, pegs: [] }; this.current.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR'; this.updateGWUI(); this.refreshAll(); this.saveToStorage(); }
+              else if (id === 'btn-gw-new-a') { let maxH = this.current.pointA.top ? (this.current.pointA.top.y - this.current.pointA.base.y) : 3.0; let newAnchor = { pole: 'A', height: maxH / 2, pegs: [] }; this.current.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR'; this.updateGWUI(); this.refreshAll(); this.saveToStorage(); }
+              else if (id === 'btn-gw-new-b') { let maxH = this.current.pointB.top ? (this.current.pointB.top.y - this.current.pointB.base.y) : 3.0; let newAnchor = { pole: 'B', height: maxH / 2, pegs: [] }; this.current.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR'; this.updateGWUI(); this.refreshAll(); this.saveToStorage(); }
               else if (id === 'btn-gw-done') { this.activeAnchor = null; this.gwState = 'MAIN'; this.updateGWUI(); this.refreshAll(); }
               else if (id === 'btn-cal-set-pts') { if (!this.current.pointA.base) return; this.current.state = 'SET_CALIB_PT1'; if(this.menuUI) this.menuUI.setAttribute('visible', false); this.updateMenuText(); }
               else if (id === 'btn-cal-recover') { if (!this.calibLocal1 || !this.calibLocal2) return; this.current.state = 'AWAITING_CALIB_PT1'; if(this.menuUI) this.menuUI.setAttribute('visible', false); this.updateMenuText(); }
-              else if (id === 'btn-ar-save') { if (!this.calibLocal1 || !this.calibLocal2) return; let timeStr = new Date().getHours() + "-" + new Date().getMinutes() + "-" + new Date().getSeconds(); document.querySelector('#info-text').setAttribute('value', this.executeSave("SCENA_" + timeStr)); }
-              else if (id === 'btn-height-a') { if(!this.current.pointA.base) return; this.current.state = 'REPOSITION_HEIGHT_A'; this.currentHeight = this.current.pointA.top.y - this.current.pointA.base.y; this.setupVerticalPreviewMode(this.current.pointA.base); if(this.menuUI) this.menuUI.setAttribute('visible', false); }
-              else if (id === 'btn-height-b') { if(!this.current.pointB.base) return; this.current.state = 'REPOSITION_HEIGHT_B'; this.currentHeight = this.current.pointB.top.y - this.current.pointB.base.y; this.setupVerticalPreviewMode(this.current.pointB.base); if(this.menuUI) this.menuUI.setAttribute('visible', false); }
+              else if (id === 'btn-ar-save') { if (!this.calibLocal1 || !this.calibLocal2) return; let timeStr = new Date().getHours() + "-" + new Date().getMinutes() + "-" + new Date().getSeconds(); let info = document.querySelector('#info-text'); if(info) info.setAttribute('value', this.executeSave("SCENA_" + timeStr)); }
+              else if (id === 'btn-height-a') { if(!this.current.pointA.base) return; this.current.state = 'REPOSITION_HEIGHT_A'; this.currentHeight = this.current.pointA.top ? (this.current.pointA.top.y - this.current.pointA.base.y) : 1.0; this.setupVerticalPreviewMode(this.current.pointA.base); if(this.menuUI) this.menuUI.setAttribute('visible', false); }
+              else if (id === 'btn-height-b') { if(!this.current.pointB.base) return; this.current.state = 'REPOSITION_HEIGHT_B'; this.currentHeight = this.current.pointB.top ? (this.current.pointB.top.y - this.current.pointB.base.y) : 1.0; this.setupVerticalPreviewMode(this.current.pointB.base); if(this.menuUI) this.menuUI.setAttribute('visible', false); }
               else if (id === 'btn-ant') { this.current.antIdx = (this.current.antIdx + 1) % this.antennaTypes.length; this.resetAntennaLengths(); this.refreshAll(); }
-              else if (id === 'btn-band') { this.current.bandIdx = (this.current.bandIdx + 1) % this.bands.length; this.resetAntennaLengths(); if (this.antennaTypes[this.current.antIdx] === 'Verticale' && this.current.pointA.top) { this.current.pointA.top.y = this.current.pointA.base.y + this.getCalculatedLength(); } this.refreshAll(); }
+              else if (id === 'btn-band') { this.current.bandIdx = (this.current.bandIdx + 1) % this.bands.length; this.resetAntennaLengths(); if (this.antennaTypes[this.current.antIdx] === 'Verticale' && this.current.pointA.top && this.current.pointA.base) { this.current.pointA.top.y = this.current.pointA.base.y + this.getCalculatedLength(); } this.refreshAll(); }
               else if (id === 'btn-c-left') { this.current.pointC.percent = Math.max(0.02, mathRound(this.current.pointC.percent - 0.05)); this.refreshAll(); }
               else if (id === 'btn-c-right') { this.current.pointC.percent = Math.min(0.98, mathRound(this.current.pointC.percent + 0.05)); this.refreshAll(); }
               else if (id === 'btn-lw-vertex') { this.current.longwireVertex = this.current.longwireVertex === 'A' ? 'B' : 'A'; this.refreshAll(); }
@@ -1315,7 +1318,10 @@
                  this.clearAllSpatialPanelAnchors();
                  localStorage.removeItem('antennaArProV21'); this.refreshAll();
               }
-            });
+            };
+
+            scene.addEventListener('click', handleUIClick);
+            scene.addEventListener('mousedown', handleUIClick);
           },
 
           setupMmanaFileLoader: function() {
@@ -1368,7 +1374,7 @@
 <a-scene webxr="referenceSpaceType: local-floor; optionalFeatures: local-floor, hit-test, anchors, spatial-tracking;" vr-mode-ui="enabled: true">
 
     <a-entity id="cameraRig">
-        <a-camera id="camera" position="0 1.6 0" look-controls="enabled: true; touchEnabled: false"></a-camera>
+        <a-camera id="camera" position="0 1.6 0" look-controls="enabled: true; touchEnabled: false" cursor="rayOrigin: mouse" raycaster="objects: .clickable, .gw-collar, .gw-peg, .antenna-selector, #point-c-hitbox"></a-camera>
 
         <a-entity id="left-controller" oculus-touch-controls="hand: left">
             <a-entity id="menu-ui" visible="true" position="0 0.1 -0.5" rotation="-15 0 0">
