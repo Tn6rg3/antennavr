@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V41 - Modelli 3D GLB Custom + Hardware Anchors</title>
+  <title>Antenne AR Pro V42 - Modelli 3D (GLB, OBJ, STL) + Hardware Anchors</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -11,10 +11,11 @@
     #ui-2d-container input, #ui-2d-container select { width: 93%; padding: 6px; background: #222; color: #fff; border: 1px solid #00E676; margin-bottom: 10px; font-family: monospace; }
     #ui-2d-container button { width: 100%; padding: 8px; background: #00E676; color: #000; border: none; font-weight: bold; cursor: pointer; margin-bottom: 5px; }
     #ui-2d-container button.action { background: #FFEB3B; }
-    .import-box { background: #333; padding: 8px; border-radius: 5px; margin-bottom: 10px; border: 1px dashed #00E676;}
+    .import-box { background: #222; padding: 10px; border-radius: 6px; margin-bottom: 12px; border: 1px dashed #00E676; }
     hr { border-color: #333; margin: 15px 0; }
   </style>
   <script>
+    // Componente per orientamento etichette verso la camera
     AFRAME.registerComponent('look-at-camera', { 
       tick: function () { 
         let cameraEl = document.querySelector('#camera'); 
@@ -26,6 +27,7 @@
       } 
     });
     
+    // Feedback visivo bottoni VR
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
         let el = this.el; 
@@ -52,10 +54,92 @@
       }
     });
 
+    // Parser STL Binary & ASCII autonomo
+    function parseSTLGeometry(buffer) {
+        let reader = new DataView(buffer);
+        let isBinary = true;
+        let numFaces = 0;
+        if (buffer.byteLength > 84) {
+            numFaces = reader.getUint32(80, true);
+            let expectedSize = 84 + numFaces * 50;
+            if (buffer.byteLength !== expectedSize) {
+                let sample = new TextDecoder().decode(new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 512)));
+                if (sample.trim().startsWith('solid') && !sample.includes('\0')) {
+                    isBinary = false;
+                }
+            }
+        } else {
+            isBinary = false;
+        }
+
+        let geom = new THREE.BufferGeometry();
+        if (isBinary) {
+            let pos = [];
+            let normals = [];
+            let offset = 84;
+            for (let i = 0; i < numFaces; i++) {
+                let nx = reader.getFloat32(offset, true);
+                let ny = reader.getFloat32(offset + 4, true);
+                let nz = reader.getFloat32(offset + 8, true);
+                offset += 12;
+                for (let v = 0; v < 3; v++) {
+                    pos.push(
+                        reader.getFloat32(offset, true),
+                        reader.getFloat32(offset + 4, true),
+                        reader.getFloat32(offset + 8, true)
+                    );
+                    normals.push(nx, ny, nz);
+                    offset += 12;
+                }
+                offset += 2;
+            }
+            geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            if (normals.length > 0 && normals[0] === 0 && normals[1] === 0 && normals[2] === 0) {
+                geom.computeVertexNormals();
+            } else {
+                geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+            }
+        } else {
+            let text = new TextDecoder().decode(new Uint8Array(buffer));
+            let pos = [];
+            let vertexMatches = text.match(/vertex\s+([\d.\-+eE]+)\s+([\d.\-+eE]+)\s+([\d.\-+eE]+)/g);
+            if (vertexMatches) {
+                vertexMatches.forEach(str => {
+                    let parts = str.trim().split(/\s+/);
+                    pos.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]));
+                });
+                geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+                geom.computeVertexNormals();
+            }
+        }
+        geom.center();
+        geom.computeBoundingBox();
+        if (geom.boundingBox) {
+            geom.translate(0, -geom.boundingBox.min.y, 0); // Appoggia la base al suolo (quota 0)
+        }
+        return geom;
+    }
+
+    // Componente A-Frame per renderizzare file STL
+    AFRAME.registerComponent('stl-model', {
+      schema: { type: 'string' },
+      init: function() {
+        if (!this.data) return;
+        fetch(this.data)
+          .then(res => res.arrayBuffer())
+          .then(buf => {
+            let geom = parseSTLGeometry(buf);
+            let mat = new THREE.MeshStandardMaterial({ color: 0x90A4AE, metalness: 0.4, roughness: 0.5 });
+            let mesh = new THREE.Mesh(geom, mat);
+            this.el.setObject3D('mesh', mesh);
+          })
+          .catch(err => console.error("Errore caricamento STL:", err));
+      }
+    });
+
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
         try {
-            // Aggiunto 'Modello 3D' ai tipi
             this.antennaTypes = ['Dipolo', 'End Fed', 'Longwire', 'Verticale', 'MMANA-GAL', 'Modello 3D'];
             this.bands = ['160m', '80m', '40m', '20m', '15m', '10m', '2m'];
             this.mmanaModels = ['Yagi 3 Elementi', 'Delta Loop', 'Dipolo MMANA', 'Modello Importato'];
@@ -69,9 +153,11 @@
             this.calibLocal1 = null; 
             this.calibLocal2 = null;
             
-            this.loaded3DUrl = null; // Contiene l'URL del modello GLB importato dall'utente
+            // Dati Modelli 3D
+            this.loaded3DUrl = null;
+            this.loaded3DFormat = null; // 'glb', 'obj', 'stl'
             
-            // WebXR Hardware Anchor State (V39)
+            // WebXR Spatial Anchors
             this.sceneAnchor = null;
             this.requestingAnchor = false;
             
@@ -90,7 +176,6 @@
 
             this.raycasterEl = document.querySelector('#right-controller'); this.leftControllerEl = document.querySelector('#left-controller');
             
-            // Struttura a 3 livelli V39
             this.anchorRootEl = document.querySelector('#anchor-root');
             this.worldPivotEl = document.querySelector('#world-pivot'); 
             this.worldContentEl = document.querySelector('#world-content');
@@ -119,7 +204,7 @@
               pointA: { base: null, top: null }, pointB: { base: null, top: null }, 
               pointC: { percent: 0.5, top: null, base: null }, 
               traliccio: { active: false, center: null, shape: 'square', radius: 0.3, rotationY: 0, height: 1.0, corners: [], pegs: [] }, 
-              custom3D: { scale: 1.0, rotationY: 0 }, // Dati per Modelli 3D
+              custom3D: { scale: 1.0, rotationY: 0 },
               antIdx: 3, bandIdx: 2, 
               endFed_AC_Len: 10.0, endFed_CB_Len: 10.0, longwireLen: 20.0, longwireVertex: 'A',
               numRadials: 4, radialLen: 5.0, mmanaModelIdx: 0, antennaRotationY: 0,
@@ -154,7 +239,7 @@
       },
 
       executeSave: function(customName) {
-        if(!this.current.pointA.base && this.antennas.length <= 1) return "ERRORE: Devi piazzare almeno un'antenna o oggetto."; 
+        if(!this.current.pointA.base && this.antennas.length <= 1) return "ERRORE: Devi piazzare almeno un'antenna o modello."; 
         if(!this.calibLocal1 || !this.calibLocal2) return "ERRORE: Devi impostare i 2 Diamanti prima.";
         let db = JSON.parse(localStorage.getItem('antenneAR_DB') || '{}');
         db[customName] = { antennas: JSON.parse(JSON.stringify(this.antennas)), activeAntIdx: this.activeAntIdx, globalTextScale: this.globalTextScale, calibLocal1: this.calibLocal1, calibLocal2: this.calibLocal2 };
@@ -217,7 +302,7 @@
       },
 
       toggleGuyWireMode: function() {
-        if (this.antennaTypes[this.current.antIdx] === 'Modello 3D') return; // Niente tiranti sui 3D
+        if (this.antennaTypes[this.current.antIdx] === 'Modello 3D') return;
         if (!this.current.pointA.top && !this.current.pointB.top && !this.current.traliccio.active) return; 
         if (this.current.state.startsWith('AWAITING') || this.current.state.startsWith('PLACE_HEIGHT') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('SIZE_ROTATE')) return;
         
@@ -340,7 +425,7 @@
 
         let sceneEl = this.el.sceneEl; let frame = sceneEl.frame;
         
-        // ---- GESTIONE WEBXR ANCHORS (ELIMINA IL DRIFT) ----
+        // GESTIONE ANCHOR HARDWARE
         if (sceneEl.is('ar-mode') && frame) {
             let refSpace = sceneEl.renderer.xr.getReferenceSpace();
             if (!this.sceneAnchor && !this.requestingAnchor && frame.createAnchor) {
@@ -360,7 +445,6 @@
                 }
             }
         }
-        // ---------------------------------------------------
 
         let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || (this.gwState && this.gwState.includes('PEGS'));
         if (!isPlacingMode) this.triangState = 0;
@@ -487,7 +571,6 @@
 
           if (this.current.state === 'SIZE_ROTATE_3D') {
               if (Math.abs(evt.detail.y) > 0.3) {
-                 // Scala proporzionale in base a quanto è già grande
                  let scaleMult = this.current.custom3D.scale > 2 ? 0.2 : 0.05;
                  let step = evt.detail.y < 0 ? scaleMult : -scaleMult; 
                  this.current.custom3D.scale = Math.max(0.01, this.current.custom3D.scale + step);
@@ -575,7 +658,7 @@
                     }
                     return;
                 }
-                if (this.triangState === 2) { /* Conferma finale: prosegue piazzando il punto */ }
+                if (this.triangState === 2) { /* Conferma */ }
             }
 
             if (this.current.state === 'REPOSITION_GROUND_C') {
@@ -606,7 +689,7 @@
                this.currentHeight = 1.0; this.current.state = 'PLACE_HEIGHT_A'; this.setupVerticalPreviewMode(this.current.pointA.base); this.refreshAll(); return;
             }
 
-            // GESTIONE CONFERMA 3D
+            // CONFERMA PIAZZAMENTO MODELLO 3D
             if (this.current.state === 'SIZE_ROTATE_3D') {
                 this.current.state = 'IDLE'; 
                 if(this.menuUI) this.menuUI.setAttribute('visible', true); 
@@ -683,7 +766,7 @@
                   this.current.pointA.base = newPoint; 
               }
               
-              // GESTIONE MODELLO 3D (Salta altezze e punto B)
+              // SELEZIONE MODELLO 3D
               if (type === 'Modello 3D') {
                   if(!this.current.custom3D) this.current.custom3D = { scale: 1.0, rotationY: 0 };
                   this.current.state = 'SIZE_ROTATE_3D';
@@ -744,8 +827,8 @@
         }
         else if (is3D) {
             if (this.current.state === 'SIZE_ROTATE_3D') infoTextStr = "JOY SX: Ruota | JOY DX (Su/Giu): Scala Modello\nGRILLETTO: Conferma Piazzamento";
-            else if (this.loaded3DUrl) infoTextStr = "MODELLO 3D PRONTO DA PIAZZARE\nPunta a terra e premi grilletto.";
-            else infoTextStr = "ATTENZIONE: NESSUN MODELLO 3D IN MEMORIA!\nCarica un file .GLB o .GLTF dal menu 2D su schermo.";
+            else if (this.loaded3DUrl) infoTextStr = `MODELLO 3D PRONTO (${(this.loaded3DFormat||'').toUpperCase()})\nPunta a terra e premi grilletto.`;
+            else infoTextStr = "ATTENZIONE: NESSUN MODELLO 3D IN MEMORIA!\nCarica un file .GLB, .OBJ o .STL dal menu 2D su schermo.";
         }
         else if (this.current.state === 'REPOSITION_GROUND_C') { infoTextStr = "Punta a terra sotto al Centro C e premi il grilletto\nper fissare la quota."; }
         else if (this.current.state === 'PLACE_TRALICCIO_CENTER') { infoTextStr = "Punta a terra e premi grilletto per\nil CENTRO del Traliccio."; }
@@ -798,7 +881,6 @@
 
       drawTraliccio: function(ant, container, isCurrent) {
         if (!ant.traliccio || !ant.traliccio.active || !ant.traliccio.center) return;
-        
         this.createBasePanel(ant.traliccio.center, container);
 
         let t = ant.traliccio; let isSq = t.shape === 'square'; let numS = isSq ? 4 : 3;
@@ -939,22 +1021,43 @@
           
           let type = this.antennaTypes[ant.antIdx];
 
-          // ----- GESTIONE RENDER MODELLO 3D -----
+          // ----- RENDER MODELLO 3D (GLB / OBJ / STL) -----
           if (type === 'Modello 3D') {
               if (ant.pointA.base) {
                   this.createBasePanel(ant.pointA.base, container);
                   let modelEl = document.createElement('a-entity');
                   
                   if (this.loaded3DUrl) {
-                      modelEl.setAttribute('gltf-model', this.loaded3DUrl);
+                      if (this.loaded3DFormat === 'glb') {
+                          modelEl.setAttribute('gltf-model', this.loaded3DUrl);
+                      } else if (this.loaded3DFormat === 'obj') {
+                          modelEl.setAttribute('obj-model', `obj: ${this.loaded3DUrl}`);
+                          modelEl.setAttribute('material', 'color: #90A4AE; metalness: 0.4; roughness: 0.6');
+                      } else if (this.loaded3DFormat === 'stl') {
+                          modelEl.setAttribute('stl-model', this.loaded3DUrl);
+                      }
+
+                      // Allineamento automatico al terreno per GLB e OBJ
+                      if (this.loaded3DFormat !== 'stl') {
+                          modelEl.addEventListener('model-loaded', () => {
+                              let obj3D = modelEl.getObject3D('mesh');
+                              if (obj3D) {
+                                  let box = new THREE.Box3().setFromObject(obj3D);
+                                  let center = new THREE.Vector3();
+                                  box.getCenter(center);
+                                  obj3D.position.x -= center.x;
+                                  obj3D.position.y -= box.min.y; // Poggia esattamente la base a terra
+                                  obj3D.position.z -= center.z;
+                              }
+                          });
+                      }
                   } else {
-                      // Cubo di emergenza se il file non è stato ancora caricato o è andato perso
                       modelEl.setAttribute('geometry', 'primitive: box; width: 0.5; height: 0.5; depth: 0.5');
                       modelEl.setAttribute('material', 'color: #9C27B0; wireframe: true');
-                      this.createLabel('FILE .GLB MANCANTE\nCARICA DA MENU 2D', {x: ant.pointA.base.x, y: ant.pointA.base.y + 0.6, z: ant.pointA.base.z}, '#FF1744', this.globalTextScale, container);
+                      this.createLabel('FILE 3D NON CARICATO\nUSA IL MENU 2D', {x: ant.pointA.base.x, y: ant.pointA.base.y + 0.6, z: ant.pointA.base.z}, '#FF1744', this.globalTextScale, container);
                   }
                   
-                  if(!ant.custom3D) ant.custom3D = {scale: 1.0, rotationY: 0};
+                  if(!ant.custom3D) ant.custom3D = { scale: 1.0, rotationY: 0 };
                   modelEl.setAttribute('position', `${ant.pointA.base.x} ${ant.pointA.base.y} ${ant.pointA.base.z}`);
                   modelEl.setAttribute('rotation', `0 ${ant.custom3D.rotationY} 0`);
                   modelEl.setAttribute('scale', `${ant.custom3D.scale} ${ant.custom3D.scale} ${ant.custom3D.scale}`);
@@ -963,7 +1066,6 @@
               this.renderSelectorBox(ant, container, isCurrent, idx);
               return;
           }
-          // ----------------------------------------
 
           if (!ant.pointA.top) { this.renderSelectorBox(ant, container, isCurrent, idx); return; }
           
@@ -1153,18 +1255,29 @@
             });
         }
         
-        // MODELLI 3D GLB Loader
+        // MODELLI 3D (GLB / GLTF / OBJ / STL) Loader Unificato
         let fileInput3D = document.querySelector('#file-3d-model');
         if(fileInput3D) {
             fileInput3D.addEventListener('change', (evt) => {
                 let file = evt.target.files[0];
                 if(file) {
-                    if (this.loaded3DUrl) URL.revokeObjectURL(this.loaded3DUrl); // Libera memoria precedente
+                    let name = file.name.toLowerCase();
+                    if (this.loaded3DUrl) URL.revokeObjectURL(this.loaded3DUrl); // Libera memoria
                     this.loaded3DUrl = URL.createObjectURL(file);
                     
-                    // Switch automatico al tipo di antenna "Modello 3D"
+                    if (name.endsWith('.glb') || name.endsWith('.gltf')) {
+                        this.loaded3DFormat = 'glb';
+                    } else if (name.endsWith('.obj')) {
+                        this.loaded3DFormat = 'obj';
+                    } else if (name.endsWith('.stl')) {
+                        this.loaded3DFormat = 'stl';
+                    } else {
+                        alert("Formato non riconosciuto. Usa .GLB, .OBJ o .STL");
+                        return;
+                    }
+
                     this.current.antIdx = this.antennaTypes.indexOf('Modello 3D');
-                    alert("Modello 3D importato e pronto in memoria!\nIndossa il visore e piazzo col grilletto.");
+                    alert(`Modello ${this.loaded3DFormat.toUpperCase()} caricato!\nIndossa il visore e premi il grilletto sul pavimento.`);
                     this.refreshAll();
                 }
             });
@@ -1193,9 +1306,9 @@
     <button style="background: #D32F2F; color:white;" onclick="window.deleteAntennaFromDB()">ELIMINA SCENA</button>
     <hr>
     <div class="import-box">
-      <h3>IMPORTA MODELLO 3D (.GLB)</h3>
-      <p style="color:#FFF59D;">NB: Usa il formato .GLB per colori e texture. Va ricaricato ad ogni riavvio app.</p>
-      <input type="file" id="file-3d-model" accept=".glb,.gltf">
+      <h3>IMPORTA MODELLO 3D</h3>
+      <p style="color:#FFF59D;">Supporta <b>.GLB</b>, <b>.OBJ</b> e <b>.STL</b>.<br>Va ricaricato dal browser alla riapertura dell'app.</p>
+      <input type="file" id="file-3d-model" accept=".glb,.gltf,.obj,.stl">
     </div>
     <div class="import-box">
       <h3>MMANA-GAL (.maa)</h3>
@@ -1212,7 +1325,7 @@
         <a-entity id="menu-ui" visible="false" position="0 0.15 -0.45" rotation="-30 0 0">
           <a-plane width="0.55" height="0.95" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO V41" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
+          <a-text value="CONFIGURATORE ANTENNE PRO V42" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
           
           <a-plane width="0.52" height="0.08" color="#2A2A2A" position="0 0.38 0.01">
             <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
