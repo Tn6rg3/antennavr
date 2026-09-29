@@ -2,34 +2,104 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Spawner - Appoggia Oggetti 3D</title>
+    <title>AR Studio - Mesh, Texture e Spawn</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <style>
+      #ui-2d {
+        position: absolute; top: 20px; left: 20px; z-index: 999;
+        background: rgba(255, 255, 255, 0.95); padding: 20px;
+        border-radius: 10px; font-family: sans-serif;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      }
+    </style>
     <script>
+      // 1. GESTIONE DEL CARICAMENTO IMMAGINE (Risolto il problema del mancato caricamento)
+      window.userTexture = null;
+
+      document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('file-upload').addEventListener('change', function(e) {
+          const file = e.target.files[0];
+          if (file) {
+            const url = URL.createObjectURL(file);
+            document.getElementById('status').innerText = "Caricamento in corso...";
+            
+            // Usiamo una callback per assicurarci che l'immagine sia 100% caricata nella memoria grafica
+            new THREE.TextureLoader().load(url, function(texture) {
+              texture.wrapS = THREE.RepeatWrapping;
+              texture.wrapT = THREE.RepeatWrapping;
+              texture.repeat.set(2, 2); // Moltiplica l'immagine per non sgranarla troppo sui muri grandi
+              window.userTexture = texture;
+              document.getElementById('status').innerText = "✅ Immagine pronta! Entra in AR.";
+            });
+          }
+        });
+      });
+
+      // 2. GESTORE DELLO SPAZIO (Mesh, Piani e Materiali)
       AFRAME.registerComponent('gestore-spazio', {
         init: function () {
           this.planes = new Map();
           this.meshes = new Map();
+          this.meshVisibile = true;
+          this.usaImmagine = false;
           
-          // Il materiale per la mesh. Inizialmente visibile.
-          this.material = new THREE.MeshBasicMaterial({
-            color: 0x00FF00,
-            transparent: true,
-            opacity: 0.5,
-            side: THREE.DoubleSide,
-            wireframe: true
+          this.matWireframe = new THREE.MeshBasicMaterial({
+            color: 0x00FF00, transparent: true, opacity: 0.6,
+            side: THREE.DoubleSide, wireframe: true
           });
 
-          // Logica del bottone per nascondere/mostrare la mesh
-          const btnVisibilita = document.querySelector('#btn-visibilita');
-          let meshVisibile = true;
-
-          btnVisibilita.addEventListener('click', () => {
-            meshVisibile = !meshVisibile;
-            this.material.visible = meshVisibile; // Questo rende invisibile la mesh ma mantiene le collisioni!
-            
-            const testo = meshVisibile ? 'Nascondi Mesh' : 'Mostra Mesh';
-            btnVisibilita.querySelector('a-text').setAttribute('value', testo);
+          this.matImmagine = new THREE.MeshBasicMaterial({
+            color: 0xFFFFFF, transparent: true, opacity: 0.9,
+            side: THREE.DoubleSide
           });
+
+          // Eventi per i bottoni fluttuanti 3D
+          document.querySelector('#btn-immagine').addEventListener('click', () => {
+            if (window.userTexture) {
+              this.usaImmagine = !this.usaImmagine;
+              if (this.usaImmagine) {
+                this.matImmagine.map = window.userTexture;
+                this.matImmagine.needsUpdate = true; // Forza l'aggiornamento della scheda video
+                this.aggiornaMateriali(this.matImmagine);
+                document.querySelector('#testo-btn-img').setAttribute('value', 'Rimetti Griglia');
+              } else {
+                this.aggiornaMateriali(this.matWireframe);
+                document.querySelector('#testo-btn-img').setAttribute('value', 'Applica Immagine');
+              }
+            } else {
+              document.querySelector('#testo-btn-img').setAttribute('value', 'Carica file dal PC prima!');
+              setTimeout(() => document.querySelector('#testo-btn-img').setAttribute('value', 'Applica Immagine'), 2500);
+            }
+          });
+
+          document.querySelector('#btn-aggiorna').addEventListener('click', () => {
+            this.cancellaTutto();
+            document.querySelector('#testo-btn-agg').setAttribute('value', 'Fatto!');
+            setTimeout(() => document.querySelector('#testo-btn-agg').setAttribute('value', 'Aggiorna Mesh'), 1000);
+          });
+        },
+
+        // Funzione chiamata dal Controller quando premi il tasto "A"
+        toggleVisibilita: function() {
+          this.meshVisibile = !this.meshVisibile;
+          // TRUCCO: Invece di nasconderla, azzeriamo l'opacità. 
+          // Così è invisibile, ma il laser ci sbatte ancora contro per appoggiare gli oggetti!
+          const opacitaGriglia = this.meshVisibile ? 0.6 : 0.0;
+          const opacitaImmagine = this.meshVisibile ? 0.9 : 0.0;
+          
+          this.matWireframe.opacity = opacitaGriglia;
+          this.matImmagine.opacity = opacitaImmagine;
+        },
+
+        aggiornaMateriali: function(nuovoMateriale) {
+          this.planes.forEach(d => d.entity.getObject3D('mesh').material = nuovoMateriale);
+          this.meshes.forEach(d => d.entity.getObject3D('mesh').material = nuovoMateriale);
+        },
+
+        cancellaTutto: function() {
+          this.planes.forEach(d => { this.el.sceneEl.removeChild(d.entity); });
+          this.meshes.forEach(d => { this.el.sceneEl.removeChild(d.entity); });
+          this.planes.clear(); this.meshes.clear();
         },
 
         tick: function () {
@@ -40,12 +110,14 @@
           const refSpace = renderer.xr.getReferenceSpace();
           if (!refSpace) return;
 
-          // Gestione Piani
+          const materialeAttuale = this.usaImmagine ? this.matImmagine : this.matWireframe;
+
+          // Generazione Piani
           if (frame.detectedPlanes) {
             frame.detectedPlanes.forEach(plane => {
               let pData = this.planes.get(plane);
               if (!pData) {
-                const entity = this.creaEntitaSuperficie(this.createPlaneGeometry(plane));
+                const entity = this.creaEntitaSuperficie(this.createPlaneGeometry(plane), materialeAttuale);
                 pData = { entity: entity, lastTime: plane.lastChangedTime };
                 this.planes.set(plane, pData);
               } else if (plane.lastChangedTime > pData.lastTime) {
@@ -58,12 +130,12 @@
             });
           }
 
-          // Gestione Mesh
+          // Generazione Mesh
           if (frame.detectedMeshes) {
             frame.detectedMeshes.forEach(xrMesh => {
               let mData = this.meshes.get(xrMesh);
               if (!mData) {
-                const entity = this.creaEntitaSuperficie(this.createMeshGeometry(xrMesh));
+                const entity = this.creaEntitaSuperficie(this.createMeshGeometry(xrMesh), materialeAttuale);
                 mData = { entity: entity, lastTime: xrMesh.lastChangedTime };
                 this.meshes.set(xrMesh, mData);
               } else if (xrMesh.lastChangedTime > mData.lastTime) {
@@ -77,19 +149,17 @@
           }
         },
 
-        // Funzione per creare un'entità A-Frame cliccabile (invece di una mesh grezza)
-        creaEntitaSuperficie: function(geometry) {
+        creaEntitaSuperficie: function(geometry, materiale) {
           const entity = document.createElement('a-entity');
-          // Aggiungiamo la classe 'superficie' così il raggio laser la riconosce
           entity.classList.add('superficie'); 
-          const mesh = new THREE.Mesh(geometry, this.material);
+          const mesh = new THREE.Mesh(geometry, materiale);
           entity.setObject3D('mesh', mesh);
           entity.object3D.matrixAutoUpdate = false;
           this.el.sceneEl.appendChild(entity);
           return entity;
         },
 
-        // Geometrie
+        // GEOMETRIE CON MAPPA UV AGGIUNTA (Ora le immagini si vedono!)
         createPlaneGeometry: function(plane) {
           const shape = new THREE.Shape();
           if (plane.polygon.length > 0) {
@@ -98,6 +168,15 @@
           }
           const geometry = new THREE.ShapeGeometry(shape);
           geometry.rotateX(Math.PI / 2); 
+          
+          // Generatore Coordinate UV per le immagini
+          const pos = geometry.attributes.position;
+          const uvs = new Float32Array(pos.count * 2);
+          for(let i=0; i<pos.count; i++) {
+              uvs[i*2] = pos.getX(i);     // Asse U
+              uvs[i*2+1] = pos.getZ(i);   // Asse V
+          }
+          geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
           return geometry;
         },
 
@@ -105,63 +184,93 @@
           const geometry = new THREE.BufferGeometry();
           geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(xrMesh.vertices), 3));
           geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(xrMesh.indices), 1));
+          
+          // Generatore Coordinate UV per la mesh
+          const uvs = new Float32Array(xrMesh.vertices.length / 3 * 2);
+          for(let i=0; i<uvs.length; i+=2) {
+              uvs[i] = xrMesh.vertices[(i/2)*3]; 
+              uvs[i+1] = xrMesh.vertices[(i/2)*3 + 2]; 
+          }
+          geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
           geometry.computeVertexNormals();
           return geometry;
         }
       });
 
-      // Componente per piazzare gli oggetti 3D
-      AFRAME.registerComponent('spawner-oggetti', {
+      // 3. LOGICA DEI CONTROLLER (Tasto A e Grilletto)
+      AFRAME.registerComponent('controlli-avanzati', {
         init: function () {
-          // Ascolta il click del controller
-          this.el.addEventListener('click', (evento) => {
-            // Controlla se abbiamo colpito qualcosa che ha la classe 'superficie'
-            if (evento.detail.intersectedEl && evento.detail.intersectedEl.classList.contains('superficie')) {
-              
-              // Prende il punto esatto di impatto del laser
-              const puntoImpatto = evento.detail.intersection.point;
+          // Quando premi il Tasto A (o X sul sinistro) nasconde/mostra la maglia
+          this.el.addEventListener('abuttondown', () => this.attivaToggle());
+          this.el.addEventListener('xbuttondown', () => this.attivaToggle());
 
-              // Crea un nuovo modello 3D (qui uso la scatola inclusa, ma puoi usare un GLTF)
-              const nuovoOggetto = document.createElement('a-entity');
+          // Quando premi il grilletto, valuta dove spara il laser
+          this.el.addEventListener('click', (evento) => {
+            if (!evento.detail.intersectedEl) return;
+            
+            // Se spariamo alla stanza, creiamo un oggetto
+            if (evento.detail.intersectedEl.classList.contains('superficie')) {
+              const punto = evento.detail.intersection.point;
               
-              // SE VUOI USARE UN MODELLO IMPORTATO (.glb), usa questo:
-              // nuovoOggetto.setAttribute('gltf-model', '#mio-modello');
+              const cubo = document.createElement('a-entity');
+              // Sostituisci la riga sotto con un gltf-model se vuoi usare un file 3D
+              cubo.setAttribute('geometry', 'primitive: box; width: 0.15; height: 0.15; depth: 0.15');
+              cubo.setAttribute('material', 'color: #FF2255');
               
-              // Per ora creiamo un cubo rosso come esempio
-              nuovoOggetto.setAttribute('geometry', 'primitive: box; width: 0.2; height: 0.2; depth: 0.2');
-              nuovoOggetto.setAttribute('material', 'color: red');
-              
-              // Lo posiziona esattamente dove ha colpito il laser, alzandolo leggermente (metà della sua altezza) 
-              // per non farlo compenetrare nel tavolo/pavimento
-              nuovoOggetto.setAttribute('position', `${puntoImpatto.x} ${puntoImpatto.y + 0.1} ${puntoImpatto.z}`);
-              
-              // Aggiunge l'oggetto alla scena
-              this.el.sceneEl.appendChild(nuovoOggetto);
+              // Alziamo il cubo di metà della sua altezza (0.075) così appoggia alla perfezione
+              cubo.setAttribute('position', `${punto.x} ${punto.y + 0.075} ${punto.z}`);
+              this.el.sceneEl.appendChild(cubo);
             }
           });
+        },
+        
+        attivaToggle: function() {
+          const gestore = this.el.sceneEl.components['gestore-spazio'];
+          if (gestore) gestore.toggleVisibilita();
         }
       });
     </script>
   </head>
   <body>
 
-    <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" gestore-spazio>
-      
-      <!-- Puoi caricare qui il tuo modello 3D -->
-      <a-assets>
-        <!-- <a-asset-item id="mio-modello" src="percorso/del/tuo/modello.glb"></a-asset-item> -->
-      </a-assets>
+    <!-- INTERFACCIA WEB (Prima di entrare in AR) -->
+    <div id="ui-2d">
+      <h2>1. Scegli una texture per la stanza</h2>
+      <input type="file" id="file-upload" accept="image/*"><br><br>
+      <span id="status" style="color: #4CAF50; font-weight: bold;">In attesa dell'immagine...</span>
+    </div>
 
+    <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" gestore-spazio>
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
 
-      <!-- CONTROLLER: Diciamo al raggio laser di intercettare SOLO il pannello UI (.interfaccia) e le superfici scansionate (.superficie) -->
-      <a-entity laser-controls="hand: right" raycaster="objects: .interfaccia, .superficie; far: 10;" spawner-oggetti></a-entity>
-      <a-entity laser-controls="hand: left" raycaster="objects: .interfaccia, .superficie; far: 10;" spawner-oggetti></a-entity>
+      <!-- CONTROLLER CON SUPPORTO AI TASTI OCULUS -->
+      <!-- Aggiunto 'oculus-touch-controls' per far funzionare il tasto A e X -->
+      <a-entity 
+        laser-controls="hand: right" 
+        oculus-touch-controls="hand: right"
+        raycaster="objects: .interfaccia, .superficie; far: 10;" 
+        controlli-avanzati>
+      </a-entity>
+      
+      <a-entity 
+        laser-controls="hand: left" 
+        oculus-touch-controls="hand: left"
+        raycaster="objects: .interfaccia, .superficie; far: 10;" 
+        controlli-avanzati>
+      </a-entity>
 
-      <!-- PANNELLO UI (Aggiunta classe 'interfaccia') -->
+      <!-- PANNELLO FLUTTUANTE IN AR -->
       <a-entity position="0 1.2 -1.5">
-        <a-entity id="btn-visibilita" class="interfaccia" geometry="primitive: plane; width: 1.2; height: 0.4" material="color: #333333" position="0 0 0">
-          <a-text value="Nascondi Mesh" align="center" color="#FFF" z-offset="0.01"></a-text>
+        <a-text value="Menu AR" align="center" position="0 0.4 0" color="#FFFFFF" scale="0.8 0.8 0.8"></a-text>
+
+        <!-- Bottone 1: Immagine -->
+        <a-entity id="btn-immagine" class="interfaccia" geometry="primitive: plane; width: 1.2; height: 0.3" material="color: #4CAF50" position="0 0.1 0">
+          <a-text id="testo-btn-img" value="Applica Immagine" align="center" color="#FFF" z-offset="0.01"></a-text>
+        </a-entity>
+
+        <!-- Bottone 2: Aggiorna -->
+        <a-entity id="btn-aggiorna" class="interfaccia" geometry="primitive: plane; width: 1.2; height: 0.3" material="color: #2196F3" position="0 -0.3 0">
+          <a-text id="testo-btn-agg" value="Aggiorna Mesh" align="center" color="#FFF" z-offset="0.01"></a-text>
         </a-entity>
       </a-entity>
 
