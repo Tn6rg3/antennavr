@@ -2,9 +2,8 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V46 - Fix Crash Importazioni + AutoScale</title>
+  <title>Antenne AR Pro V47 - Integrazione Monitor PC + Libreria</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <!-- Aframe Extras per abilitare il supporto alle Animazioni dei modelli GLB -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -54,7 +53,6 @@
       }
     });
 
-    // Parser STL con Auto-Scale Intelligente BLINDATO
     function parseSTLGeometry(buffer) {
         let geom = new THREE.BufferGeometry();
         try {
@@ -89,27 +87,15 @@
                     geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geom.computeVertexNormals();
                 }
             }
-
-            // AUTO-SCALE E CENTRATURA SICURA
             geom.computeBoundingBox();
             if (geom.boundingBox && geom.boundingBox.min.x !== Infinity) {
-                let size = new THREE.Vector3();
-                geom.boundingBox.getSize(size);
+                let size = new THREE.Vector3(); geom.boundingBox.getSize(size);
                 let maxDim = Math.max(size.x, size.y, size.z);
-                // Se è più grande di 20 unità, converte i millimetri in metri.
-                if (maxDim > 20) {
-                    geom.scale(0.001, 0.001, 0.001);
-                    geom.computeBoundingBox(); 
-                }
-                geom.center(); 
-                geom.computeBoundingBox();
-                if (geom.boundingBox) {
-                    geom.translate(0, -geom.boundingBox.min.y, 0); // Lo poggia perfettamente a terra
-                }
+                if (maxDim > 20) { geom.scale(0.001, 0.001, 0.001); geom.computeBoundingBox(); }
+                geom.center(); geom.computeBoundingBox();
+                if (geom.boundingBox) { geom.translate(0, -geom.boundingBox.min.y, 0); }
             }
-        } catch (e) {
-            console.error("Errore Parse STL:", e);
-        }
+        } catch (e) { console.error("Errore Parse STL:", e); }
         return geom;
     }
 
@@ -123,8 +109,7 @@
             let geom = parseSTLGeometry(buf);
             if(geom) {
                 let mat = new THREE.MeshStandardMaterial({ color: 0x90A4AE, metalness: 0.4, roughness: 0.5 });
-                let mesh = new THREE.Mesh(geom, mat);
-                this.el.setObject3D('mesh', mesh);
+                let mesh = new THREE.Mesh(geom, mat); this.el.setObject3D('mesh', mesh);
             }
           }).catch(err => console.error("Errore fetch STL:", err));
       }
@@ -133,7 +118,8 @@
     AFRAME.registerComponent('ar-antenna-system', {
       init: function () {
         try {
-            this.antennaTypes = ['Dipolo', 'End Fed', 'Longwire', 'Verticale', 'MMANA-GAL', 'File Custom'];
+            // Aggiunto 'Schermo PC'
+            this.antennaTypes = ['Dipolo', 'End Fed', 'Longwire', 'Verticale', 'MMANA-GAL', 'File Custom', 'Schermo PC'];
             this.bands = ['160m', '80m', '40m', '20m', '15m', '10m', '2m'];
             this.mmanaModels = ['Yagi 3 Elementi', 'Delta Loop', 'Dipolo MMANA', 'Modello Importato'];
             this.maxRadials = 16; 
@@ -146,7 +132,8 @@
             this.calibLocal1 = null; 
             this.calibLocal2 = null;
             
-            this.assetLibrary = []; // Libreria media
+            this.assetLibrary = []; 
+            this.streamUrl = ""; // URL per lo streaming del PC
             
             this.sceneAnchor = null;
             this.requestingAnchor = false;
@@ -156,7 +143,6 @@
             this.targetReticlePos = new THREE.Vector3(); this.targetReticleQuat = new THREE.Quaternion(); this.lastFloorY = 0; 
 
             this.triangState = 0; 
-            this.triangRay1 = null; this.triangRay2 = null; this.triangResult = null;
 
             this.antennas = [this.createEmptyAntenna()]; 
             this.activeAntIdx = 0;
@@ -199,6 +185,7 @@
           };
       },
 
+      // ... [Le altre funzioni rimangono identiche a V46: loadPreloadedMmanaModel, switchAntenna, etc.] ...
       loadPreloadedMmanaModel: function(ant) {
         let mName = this.mmanaModels[ant.mmanaModelIdx];
         if (mName === 'Yagi 3 Elementi') { ant.mmanaWires = [{ x1: 0, y1: -2.5, z1: 0, x2: 0, y2: 2.5, z2: 0, radius: 0.004 }, { x1: 1.5, y1: -2.4, z1: 0, x2: 1.5, y2: 2.4, z2: 0, radius: 0.004 }, { x1: 3.2, y1: -2.2, z1: 0, x2: 3.2, y2: 2.2, z2: 0, radius: 0.004 }]; } 
@@ -208,14 +195,9 @@
       },
 
       switchAntenna: function(idx) {
-          this.gwState = 'OFF'; this.activeAnchor = null;
-          this.activeAntIdx = idx;
-          this.current = this.antennas[idx];
-          this.triangState = 0;
-          
+          this.gwState = 'OFF'; this.activeAnchor = null; this.activeAntIdx = idx; this.current = this.antennas[idx]; this.triangState = 0;
           if (this.current.pointA.top && (this.current.state.startsWith('PLACE_') || this.current.state.startsWith('AWAITING_'))) { this.current.state = 'IDLE'; }
-          if(this.menuUI) this.menuUI.setAttribute('visible', true);
-          this.refreshAll();
+          if(this.menuUI) this.menuUI.setAttribute('visible', true); this.refreshAll();
       },
 
       refreshDBList: function() {
@@ -287,7 +269,7 @@
       },
 
       toggleGuyWireMode: function() {
-        if (this.antennaTypes[this.current.antIdx] === 'File Custom') return;
+        if (this.antennaTypes[this.current.antIdx] === 'File Custom' || this.antennaTypes[this.current.antIdx] === 'Schermo PC') return;
         if (!this.current.pointA.top && !this.current.pointB.top && !this.current.traliccio.active) return; 
         if (this.current.state.startsWith('AWAITING') || this.current.state.startsWith('PLACE_HEIGHT') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('SIZE_ROTATE')) return;
         
@@ -361,7 +343,7 @@
 
       getCalculatedLength: function() {
         let type = this.antennaTypes[this.current.antIdx];
-        if (type === 'File Custom') return 1.0;
+        if (type === 'File Custom' || type === 'Schermo PC') return 1.0;
         let bandMeters = parseInt(this.bands[this.current.bandIdx]); 
         if (type === 'Dipolo' || type === 'Verticale') return bandMeters / 4; 
         if (type === 'End Fed') return bandMeters * 0.45; 
@@ -671,7 +653,6 @@
                this.currentHeight = 1.0; this.current.state = 'PLACE_HEIGHT_A'; this.setupVerticalPreviewMode(this.current.pointA.base); this.refreshAll(); return;
             }
 
-            // CONFERMA PIAZZAMENTO MODELLO 3D/FOTO
             if (this.current.state === 'SIZE_ROTATE_3D') {
                 this.current.state = 'IDLE'; 
                 if(this.menuUI) this.menuUI.setAttribute('visible', true); 
@@ -745,7 +726,7 @@
                   this.current.pointA.base = newPoint; 
               }
               
-              if (type === 'File Custom') {
+              if (type === 'File Custom' || type === 'Schermo PC') {
                   if(!this.current.custom3D) this.current.custom3D = { scale: 1.0, rotationY: 0, rotationX: 0, rotationZ: 0, assetIdx: 0 };
                   this.current.state = 'SIZE_ROTATE_3D';
                   if(this.menuUI) this.menuUI.setAttribute('visible', false);
@@ -787,11 +768,11 @@
         let isTraliccioSetup = this.current.state === 'SIZE_ROTATE_TRALICCIO';
         toggleSubMenu('#sub-dipolo', type === 'Dipolo' && !isTraliccioSetup); toggleSubMenu('#sub-endfed', type === 'End Fed' && !isTraliccioSetup); toggleSubMenu('#sub-longwire', type === 'Longwire' && !isTraliccioSetup); toggleSubMenu('#sub-verticale', type === 'Verticale' && !isTraliccioSetup); toggleSubMenu('#sub-mmana', type === 'MMANA-GAL' && !isTraliccioSetup); toggleSubMenu('#sub-traliccio-setup', isTraliccioSetup); toggleSubMenu('#sub-media', type === 'File Custom' && !isTraliccioSetup);
         
-        let is3D = type === 'File Custom';
+        let is3D = type === 'File Custom' || type === 'Schermo PC';
         let btnRepoB = document.querySelector('#btn-repo-b'); if(btnRepoB) btnRepoB.setAttribute('visible', !is3D && type !== 'Verticale' && type !== 'MMANA-GAL' && !isTraliccioSetup);
         let btnHeightB = document.querySelector('#btn-height-b'); if(btnHeightB) btnHeightB.setAttribute('visible', !is3D && type !== 'Verticale' && type !== 'MMANA-GAL' && !isTraliccioSetup);
 
-        if (is3D) {
+        if (type === 'File Custom') {
             let txtMedia = document.querySelector('#txt-media-name');
             if (this.assetLibrary.length === 0) {
                 if(txtMedia) txtMedia.setAttribute('value', 'NESSUN FILE IMPORTATO');
@@ -804,6 +785,14 @@
             }
         }
 
+        // UPDATE UI PER SCHERMO PC
+        let inpStream = document.querySelector('#stream-url-input');
+        if (inpStream) {
+            if (type === 'Schermo PC') {
+                this.streamUrl = inpStream.value;
+            }
+        }
+
         this.refreshRaycaster();
 
         let infoTextStr = ""; let poleAH = (this.current.pointA && this.current.pointA.top && this.current.pointA.base) ? (this.current.pointA.top.y - this.current.pointA.base.y) : 0;
@@ -813,7 +802,12 @@
             else if (this.triangState === 1) infoTextStr = "TRIANGOLAZIONE: RAGGIO 2\nSpostati, mira all'incrocio col CONTROLLER. (Joy DX: Annulla)";
             else if (this.triangState === 2) infoTextStr = "TRIANGOLAZIONE: PUNTO ACQUISITO\n[GRILLETTO] Piazza | Joy DX: Rifai R2 | Joy SX: Reset";
         }
-        else if (is3D) {
+        else if (type === 'Schermo PC') {
+            if (this.current.state === 'SIZE_ROTATE_3D') infoTextStr = "JOY SX: Ruota | JOY DX: Scala\nGRILLETTO: Conferma Piazzamento Monitor";
+            else if (this.streamUrl && this.streamUrl.length > 5) infoTextStr = "MONITOR PRONTO\nPunta a terra e premi il grilletto per posizionare lo schermo.";
+            else infoTextStr = "ATTENZIONE: URL STREAMING MANCANTE!\nInserisci l'URL di OBS/VLC nel menu 2D sul tuo PC.";
+        }
+        else if (type === 'File Custom') {
             if (this.current.state === 'SIZE_ROTATE_3D') infoTextStr = "JOY SX (L/R e Su/Giu): Ruota Oggetto\nJOY DX (Su/Giu): Ingrandisci / Riduci\nGRILLETTO: Conferma Piazzamento";
             else if (this.assetLibrary.length > 0) infoTextStr = "LIBRERIA FILE MULTIMEDIALI PRONTA\nScegli l'oggetto e premi il grilletto a terra.";
             else infoTextStr = "ATTENZIONE: NESSUN FILE NELLA LIBRERIA!\nUsa il menu 2D per caricare Modelli 3D o Immagini.";
@@ -989,7 +983,7 @@
           hitBox.setAttribute('material', 'color: #FFEB3B; opacity: 0.9; shader: flat');
           hitBox.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear');
           hitBox.classList.add('clickable', 'antenna-selector'); hitBox.setAttribute('data-ant-idx', idx); hitBox.setAttribute('btn-interaction', ''); container.appendChild(hitBox);
-          let lbl = this.antennaTypes[ant.antIdx] === 'File Custom' ? `SELEZIONA\nOGGETTO ${idx + 1}` : `SELEZIONA\nANTENNA ${idx + 1}`;
+          let lbl = this.antennaTypes[ant.antIdx] === 'File Custom' ? `SELEZIONA\nOGGETTO ${idx + 1}` : (this.antennaTypes[ant.antIdx] === 'Schermo PC' ? `SELEZIONA\nSCHERMO ${idx + 1}` : `SELEZIONA\nANTENNA ${idx + 1}`);
           this.createLabel(lbl, {x: basePos.x, y: basePos.y + 0.6, z: basePos.z}, '#FFEB3B', this.globalTextScale * 0.7, container);
       },
 
@@ -999,6 +993,37 @@
           
           let type = this.antennaTypes[ant.antIdx];
 
+          // ----- RENDER SCHERMO PC -----
+          if (type === 'Schermo PC') {
+              if (ant.pointA.base) {
+                  this.createBasePanel(ant.pointA.base, container);
+                  let mediaEl = document.createElement('a-image');
+                  
+                  // Se non c'è url di stream o il form è vuoto
+                  if (!this.streamUrl || this.streamUrl.length < 5) {
+                      mediaEl = document.createElement('a-entity');
+                      mediaEl.setAttribute('geometry', 'primitive: plane; width: 1.6; height: 0.9');
+                      mediaEl.setAttribute('material', 'color: #000; side: double');
+                      this.createLabel('INSERISCI URL STREAM\nNEL MENU 2D SU PC', {x: ant.pointA.base.x, y: ant.pointA.base.y + 0.6, z: ant.pointA.base.z}, '#FF1744', this.globalTextScale, container);
+                  } else {
+                      mediaEl.setAttribute('src', this.streamUrl);
+                      mediaEl.setAttribute('width', '1.6'); // Rapporto 16:9 standard
+                      mediaEl.setAttribute('height', '0.9');
+                      mediaEl.setAttribute('material', 'side: double; shader: flat');
+                  }
+                  
+                  if(!ant.custom3D) ant.custom3D = { scale: 1.0, rotationX: 0, rotationY: 0, rotationZ: 0, assetIdx: 0 };
+                  
+                  mediaEl.setAttribute('position', `${ant.pointA.base.x} ${ant.pointA.base.y + 0.45 * ant.custom3D.scale} ${ant.pointA.base.z}`);
+                  mediaEl.setAttribute('rotation', `${ant.custom3D.rotationX} ${ant.custom3D.rotationY} ${ant.custom3D.rotationZ}`);
+                  mediaEl.setAttribute('scale', `${ant.custom3D.scale} ${ant.custom3D.scale} ${ant.custom3D.scale}`);
+                  container.appendChild(mediaEl);
+              }
+              this.renderSelectorBox(ant, container, isCurrent, idx);
+              return;
+          }
+
+          // ----- RENDER FILE CUSTOM (GLB, OBJ, STL, PNG, JPG) -----
           if (type === 'File Custom') {
               if (ant.pointA.base) {
                   this.createBasePanel(ant.pointA.base, container);
@@ -1223,14 +1248,14 @@
           else if (id === 'btn-repo-a') { this.current.state = 'REPOSITION_GROUND_A'; if(this.menuUI) this.menuUI.setAttribute('visible', false); } 
           else if (id === 'btn-repo-b') { this.current.state = 'REPOSITION_GROUND_B'; if(this.menuUI) this.menuUI.setAttribute('visible', false); }
           else if (id === 'btn-global-reset') {
-             // Sgancia completamente la scena
+             // FORZATURA RESET SICURO E RIAVVIO MENU
              let containerEls = this.worldContentEl.querySelectorAll('.antenna-group');
              containerEls.forEach(el => el.parentNode.removeChild(el));
              this.antennas = [this.createEmptyAntenna()]; this.activeAntIdx = 0; this.current = this.antennas[0];
              if(this.anchorRootEl) { this.anchorRootEl.object3D.position.set(0,0,0); this.anchorRootEl.object3D.rotation.set(0,0,0); }
              if(this.worldPivotEl) { this.worldPivotEl.object3D.position.set(0,0,0); this.worldPivotEl.object3D.rotation.set(0,0,0); }
              if(this.worldContentEl) { this.worldContentEl.object3D.position.set(0,0,0); this.worldContentEl.setAttribute('visible', 'true'); }
-             this.calibLocal1 = null; this.calibLocal2 = null;
+             this.calibLocal1 = null; this.calibLocal2 = null; this.triangState = 0;
              if(this.diamondRef1) this.diamondRef1.setAttribute('visible', 'false'); if(this.diamondRef2) this.diamondRef2.setAttribute('visible', 'false');
              localStorage.removeItem('antennaArProV21'); 
              if(this.menuUI) this.menuUI.setAttribute('visible', 'true');
@@ -1279,7 +1304,6 @@
                         if(format !== 'unknown') {
                             let assetObj = { name: file.name, url: url, format: format };
                             
-                            // CARICAMENTO SICURO IMMAGINI (No Crash DOM)
                             if (format === 'image') {
                                 let img = new Image();
                                 img.onload = () => { 
@@ -1329,6 +1353,14 @@
     <button onclick="window.loadAntennaFromDB()">CARICA SCENA</button>
     <button style="background: #D32F2F; color:white;" onclick="window.deleteAntennaFromDB()">ELIMINA SCENA</button>
     <hr>
+    
+    <!-- MENU STREAMING PC -->
+    <div class="import-box" style="border-color: #00BFFF;">
+      <h3 style="color:#00BFFF;">STREAMING MONITOR PC</h3>
+      <p style="color:#FFF59D;">Per vederlo crea "Nuova Antenna" -> "Schermo PC"</p>
+      <input type="text" id="stream-url-input" placeholder="Es. http://192.168.1.50:8080/video" onchange="document.querySelector('[ar-antenna-system]').components['ar-antenna-system'].refreshAll()">
+    </div>
+
     <div class="import-box">
       <h3>LIBRERIA MULTIMEDIALE</h3>
       <p style="color:#FFF59D;">Carica PIU' file contemporaneamente: <b>.GLB, .OBJ, .STL, .PNG, .JPG</b>. <br>I GLB supportano colori e animazioni.</p>
@@ -1351,7 +1383,7 @@
         <a-entity id="menu-ui" visible="false" position="0 0.15 -0.2" rotation="-30 0 0">
           <a-plane width="0.55" height="0.95" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO V46" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
+          <a-text value="CONFIGURATORE ANTENNE PRO V47" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
           
           <a-plane width="0.52" height="0.08" color="#2A2A2A" position="0 0.38 0.01">
             <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
@@ -1381,7 +1413,6 @@
             <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
-          <!-- MENU LIBRERIA MEDIA CUSTOM -->
           <a-entity id="sub-media" position="0 0.02 0" visible="false">
             <a-text value="LIBRERIA FILE (MODELLI 3D E IMMAGINI)" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-media-prev" class="clickable" btn-interaction width="0.1" height="0.03" color="#006064" position="-0.16 -0.01 0.01"><a-text value="< PREV" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
