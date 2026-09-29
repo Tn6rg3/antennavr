@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V39 - Hitbox Ingrandite, Laser Intelligente e Pannelli Ancorati</title>
+  <title>V39 - Hardware Spatial Anchors</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -67,13 +67,14 @@
             this.calibLocal1 = null; 
             this.calibLocal2 = null;
             
-            // Pointer Modes: 'TOUCH', 'LIDAR', 'TRIANG'
+            // WEBXR HARDWARE ANCHOR
+            this.xrHardwareAnchor = null;
+
             this.pointerMode = 'TOUCH';
             this.hitTestSource = null; this.requestingHitTest = false; this.reticleValid = false;
             this.targetReticlePos = new THREE.Vector3(); this.targetReticleQuat = new THREE.Quaternion(); this.lastFloorY = 0; 
 
-            // Triangulation Logic
-            this.triangState = 0; // 0=Aiming Ray1, 1=Aiming Ray2, 2=Confirm
+            this.triangState = 0;
             this.triangRay1 = null;
             this.triangRay2 = null;
             this.triangResult = null;
@@ -91,7 +92,7 @@
             if (this.raycasterEl) { this.raycasterEl.addEventListener('triggerdown', this.onTriggerDown.bind(this)); this.raycasterEl.addEventListener('thumbstickmoved', this.onRightThumbstick.bind(this)); }
             if (this.leftControllerEl) { this.leftControllerEl.addEventListener('ybuttondown', this.toggleMenu.bind(this)); this.leftControllerEl.addEventListener('xbuttondown', this.toggleGuyWireMode.bind(this)); this.leftControllerEl.addEventListener('thumbstickmoved', this.onLeftThumbstick.bind(this)); }
 
-            this.el.sceneEl.addEventListener('exit-vr', () => { this.hitTestSource = null; this.requestingHitTest = false; });
+            this.el.sceneEl.addEventListener('exit-vr', () => { this.hitTestSource = null; this.requestingHitTest = false; this.xrHardwareAnchor = null; });
 
             this.initPersistentElements(); this.setupGlobalEventDelegation(); this.setupMmanaFileLoader();
             window.saveAntennaToDB = this.saveAntennaToDB.bind(this); window.loadAntennaFromDB = this.loadAntennaFromDB.bind(this); window.deleteAntennaFromDB = this.deleteAntennaFromDB.bind(this);
@@ -262,10 +263,8 @@
         this.el.sceneEl.appendChild(this.reticleWrapper);
         this.reticleWrapper.setAttribute('visible', 'false');
 
-        // Geometrie per Triangolazione
         this.triangUI = document.createElement('a-entity');
         this.el.sceneEl.appendChild(this.triangUI);
-        
         this.beam1El = document.createElement('a-cylinder');
         this.triangUI.appendChild(this.beam1El);
         this.beam2El = document.createElement('a-cylinder');
@@ -308,20 +307,14 @@
         let a = d1.dot(d1); let b = d1.dot(d2); let c = d2.dot(d2);
         let d = d1.dot(w0); let e = d2.dot(w0);
         let denom = a*c - b*b;
-
         if (denom < 1e-5) return null;
-
         let t1 = (b*e - c*d) / denom;
         let t2 = (a*e - b*d) / denom;
-
         if (t1 < 0 || t2 < 0) return null;
-
         let pt1 = new THREE.Vector3().copy(p1).addScaledVector(d1, t1);
         let pt2 = new THREE.Vector3().copy(p2).addScaledVector(d2, t2);
-
         let error = pt1.distanceTo(pt2);
         let midpoint = new THREE.Vector3().lerpVectors(pt1, pt2, 0.5);
-
         return { point: midpoint, error: error, dist1: t1, dist2: t2 };
       },
 
@@ -338,7 +331,42 @@
           el.setAttribute('rotation', `${euler.x * 180 / Math.PI} ${euler.y * 180 / Math.PI} ${euler.z * 180 / Math.PI}`);
       },
 
+      // --- LOGICA DI CREAZIONE ANCORA HARDWARE ---
+      createHardwareAnchor: function(position) {
+          let sceneEl = this.el.sceneEl;
+          if (!sceneEl.is('ar-mode')) return;
+          let frame = sceneEl.frame;
+          let session = sceneEl.renderer.xr.getSession();
+          let refSpace = sceneEl.renderer.xr.getReferenceSpace();
+          
+          if (frame && frame.createAnchor && session && refSpace) {
+              // Creiamo una trasformazione rigida esattamente al punto richiesto (pavimento)
+              let transform = new XRRigidTransform(
+                  { x: position.x, y: position.y, z: position.z },
+                  { x: 0, y: 0, z: 0, w: 1 }
+              );
+              frame.createAnchor(transform, refSpace).then((anchor) => {
+                  this.xrHardwareAnchor = anchor;
+                  console.log("Hardware Anchor WebXR creato con successo!");
+              }).catch(e => console.error("Errore creazione Hardware Anchor:", e));
+          }
+      },
+
       tick: function (time, frameDelta) {
+        let sceneEl = this.el.sceneEl;
+        let frame = sceneEl.frame;
+
+        // --- APPLICAZIONE HARDWARE ANCHOR A OGNI FRAME ---
+        if (this.xrHardwareAnchor && frame && sceneEl.is('ar-mode')) {
+            let refSpace = sceneEl.renderer.xr.getReferenceSpace();
+            let anchorPose = frame.getPose(this.xrHardwareAnchor.anchorSpace, refSpace);
+            if (anchorPose) {
+                // Inchiodiamo il perno di tutto il mondo all'ancora hardware.
+                // Manteniamo la rotazione Y impostata dall'utente con i diamanti.
+                this.worldPivotEl.object3D.position.set(anchorPose.transform.position.x, anchorPose.transform.position.y, anchorPose.transform.position.z);
+            }
+        }
+
         if(!this.current.state) return;
         let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || (this.gwState && this.gwState.includes('PEGS'));
         
@@ -347,7 +375,6 @@
         let indicator = document.querySelector('#touch-indicator'); 
         if (indicator) indicator.setAttribute('visible', isPlacingMode && this.pointerMode === 'TOUCH');
 
-        let sceneEl = this.el.sceneEl; let frame = sceneEl.frame;
         let cameraPos = new THREE.Vector3(); let cameraDir = new THREE.Vector3(0, 0, -1);
         let cameraEl = document.querySelector('#camera');
         if (cameraEl && cameraEl.object3D) { cameraEl.object3D.getWorldPosition(cameraPos); cameraDir.applyQuaternion(cameraEl.object3D.getWorldQuaternion(new THREE.Quaternion())); }
@@ -430,8 +457,21 @@
             } else { if(this.reticleWrapper) this.reticleWrapper.setAttribute('visible', 'false'); this.reticleValid = false; }
         }
 
-        if (this.current.state === 'AWAITING_CALIB_PT1') { let hitGround = this.getHitPoint(); if (hitGround) this.worldPivotEl.object3D.position.copy(hitGround.point); } 
-        else if (this.current.state === 'AWAITING_CALIB_PT2') { let hitGround = this.getHitPoint(); if (hitGround && this.calibPt1 && this.calibLocal1 && this.calibLocal2) { let angleLocal = Math.atan2(this.calibLocal2.x - this.calibLocal1.x, this.calibLocal2.z - this.calibLocal1.z); let angleWorld = Math.atan2(hitGround.point.x - this.calibPt1.x, hitGround.point.z - this.calibPt1.z); this.worldPivotEl.object3D.rotation.set(0, angleWorld - angleLocal, 0); } }
+        if (this.current.state === 'AWAITING_CALIB_PT1') { 
+            let hitGround = this.getHitPoint(); 
+            if (hitGround && !this.xrHardwareAnchor) { 
+                // Segue temporaneamente finché non fissa
+                this.worldPivotEl.object3D.position.copy(hitGround.point); 
+            } 
+        } 
+        else if (this.current.state === 'AWAITING_CALIB_PT2') { 
+            let hitGround = this.getHitPoint(); 
+            if (hitGround && this.calibPt1 && this.calibLocal1 && this.calibLocal2) { 
+                let angleLocal = Math.atan2(this.calibLocal2.x - this.calibLocal1.x, this.calibLocal2.z - this.calibLocal1.z); 
+                let angleWorld = Math.atan2(hitGround.point.x - this.calibPt1.x, hitGround.point.z - this.calibPt1.z); 
+                this.worldPivotEl.object3D.rotation.set(0, angleWorld - angleLocal, 0); 
+            } 
+        }
       },
 
       getHitPoint: function() {
@@ -545,7 +585,6 @@
                     this.raycasterEl.object3D.getWorldPosition(ctrlPos); 
                     ctrlDir.applyQuaternion(this.raycasterEl.object3D.getWorldQuaternion(new THREE.Quaternion())); 
                 }
-
                 if (this.triangState === 0) {
                     this.triangRay1 = { origin: ctrlPos, dir: ctrlDir };
                     this.triangState = 1; this.refreshAll(); return;
@@ -556,9 +595,6 @@
                         this.triangState = 2; this.refreshAll(); 
                     }
                     return;
-                }
-                if (this.triangState === 2) {
-                    // Conferma finale: prosegue piazzando il punto
                 }
             }
 
@@ -577,6 +613,7 @@
             if (this.current.state === 'PLACE_TRALICCIO_CENTER') {
                let hitGround = this.getHitPoint();
                if(hitGround) {
+                   if (!this.xrHardwareAnchor) this.createHardwareAnchor(hitGround.point);
                    this.current.traliccio.center = this.getLocalPoint(hitGround.point);
                    this.current.state = 'SIZE_ROTATE_TRALICCIO';
                    if(this.menuUI) this.menuUI.setAttribute('visible', true); this.refreshAll();
@@ -611,7 +648,18 @@
                 return;
             }
 
-            if (this.current.state === 'AWAITING_CALIB_PT1') { let hitGround = this.getHitPoint(); if (hitGround) { this.calibPt1 = hitGround.point.clone(); this.worldPivotEl.object3D.position.copy(this.calibPt1); this.current.state = 'AWAITING_CALIB_PT2'; this.updateMenuText(); } if (this.triangState === 2) this.triangState = 0; return; }
+            if (this.current.state === 'AWAITING_CALIB_PT1') { 
+                let hitGround = this.getHitPoint(); 
+                if (hitGround) { 
+                    this.calibPt1 = hitGround.point.clone(); 
+                    this.createHardwareAnchor(this.calibPt1);
+                    this.worldPivotEl.object3D.position.copy(this.calibPt1); 
+                    this.current.state = 'AWAITING_CALIB_PT2'; 
+                    this.updateMenuText(); 
+                } 
+                if (this.triangState === 2) this.triangState = 0; 
+                return; 
+            }
             if (this.current.state === 'AWAITING_CALIB_PT2') { let hitGround = this.getHitPoint(); if (hitGround) { this.calibPt2 = hitGround.point.clone(); this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false'); this.current.state = 'IDLE'; this.refreshAll(); } if (this.triangState === 2) this.triangState = 0; return; }
             if (this.current.state === 'SET_CALIB_PT1') { let hitGround = this.getHitPoint(); if (hitGround) { this.calibLocal1 = this.getLocalPoint(hitGround.point); this.diamondRef1.setAttribute('position', this.calibLocal1); this.diamondRef1.setAttribute('visible', 'true'); this.current.state = 'SET_CALIB_PT2'; this.updateMenuText(); } if (this.triangState === 2) this.triangState = 0; return; }
             if (this.current.state === 'SET_CALIB_PT2') { let hitGround = this.getHitPoint(); if (hitGround) { this.calibLocal2 = this.getLocalPoint(hitGround.point); this.diamondRef2.setAttribute('position', this.calibLocal2); this.diamondRef2.setAttribute('visible', 'true'); setTimeout(() => { this.diamondRef1.setAttribute('visible', 'false'); this.diamondRef2.setAttribute('visible', 'false'); }, 1000); this.current.state = 'IDLE'; this.updateMenuText(); } if (this.triangState === 2) this.triangState = 0; return; }
@@ -647,6 +695,9 @@
 
             if (this.current.state === 'PLACE_GROUND_A' || this.current.state === 'REPOSITION_GROUND_A') {
               let hitGround = this.getHitPoint(); if(!hitGround) return;
+              
+              if (!this.xrHardwareAnchor) this.createHardwareAnchor(hitGround.point);
+
               let newPoint = this.getLocalPoint(hitGround.point);
               
               if (this.current.state === 'REPOSITION_GROUND_A' && this.current.traliccio && this.current.traliccio.active) {
@@ -760,10 +811,7 @@
 
       drawTraliccio: function(ant, container, isCurrent) {
         if (!ant.traliccio || !ant.traliccio.active || !ant.traliccio.center) return;
-        
-        // Pannello di base fittizio
         this.createBasePanel(ant.traliccio.center, container);
-
         let t = ant.traliccio; let isSq = t.shape === 'square'; let numS = isSq ? 4 : 3;
         t.corners = []; let rotRad = (t.rotationY || 0) * (Math.PI / 180); let baseAng = isSq ? Math.PI/4 : Math.PI/2;
         for (let i = 0; i < numS; i++) { let ang = baseAng + (i * 2 * Math.PI / numS) + rotRad; t.corners.push(new THREE.Vector3( t.center.x + Math.cos(ang) * (t.radius||0.3), t.center.y, t.center.z + Math.sin(ang) * (t.radius||0.3) )); }
@@ -821,16 +869,13 @@
               let hY = tCenter.y + anchor.height; let frameColor = isSelected ? '#00FF00' : '#FF1744';
               for(let c=0; c<corners.length; c++) {
                   let nextC = (c+1)%corners.length; let p1 = new THREE.Vector3(corners[c].x, hY, corners[c].z); let p2 = new THREE.Vector3(corners[nextC].x, hY, corners[nextC].z);
-                  
                   this.createLineTube(p1, p2, isSelected ? 0.03 : 0.02, `color: ${frameColor}; shader: flat`, container);
                   
                   let hitTube = this.createLineTube(p1, p2, 0.1, 'opacity: 0; transparent: true; depthWrite: false', container);
                   hitTube.setAttribute('data-index', idx);
                   if (isCurrent && (this.gwState === 'MAIN' || ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_TRALICCIO_PEGS') && isSelected))) { 
                       hitTube.classList.add('gw-collar', 'clickable'); 
-                  } else {
-                      hitTube.classList.add('gw-collar');
-                  }
+                  } else { hitTube.classList.add('gw-collar'); }
                   
                   if (ant.traliccio.pegs && ant.traliccio.pegs[c]) {
                      let pegRaw = ant.traliccio.pegs[c]; let pegPos = new THREE.Vector3(pegRaw.x, pegRaw.y, pegRaw.z); let wLen = p1.distanceTo(pegPos);
@@ -859,9 +904,7 @@
             hitCollar.setAttribute('data-index', idx);
             if (isCurrent && (this.gwState === 'MAIN' || ((this.gwState === 'EDIT_COLLAR' || this.gwState === 'EDIT_PEGS') && isSelected))) { 
                 hitCollar.classList.add('gw-collar', 'clickable'); 
-            } else {
-                hitCollar.classList.add('gw-collar');
-            }
+            } else { hitCollar.classList.add('gw-collar'); }
             container.appendChild(hitCollar);
             
             this.createLabel(`COLLARE: ${h.toFixed(2)}m`, {x: anchorPos.x, y: anchorPos.y + 0.08, z: anchorPos.z}, '#00E676', this.globalTextScale * 0.8, container);
@@ -911,7 +954,6 @@
           
           if (!ant.pointA.top) { this.renderSelectorBox(ant, container, isCurrent, idx); return; }
           
-          // Generazione del Pannello Base per punto A e B
           if(ant.pointA.base && !ant.traliccio.active) this.createBasePanel(ant.pointA.base, container);
           if(ant.pointB.base) this.createBasePanel(ant.pointB.base, container);
 
@@ -1082,7 +1124,7 @@
              this.antennas = [this.createEmptyAntenna()]; this.activeAntIdx = 0; this.current = this.antennas[0];
              if(this.worldPivotEl) { this.worldPivotEl.object3D.position.set(0,0,0); this.worldPivotEl.object3D.rotation.set(0,0,0); }
              if(this.worldContentEl) { this.worldContentEl.object3D.position.set(0,0,0); this.worldContentEl.setAttribute('visible', 'true'); }
-             this.calibLocal1 = null; this.calibLocal2 = null;
+             this.calibLocal1 = null; this.calibLocal2 = null; this.xrHardwareAnchor = null;
              if(this.diamondRef1) this.diamondRef1.setAttribute('visible', 'false'); if(this.diamondRef2) this.diamondRef2.setAttribute('visible', 'false');
              localStorage.removeItem('antennaArProV21'); this.refreshAll();
           }
@@ -1132,7 +1174,6 @@
     <input type="file" id="file-mmana" accept=".maa">
   </div>
 
-  <!-- Aggiunto parametro 'anchors' nelle optionalFeatures -->
   <a-scene webxr="optionalFeatures: local-floor, hit-test, anchors;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
@@ -1142,7 +1183,7 @@
         <a-entity id="menu-ui" visible="false" position="0 0.15 -0.45" rotation="-30 0 0">
           <a-plane width="0.55" height="0.95" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
           
-          <a-text value="CONFIGURATORE ANTENNE PRO V38" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
+          <a-text value="CONFIGURATORE ANTENNE PRO V39" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
           
           <a-plane width="0.52" height="0.08" color="#2A2A2A" position="0 0.38 0.01">
             <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
