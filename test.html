@@ -2,38 +2,36 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Stanza Verde AR - Controllo Configurazione</title>
+    <title>Stanza Verde AR - Mesh Esatta</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script>
-      AFRAME.registerComponent('colora-stanza-verde', {
+      AFRAME.registerComponent('colora-mesh-verde', {
         init: function () {
-          this.planes = new Map();
+          this.meshes = new Map();
           
+          // Materiale verde per la mesh. 
+          // Consiglio: cambia wireframe in 'true' se vuoi vedere la griglia stile Matrix
           this.material = new THREE.MeshBasicMaterial({
             color: 0x00FF00,
             transparent: true,
-            opacity: 0.5,
+            opacity: 0.4,
             side: THREE.DoubleSide,
-            wireframe: false
+            wireframe: false 
           });
 
-          // Riferimento al testo di avviso
           this.warningText = document.querySelector('#avviso-stanza');
           this.checkTimer = null;
 
-          // Quando inizia la sessione AR, facciamo partire un timer di 3 secondi
           this.el.sceneEl.addEventListener('enter-vr', () => {
             if (this.el.sceneEl.is('ar-mode')) {
               this.checkTimer = setTimeout(() => {
-                // Se dopo 3 secondi non abbiamo trovato nessun muro, mostriamo l'avviso
-                if (this.planes.size === 0) {
+                if (this.meshes.size === 0) {
                   this.warningText.setAttribute('visible', 'true');
                 }
-              }, 3000);
+              }, 4000); // Aspettiamo 4 secondi, la mesh è più pesante da caricare
             }
           });
 
-          // Quando usciamo dall'AR, nascondiamo l'avviso
           this.el.sceneEl.addEventListener('exit-vr', () => {
             clearTimeout(this.checkTimer);
             this.warningText.setAttribute('visible', 'false');
@@ -50,69 +48,69 @@
           const refSpace = renderer.xr.getReferenceSpace();
           if (!refSpace) return;
 
-          if (frame.detectedPlanes) {
-            frame.detectedPlanes.forEach(plane => {
-              let planeData = this.planes.get(plane);
+          // Usiamo detectedMeshes invece di detectedPlanes
+          if (frame.detectedMeshes) {
+            frame.detectedMeshes.forEach(xrMesh => {
+              let meshData = this.meshes.get(xrMesh);
 
-              if (!planeData) {
-                const geometry = this.createGeometry(plane);
-                const mesh = new THREE.Mesh(geometry, this.material);
-                mesh.matrixAutoUpdate = false;
-                this.el.object3D.add(mesh);
+              if (!meshData) {
+                const geometry = this.createMeshGeometry(xrMesh);
+                const threeMesh = new THREE.Mesh(geometry, this.material);
+                threeMesh.matrixAutoUpdate = false;
+                this.el.object3D.add(threeMesh);
                 
-                planeData = { mesh: mesh, lastTime: plane.lastChangedTime };
-                this.planes.set(plane, planeData);
-
-                // Abbiamo trovato almeno un piano! Nascondiamo l'avviso di errore
+                meshData = { mesh: threeMesh, lastTime: xrMesh.lastChangedTime };
+                this.meshes.set(xrMesh, meshData);
                 this.warningText.setAttribute('visible', 'false');
               } 
-              else if (plane.lastChangedTime > planeData.lastTime) {
-                planeData.mesh.geometry.dispose();
-                planeData.mesh.geometry = this.createGeometry(plane);
-                planeData.lastTime = plane.lastChangedTime;
+              else if (xrMesh.lastChangedTime > meshData.lastTime) {
+                meshData.mesh.geometry.dispose();
+                meshData.mesh.geometry = this.createMeshGeometry(xrMesh);
+                meshData.lastTime = xrMesh.lastChangedTime;
               }
               
-              const pose = frame.getPose(plane.planeSpace, refSpace);
+              const pose = frame.getPose(xrMesh.meshSpace, refSpace);
               if (pose) {
-                planeData.mesh.matrix.fromArray(pose.transform.matrix);
+                meshData.mesh.matrix.fromArray(pose.transform.matrix);
               }
             });
           }
         },
 
-        createGeometry: function(plane) {
-          const shape = new THREE.Shape();
-          if (plane.polygon.length > 0) {
-            shape.moveTo(plane.polygon[0].x, plane.polygon[0].z);
-            for (let i = 1; i < plane.polygon.length; i++) {
-              shape.lineTo(plane.polygon[i].x, plane.polygon[i].z);
-            }
-          }
-          const geometry = new THREE.ShapeGeometry(shape);
-          geometry.rotateX(Math.PI / 2); 
+        // Converte i dati grezzi della scansione del Quest in una vera forma 3D Three.js
+        createMeshGeometry: function(xrMesh) {
+          const geometry = new THREE.BufferGeometry();
+          
+          // I vertici (punti nello spazio)
+          const vertices = new Float32Array(xrMesh.vertices);
+          // Gli indici (come i punti si collegano per formare triangoli)
+          const indices = new Uint32Array(xrMesh.indices);
+          
+          geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+          geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+          
+          // Calcola le normali per permettere alla luce di riflettere (utile se aggiungi luci)
+          geometry.computeVertexNormals();
           return geometry;
         }
       });
     </script>
   </head>
   <body>
-    <!-- NOTA BENE: Abbiamo spostato 'plane-detection' dentro requiredFeatures -->
+    <!-- Richiediamo 'mesh' per avere la topologia 3D esatta -->
     <a-scene 
-      webxr="requiredFeatures: local-floor, plane-detection; optionalFeatures: hit-test;" 
-      colora-stanza-verde>
+      webxr="requiredFeatures: local-floor, mesh; optionalFeatures: hit-test;" 
+      colora-mesh-verde>
       
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
 
-      <!-- Cartello di avviso: posizionato davanti all'utente, ma nascosto di default -->
       <a-entity id="avviso-stanza" visible="false" position="0 1.5 -1.5">
-        <!-- Sfondo nero per far leggere bene il testo -->
         <a-plane color="#000" opacity="0.8" width="2" height="0.6" position="0 0 -0.01"></a-plane>
         <a-text 
-          value="Stanza non configurata!\n\nEsci dall'AR e usa il menu del Quest:\nImpostazioni > Spazio Fisico > Configurazione" 
+          value="Nessuna Mesh trovata!\n\n1. Controlla di aver scansionato la stanza\n2. Consenti la condivisione dei Dati Spaziali quando il browser te lo chiede" 
           align="center" 
           color="#FF3333" 
-          width="4"
-          position="0 0 0">
+          width="4">
         </a-text>
       </a-entity>
 
