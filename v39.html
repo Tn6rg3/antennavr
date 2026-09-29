@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V45 - Libreria Media Stabile + Auto-Scale STL + VIDEO</title>
+  <title>Antenne AR Pro V45 - Libreria Media Stabile + Portali AR</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <!-- Aframe Extras per abilitare il supporto alle Animazioni dei modelli GLB -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
@@ -51,6 +51,44 @@
             el.setAttribute('scale', '1 1 1'); 
             if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); 
         });
+      }
+    });
+
+    // --- NUOVI COMPONENTI PER I RITAGLI (PORTALI AR) ---
+    AFRAME.registerComponent('ritaglio-mask', {
+      init: function () {
+        let apply = () => {
+          let mesh = this.el.getObject3D('mesh');
+          if (mesh) mesh.traverse((node) => {
+            if (node.isMesh && node.material) {
+              node.material.colorWrite = false; // Rende il ritaglio invisibile
+              node.material.depthWrite = false;
+              node.material.stencilWrite = true;
+              node.material.stencilRef = 1;     // Marca il pixel con "1"
+              node.material.stencilFunc = THREE.AlwaysStencilFunc;
+              node.material.stencilZPass = THREE.ReplaceStencilOp;
+            }
+          });
+        };
+        this.el.addEventListener('model-loaded', apply);
+        if (this.el.getObject3D('mesh')) apply();
+      }
+    });
+
+    AFRAME.registerComponent('ritaglio-content', {
+      init: function () {
+        let apply = () => {
+          let mesh = this.el.getObject3D('mesh');
+          if (mesh) mesh.traverse((node) => {
+            if (node.isMesh && node.material) {
+              node.material.stencilWrite = true;
+              node.material.stencilRef = 1;
+              node.material.stencilFunc = THREE.EqualStencilFunc; // Disegna SOLO dove c'è il marchio "1"
+            }
+          });
+        };
+        this.el.addEventListener('model-loaded', apply);
+        if (this.el.getObject3D('mesh')) apply();
       }
     });
 
@@ -187,6 +225,8 @@
               pointC: { percent: 0.5, top: null, base: null }, 
               traliccio: { active: false, center: null, shape: 'square', radius: 0.3, rotationY: 0, height: 1.0, corners: [], pegs: [] }, 
               custom3D: { assetIdx: 0, scale: 1.0, rotationX: 0, rotationY: 0, rotationZ: 0 },
+              ritagli: [], // Array per i portali/maschere
+              tempRitaglioPt1: null,
               antIdx: 3, bandIdx: 2, 
               endFed_AC_Len: 10.0, endFed_CB_Len: 10.0, longwireLen: 20.0, longwireVertex: 'A',
               numRadials: 4, radialLen: 5.0, mmanaModelIdx: 0, antennaRotationY: 0,
@@ -258,7 +298,7 @@
             if(d.antennas && d.antennas.length > 0) { this.antennas = d.antennas; this.activeAntIdx = d.activeAntIdx || 0; if(this.activeAntIdx >= this.antennas.length) this.activeAntIdx = 0; this.current = this.antennas[this.activeAntIdx]; }
             if (d.globalTextScale) this.globalTextScale = d.globalTextScale;
             if (d.pivotPos) this.worldPivotEl.object3D.position.copy(d.pivotPos); if (d.pivotRot) this.worldPivotEl.object3D.rotation.copy(d.pivotRot); if (d.contentPos) this.worldContentEl.object3D.position.copy(d.contentPos);
-            if (this.current.state.startsWith('PLACE_HEIGHT') || this.current.state.startsWith('REPOSITION_HEIGHT') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SIZE_ROTATE')) this.current.state = 'IDLE';
+            if (this.current.state.startsWith('PLACE_HEIGHT') || this.current.state.startsWith('REPOSITION_HEIGHT') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SIZE_ROTATE') || this.current.state.startsWith('DRAW_RITAGLIO')) this.current.state = 'IDLE';
           } catch(e) { console.error(e); }
         }
         this.gwState = 'OFF'; this.activeAnchor = null; if(this.gwUI) this.gwUI.setAttribute('visible', false); this.refreshAll();
@@ -278,6 +318,12 @@
         if(!this.menuUI) return;
         let isVisible = this.menuUI.getAttribute('visible') === 'true' || this.menuUI.getAttribute('visible') === true;
         this.menuUI.setAttribute('visible', !isVisible);
+
+        // Resetta la modalità di ritaglio se si apre il menu a metà
+        if (!isVisible && this.current.state && this.current.state.startsWith('DRAW_RITAGLIO')) {
+            this.current.state = 'IDLE';
+        }
+
         this.refreshAll(); 
       },
 
@@ -599,6 +645,32 @@
             let now = Date.now(); if (now - this.lastTriggerTime < 300) return; this.lastTriggerTime = now;
             let intersects = null; if (this.raycasterEl && this.raycasterEl.components && this.raycasterEl.components.raycaster) intersects = this.raycasterEl.components.raycaster.intersectedEls;
             
+            // --- LOGICA RITAGLI (PORTALI AR) ---
+            if (this.current.state === 'DRAW_RITAGLIO_PT1') {
+                let hitGround = this.getHitPoint();
+                if(!hitGround) return;
+                this.current.tempRitaglioPt1 = this.getLocalPoint(hitGround.point);
+                this.current.state = 'DRAW_RITAGLIO_PT2';
+                this.refreshAll();
+                return;
+            }
+            if (this.current.state === 'DRAW_RITAGLIO_PT2') {
+                let hitGround = this.getHitPoint();
+                if(!hitGround) return;
+                let pt2 = this.getLocalPoint(hitGround.point);
+                let pt1 = this.current.tempRitaglioPt1;
+
+                let center = { x: (pt1.x + pt2.x) / 2, y: (pt1.y + pt2.y) / 2, z: (pt1.z + pt2.z) / 2 };
+                let width = Math.abs(pt2.x - pt1.x) || 0.1;
+                let height = Math.abs(pt2.y - pt1.y) || 0.1;
+
+                this.current.ritagli.push({ center: center, width: width, height: height });
+
+                this.current.state = 'DRAW_RITAGLIO_PT1'; // Permette di disegnarne altri
+                this.refreshAll();
+                return;
+            }
+
             let isPlacingMode = this.current.state.startsWith('PLACE_GROUND') || this.current.state.startsWith('REPOSITION_GROUND') || this.current.state.startsWith('AWAITING_CALIB') || this.current.state.startsWith('SET_CALIB') || this.current.state.startsWith('PLACE_TRALICCIO_CENTER') || (this.gwState && this.gwState.includes('PEGS'));
             
             let hitUI = false;
@@ -611,7 +683,6 @@
             if (hitUI) return; 
 
             if (intersects) {
-              // --- NUOVA LOGICA: PLAY/PAUSE VIDEO CON GRILLETTO ---
               let hitVideo = intersects.find(el => el.classList && el.classList.contains('video-toggle'));
               if (hitVideo) {
                   let vidId = hitVideo.getAttribute('data-video-id');
@@ -620,7 +691,7 @@
                       if (vidEl.paused) vidEl.play();
                       else vidEl.pause();
                   }
-                  return; // Ferma l'esecuzione qui per non cliccare altro
+                  return;
               }
 
               let hitSelector = intersects.find(el => el.classList && el.classList.contains('antenna-selector'));
@@ -818,6 +889,8 @@
             else if (this.triangState === 1) infoTextStr = "TRIANGOLAZIONE: RAGGIO 2\nSpostati, mira all'incrocio col CONTROLLER. (Joy DX: Annulla)";
             else if (this.triangState === 2) infoTextStr = "TRIANGOLAZIONE: PUNTO ACQUISITO\n[GRILLETTO] Piazza | Joy DX: Rifai R2 | Joy SX: Reset";
         }
+        else if (this.current.state === 'DRAW_RITAGLIO_PT1') infoTextStr = "PORTALE: Punta il muro e premi GRILLETTO per l'ANGOLO 1.\n(Premi Y sul controller SX per uscire)";
+        else if (this.current.state === 'DRAW_RITAGLIO_PT2') infoTextStr = "PORTALE: Trascina verso l'ANGOLO 2 e premi GRILLETTO per tagliare la finestra.";
         else if (is3D) {
             if (this.current.state === 'SIZE_ROTATE_3D') infoTextStr = "JOY SX (L/R e Su/Giu): Ruota Oggetto\nJOY DX (Su/Giu): Ingrandisci / Riduci\nGRILLETTO: Conferma Piazzamento";
             else if (this.assetLibrary.length > 0) infoTextStr = "LIBRERIA FILE MULTIMEDIALI PRONTA\nScegli l'oggetto e premi il grilletto a terra.\n(Punta un Video + Grilletto per Play/Pausa)";
@@ -1006,8 +1079,7 @@
 
           if (type === 'File Custom') {
               if (ant.pointA.base) {
-                  // --- MODIFICA 1: Mostra il pannello verde SOLO se l'oggetto è in fase di spostamento, NON a riposo ---
-                  if (isCurrent && ant.state !== 'IDLE') {
+                  if (isCurrent && ant.state !== 'IDLE' && !ant.state.startsWith('DRAW_RITAGLIO')) {
                       this.createBasePanel(ant.pointA.base, container);
                   }
                   
@@ -1018,7 +1090,60 @@
                       let asset = this.assetLibrary[ant.custom3D.assetIdx || 0];
                       if (!asset) asset = this.assetLibrary[0];
 
-                      if (asset.format === 'glb') {
+                      // --- LOGICA FOTO/VIDEO (PORTALI E SPESSORE) ---
+                      if (asset.format === 'image' || asset.format === 'video') {
+                          mediaEl = document.createElement('a-entity');
+                          let w = 1.0;
+                          let h = asset.aspect ? (1.0 / asset.aspect) : 1.0;
+                          let depthThickness = 0.03; // Effetto Quadro/TV spessore
+
+                          mediaEl.setAttribute('geometry', `primitive: box; width: ${w}; height: ${h}; depth: ${depthThickness}`);
+                          
+                          if (asset.format === 'video') {
+                              mediaEl.setAttribute('material', `src: ${asset.elementId}; shader: flat; color: #FFFFFF`);
+                              mediaEl.classList.add('clickable', 'video-toggle');
+                              mediaEl.setAttribute('data-video-id', asset.elementId);
+                              
+                              setTimeout(() => {
+                                  let v = document.querySelector(asset.elementId);
+                                  if (v && v.paused) v.play().catch(e => console.warn('Autoplay bloccato:', e));
+                              }, 100);
+                          } else {
+                              mediaEl.setAttribute('material', `src: ${asset.elementId}; shader: flat; transparent: false;`);
+                          }
+
+                          // Cornice posteriore spessa
+                          let frameEl = document.createElement('a-entity');
+                          frameEl.setAttribute('geometry', `primitive: box; width: ${w + 0.04}; height: ${h + 0.04}; depth: ${depthThickness - 0.01}`);
+                          frameEl.setAttribute('material', 'color: #222222; shader: flat; roughness: 0.9');
+                          frameEl.setAttribute('position', `0 0 -0.01`); 
+                          mediaEl.appendChild(frameEl);
+
+                          // --- MAGIA DEI RITAGLI (SOLO PER IMMAGINI/VIDEO) ---
+                          if (ant.ritagli && ant.ritagli.length > 0) {
+                              mediaEl.setAttribute('ritaglio-content', '');
+                              
+                              ant.ritagli.forEach((rit) => {
+                                  // Maschera invisibile (Crea il buco)
+                                  let maskEl = document.createElement('a-plane');
+                                  maskEl.setAttribute('width', rit.width);
+                                  maskEl.setAttribute('height', rit.height);
+                                  maskEl.setAttribute('position', `${rit.center.x} ${rit.center.y} ${rit.center.z + 0.05}`); 
+                                  maskEl.setAttribute('ritaglio-mask', '');
+                                  container.appendChild(maskEl);
+
+                                  // Bordo visibile del ritaglio (per capire dove abbiamo tagliato)
+                                  let bordo = document.createElement('a-plane');
+                                  bordo.setAttribute('width', rit.width);
+                                  bordo.setAttribute('height', rit.height);
+                                  bordo.setAttribute('position', `${rit.center.x} ${rit.center.y} ${rit.center.z + 0.05}`);
+                                  bordo.setAttribute('material', 'color: #00FFCC; wireframe: true; shader: flat;');
+                                  container.appendChild(bordo);
+                              });
+                          }
+                      } 
+                      // --- LOGICA MODELLI 3D (NESSUN PORTALE, NESSUNO STENCIL QUI) ---
+                      else if (asset.format === 'glb') {
                           mediaEl = document.createElement('a-entity');
                           mediaEl.setAttribute('gltf-model', asset.url);
                           mediaEl.setAttribute('animation-mixer', '');
@@ -1029,28 +1154,6 @@
                       } else if (asset.format === 'stl') {
                           mediaEl = document.createElement('a-entity');
                           mediaEl.setAttribute('stl-model', asset.url);
-                      } else if (asset.format === 'image' || asset.format === 'video') {
-                          mediaEl = document.createElement(asset.format === 'video' ? 'a-video' : 'a-plane');
-                          let w = 1.0;
-                          let h = asset.aspect ? (1.0 / asset.aspect) : 1.0;
-                          mediaEl.setAttribute('width', w);
-                          mediaEl.setAttribute('height', h);
-                          
-                          if (asset.format === 'video') {
-                              mediaEl.setAttribute('src', asset.elementId);
-                              // --- MODIFICA 3: transparent: false + Aggiunta classe per cliccare (Play/Pausa) ---
-                              mediaEl.setAttribute('material', 'shader: flat; side: double; transparent: false');
-                              mediaEl.classList.add('clickable', 'video-toggle');
-                              mediaEl.setAttribute('data-video-id', asset.elementId);
-                              
-                              setTimeout(() => {
-                                  let v = document.querySelector(asset.elementId);
-                                  if (v && v.paused) v.play().catch(e => console.warn('Autoplay bloccato:', e));
-                              }, 100);
-                          } else {
-                              // --- MODIFICA 3: alphaTest: 0.5 invece di transparent: true. Fixa le mani che scompaiono
-                              mediaEl.setAttribute('material', `src: ${asset.elementId}; shader: flat; transparent: false; alphaTest: 0.5; side: double`);
-                          }
                       }
 
                       // Auto-centratura solo per GLB e OBJ
@@ -1218,6 +1321,13 @@
                   this.refreshAll();
               }
           }
+          // --- TASTO PORTALE ---
+          else if (id === 'btn-draw-ritaglio') {
+              this.current.state = 'DRAW_RITAGLIO_PT1';
+              if(this.menuUI) this.menuUI.setAttribute('visible', false);
+              this.refreshAll();
+          }
+          // ---------------------
           else if (id === 'btn-tral-shape') { this.current.traliccio.shape = this.current.traliccio.shape === 'square' ? 'triangle' : 'square'; this.refreshAll(); }
           else if (id === 'btn-gw-new-tral') { let newAnchor = { type: 'traliccio', height: 3.0 }; this.current.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR'; this.updateGWUI(); this.refreshAll(); this.saveToStorage(); }
           else if (id === 'btn-gw-new-a') { let maxH = this.current.pointA.top.y - this.current.pointA.base.y; let newAnchor = { pole: 'A', height: maxH / 2, pegs: [] }; this.current.guyWiresData.push(newAnchor); this.activeAnchor = newAnchor; this.gwState = 'EDIT_COLLAR'; this.updateGWUI(); this.refreshAll(); this.saveToStorage(); }
@@ -1432,11 +1542,17 @@
             <a-text id="txt-band-val" value="-" align="center" scale="0.1 0.1 0.1" position="0 -0.008 0.005" color="#FFFFFF"></a-text>
           </a-plane>
 
+          <!-- MENU LIBRERIA FILE -->
           <a-entity id="sub-media" position="0 0.02 0" visible="false">
             <a-text value="LIBRERIA FILE (MODELLI 3D E IMMAGINI)" align="center" scale="0.065 0.065 0.065" color="#B0BEC5" position="0 0.03 0"></a-text>
             <a-plane id="btn-media-prev" class="clickable" btn-interaction width="0.1" height="0.03" color="#006064" position="-0.16 -0.01 0.01"><a-text value="< PREV" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
             <a-plane id="btn-media-next" class="clickable" btn-interaction width="0.1" height="0.03" color="#006064" position="0.16 -0.01 0.01"><a-text value="NEXT >" align="center" scale="0.06 0.06 0.06"></a-text></a-plane>
             <a-text id="txt-media-name" value="-" align="center" scale="0.07 0.07 0.07" position="0 -0.01 0.01" color="#FFEB3B"></a-text>
+            
+            <!-- TASTO PER DISEGNARE RITAGLI (PORTALI) -->
+            <a-plane id="btn-draw-ritaglio" class="clickable" btn-interaction width="0.32" height="0.025" color="#D81B60" position="0 -0.05 0.01">
+                <a-text value="DISEGNA RITAGLIO (PORTALE)" align="center" scale="0.055 0.055 0.055"></a-text>
+            </a-plane>
           </a-entity>
 
           <a-entity id="sub-dipolo" position="0 0.02 0" visible="false">
