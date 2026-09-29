@@ -9,8 +9,7 @@
       #ui-2d {
         position: absolute; top: 20px; left: 20px; z-index: 999;
         background: rgba(255, 255, 255, 0.95); padding: 20px;
-        border-radius: 10px; font-family: sans-serif;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px;
+        border-radius: 10px; font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px;
       }
       .btn-ui { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; }
     </style>
@@ -18,24 +17,18 @@
       window.userTexture = null;
 
       document.addEventListener('DOMContentLoaded', () => {
-        
-        // 1. Caricamento Foto
+        // GESTIONE IMMAGINE
         document.getElementById('file-upload').addEventListener('change', function(e) {
           const file = e.target.files[0];
           if (file) {
             const url = URL.createObjectURL(file);
-            document.getElementById('status-img').innerText = "Caricamento in corso...";
-            
+            document.getElementById('status-img').innerText = "Caricamento...";
             const img = new Image();
             img.onload = function() {
               const texture = new THREE.Texture(img);
-              texture.wrapS = THREE.RepeatWrapping; 
-              texture.wrapT = THREE.RepeatWrapping;
-              texture.minFilter = THREE.LinearFilter; 
-              texture.magFilter = THREE.LinearFilter;
-              texture.generateMipmaps = false;
-              texture.needsUpdate = true;
-              
+              texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
+              texture.minFilter = THREE.LinearFilter; texture.magFilter = THREE.LinearFilter;
+              texture.generateMipmaps = false; texture.needsUpdate = true;
               window.userTexture = texture;
               document.getElementById('status-img').innerText = "✅ Immagine pronta!";
             };
@@ -43,48 +36,52 @@
           }
         });
 
-        // 2. Connessione PC (Risolto il blocco infinito)
+        // RICEZIONE SCHERMO DAL PC (Logica Invertita)
         document.getElementById('btn-connetti-pc').addEventListener('click', () => {
           const btn = document.getElementById('btn-connetti-pc');
-          btn.innerText = "Ricerca PC in corso...";
+          btn.innerText = "Attivazione canale...";
           btn.style.background = "#FF9800";
           
-          const peerQuest = new Peer(); 
+          // Diamo al Quest il codice segreto fisso
+          const peerQuest = new Peer('quest-italia-pro-847291'); 
           
           peerQuest.on('open', () => {
-            // Usa lo stesso ID del file PC
-            const chiamata = peerQuest.call('schermo-quest-italia-8899', null);
+            btn.innerText = "⏳ In attesa del PC... (Apri il PC ora)";
+          });
+
+          // Quando il PC telefona, il Quest risponde e accende il monitor
+          peerQuest.on('call', call => {
+            call.answer(); // Risponde
             
-            chiamata.on('stream', flussoVideoRemoto => {
+            call.on('stream', flussoVideoRemoto => {
               const videoElemento = document.getElementById('video-pc-ricevuto');
               videoElemento.srcObject = flussoVideoRemoto;
               
+              // TENTA LA RIPRODUZIONE (muted assicura che funzioni!)
               videoElemento.play().then(() => {
                 btn.innerText = "✅ PC Connesso!";
                 btn.style.background = "#4CAF50";
-                
-                // Rende visibile il televisore virtuale solo quando arriva il video!
+                // Mostra il televisore AR
                 document.querySelector('#schermo-virtuale').setAttribute('visible', 'true');
               }).catch(e => {
-                console.error("Errore video:", e);
-                btn.innerText = "Errore di Riproduzione";
+                btn.innerText = "Errore Riproduzione. Riprova.";
+                console.error(e);
               });
             });
           });
 
           peerQuest.on('error', err => {
-            btn.innerText = "Nessun PC trovato! Apri la pagina dal PC.";
+            btn.innerText = "Errore Rete. Ricarica la pagina.";
             btn.style.background = "#F44336";
           });
         });
       });
 
+      // CORE AR (Piani, Mesh, Triplanar Mapping, Z-Fighting)
       AFRAME.registerComponent('gestore-spazio', {
         init: function () {
-          this.planes = new Map();
-          this.meshes = new Map();
-          this.meshVisibile = true;
-          this.usaImmagine = false;
+          this.planes = new Map(); this.meshes = new Map();
+          this.meshVisibile = true; this.usaImmagine = false;
           
           this.matWirePiani = new THREE.MeshBasicMaterial({ color: 0x00FF00, transparent: true, opacity: 0.6, side: THREE.DoubleSide, wireframe: true, polygonOffset: true, polygonOffsetFactor: 3, polygonOffsetUnits: 3 });
           this.matImgPiani = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.95, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 3, polygonOffsetUnits: 3 });
@@ -94,10 +91,8 @@
           document.querySelector('#btn-immagine').addEventListener('click', () => {
             if (window.userTexture) {
               this.usaImmagine = !this.usaImmagine;
-              this.matImgPiani.map = window.userTexture;
-              this.matImgMesh.map = window.userTexture;
-              this.matImgPiani.needsUpdate = true;
-              this.matImgMesh.needsUpdate = true;
+              this.matImgPiani.map = window.userTexture; this.matImgMesh.map = window.userTexture;
+              this.matImgPiani.needsUpdate = true; this.matImgMesh.needsUpdate = true;
               this.aggiornaMateriali();
               document.querySelector('#testo-btn-img').setAttribute('value', this.usaImmagine ? 'Rimetti Griglia' : 'Applica Immagine');
             }
@@ -105,22 +100,18 @@
         },
         toggleVisibilitaMesh: function() {
           this.meshVisibile = !this.meshVisibile;
-          const oGriglia = this.meshVisibile ? 0.6 : 0.0;
-          const oImg = this.meshVisibile ? 0.95 : 0.0;
-          this.matWirePiani.opacity = oGriglia; this.matWireMesh.opacity = oGriglia;
-          this.matImgPiani.opacity = oImg; this.matImgMesh.opacity = oImg;
+          const oG = this.meshVisibile ? 0.6 : 0.0; const oI = this.meshVisibile ? 0.95 : 0.0;
+          this.matWirePiani.opacity = oG; this.matWireMesh.opacity = oG;
+          this.matImgPiani.opacity = oI; this.matImgMesh.opacity = oI;
         },
         aggiornaMateriali: function() {
           this.planes.forEach(d => { d.entity.getObject3D('mesh').material = this.usaImmagine ? this.matImgPiani : this.matWirePiani; });
           this.meshes.forEach(d => { d.entity.getObject3D('mesh').material = this.usaImmagine ? this.matImgMesh : this.matWireMesh; });
         },
         tick: function () {
-          const renderer = this.el.sceneEl.renderer;
-          if (!renderer.xr.isPresenting) return;
-          const frame = this.el.sceneEl.frame;
-          if (!frame) return;
-          const refSpace = renderer.xr.getReferenceSpace();
-          if (!refSpace) return;
+          const renderer = this.el.sceneEl.renderer; if (!renderer.xr.isPresenting) return;
+          const frame = this.el.sceneEl.frame; if (!frame) return;
+          const refSpace = renderer.xr.getReferenceSpace(); if (!refSpace) return;
 
           if (frame.detectedPlanes) {
             frame.detectedPlanes.forEach(plane => {
@@ -163,22 +154,19 @@
           const mesh = new THREE.Mesh(geometry, materiale);
           entity.setObject3D('mesh', mesh);
           entity.object3D.matrixAutoUpdate = false;
-          this.el.sceneEl.appendChild(entity);
-          return entity;
+          this.el.sceneEl.appendChild(entity); return entity;
         },
         applicaUVScalate: function(geometry) {
           geometry.computeVertexNormals();
-          const pos = geometry.attributes.position;
-          const norm = geometry.attributes.normal;
+          const pos = geometry.attributes.position, norm = geometry.attributes.normal;
           const uvs = new Float32Array(pos.count * 2);
-          const grandezzaMetri = 4.0;
-
+          const GM = 4.0;
           for (let i = 0; i < pos.count; i++) {
             const nx = Math.abs(norm.getX(i)), ny = Math.abs(norm.getY(i)), nz = Math.abs(norm.getZ(i));
             const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-            if (ny >= nx && ny >= nz) { uvs[i*2] = x / grandezzaMetri; uvs[i*2+1] = z / grandezzaMetri; } 
-            else if (nx >= ny && nx >= nz) { uvs[i*2] = z / grandezzaMetri; uvs[i*2+1] = y / grandezzaMetri; } 
-            else { uvs[i*2] = x / grandezzaMetri; uvs[i*2+1] = y / grandezzaMetri; }
+            if (ny >= nx && ny >= nz) { uvs[i*2] = x/GM; uvs[i*2+1] = z/GM; } 
+            else if (nx >= ny && nx >= nz) { uvs[i*2] = z/GM; uvs[i*2+1] = y/GM; } 
+            else { uvs[i*2] = x/GM; uvs[i*2+1] = y/GM; }
           }
           geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
         },
@@ -188,8 +176,7 @@
             shape.moveTo(plane.polygon[0].x, plane.polygon[0].z);
             for (let i = 1; i < plane.polygon.length; i++) shape.lineTo(plane.polygon[i].x, plane.polygon[i].z);
           }
-          const geometry = new THREE.ShapeGeometry(shape);
-          geometry.rotateX(Math.PI / 2); this.applicaUVScalate(geometry); return geometry;
+          const geometry = new THREE.ShapeGeometry(shape); geometry.rotateX(Math.PI / 2); this.applicaUVScalate(geometry); return geometry;
         },
         createMeshGeometry: function(xrMesh) {
           const geometry = new THREE.BufferGeometry();
@@ -199,40 +186,34 @@
         }
       });
 
+      // BOLLA MAGICA
       AFRAME.registerComponent('strumento-buco', {
         init: function () {
-          this.bollaAttiva = null;
-          this.azione = null;
+          this.bollaAttiva = null; this.azione = null;
           this.geomSfera = new THREE.SphereGeometry(1, 32, 32);
           this.matBuco = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true });
 
           this.el.addEventListener('triggerdown', () => {
             const hit = this.el.components.raycaster.intersections[0];
             if (!hit) return;
-
             if (hit.object.el && hit.object.el.classList.contains('bolla-buco')) {
-              this.bollaAttiva = hit.object.el.object3D;
-              this.azione = 'cresce';
+              this.bollaAttiva = hit.object.el.object3D; this.azione = 'cresce';
             } else if (hit.object.el && hit.object.el.classList.contains('superficie')) {
               const bollaEl = document.createElement('a-entity');
               bollaEl.classList.add('bolla-buco');
               const mesh = new THREE.Mesh(this.geomSfera, this.matBuco);
               mesh.renderOrder = -1;
               bollaEl.setObject3D('mesh', mesh);
-              bollaEl.object3D.position.copy(hit.point);
-              bollaEl.object3D.scale.set(0.05, 0.05, 0.05);
+              bollaEl.object3D.position.copy(hit.point); bollaEl.object3D.scale.set(0.05, 0.05, 0.05);
               this.el.sceneEl.appendChild(bollaEl);
-              this.bollaAttiva = bollaEl.object3D;
-              this.azione = 'cresce';
+              this.bollaAttiva = bollaEl.object3D; this.azione = 'cresce';
             }
           });
           this.el.addEventListener('triggerup', () => { this.bollaAttiva = null; });
-
           this.el.addEventListener('gripdown', () => {
             const hit = this.el.components.raycaster.intersections[0];
             if (hit && hit.object.el && hit.object.el.classList.contains('bolla-buco')) {
-              this.bollaAttiva = hit.object.el.object3D;
-              this.azione = 'riduce';
+              this.bollaAttiva = hit.object.el.object3D; this.azione = 'riduce';
             }
           });
           this.el.addEventListener('gripup', () => { this.bollaAttiva = null; });
@@ -246,9 +227,7 @@
             } else if (this.azione === 'riduce') {
               this.bollaAttiva.scale.subScalar(velocita);
               if (this.bollaAttiva.scale.x <= 0.02) {
-                const entita = this.bollaAttiva.el;
-                entita.parentNode.removeChild(entita);
-                this.bollaAttiva = null;
+                const entita = this.bollaAttiva.el; entita.parentNode.removeChild(entita); this.bollaAttiva = null;
               }
             }
           }
@@ -259,10 +238,8 @@
         init: function () {
           this.el.addEventListener('abuttondown', () => this.attivaToggleMesh());
           this.el.addEventListener('xbuttondown', () => this.attivaToggleMesh());
-          
           this.el.addEventListener('ybuttondown', () => {
             const pannello = document.querySelector('#pannello-ar');
-            // RISOLTO IL PROBLEMA DELLA SCRITTA: object3D.visible fa sparire TUTTO infallibilmente
             if (pannello) pannello.object3D.visible = !pannello.object3D.visible;
           });
         },
@@ -275,7 +252,7 @@
   </head>
   <body>
 
-    <!-- UI 2D PRIMA DELL'AR -->
+    <!-- UI 2D -->
     <div id="ui-2d">
       <h3 style="margin-top:0;">1. Foto Stanza (4 Metri)</h3>
       <input type="file" id="file-upload" accept="image/*" style="width:100%">
@@ -284,25 +261,23 @@
       <hr style="margin: 15px 0;">
       
       <h3 style="margin-top:0;">2. Schermo PC</h3>
-      <button id="btn-connetti-pc" class="btn-ui" style="background: #2196F3;">Connetti al PC</button>
-      
-      <p style="font-size:12px; color:#555; margin-bottom:0;">Assicurati che il PC stia trasmettendo tramite il suo link GitHub prima di cliccare.</p>
+      <button id="btn-connetti-pc" class="btn-ui" style="background: #2196F3;">1. Apri Canale Ricezione</button>
     </div>
 
     <!-- SCENA AR -->
     <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" gestore-spazio>
       
       <a-assets>
-        <video id="video-pc-ricevuto" autoplay playsinline crossorigin="anonymous"></video>
+        <!-- AGGIUNTO MUTED: Fondamentale per far partire il video in automatico -->
+        <video id="video-pc-ricevuto" autoplay muted playsinline crossorigin="anonymous"></video>
       </a-assets>
 
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
 
-      <!-- CONTROLLER -->
       <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .interfaccia, .superficie, .bolla-buco; far: 10;" controlli-base strumento-buco></a-entity>
       <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .interfaccia, .superficie, .bolla-buco; far: 10;" controlli-base strumento-buco></a-entity>
 
-      <!-- MONITOR VIRTUALE (Inizialmente invisibile) -->
+      <!-- MONITOR VIRTUALE (Si accende da solo all'arrivo del segnale) -->
       <a-video id="schermo-virtuale" src="#video-pc-ricevuto" width="1.6" height="0.9" position="0 1.2 -2.5" class="superficie" visible="false"></a-video>
 
       <!-- PANNELLO AR FLUTTUANTE -->
