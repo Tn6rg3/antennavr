@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio - Bolla e Texture</title>
+    <title>AR Studio - Effetto Coperta</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <style>
       #ui-2d {
@@ -25,9 +25,16 @@
             const img = new Image();
             img.onload = function() {
               const texture = new THREE.Texture(img);
-              texture.wrapS = THREE.ClampToEdgeWrapping; // Forza a non ripetersi mai
-              texture.wrapT = THREE.ClampToEdgeWrapping;
-              texture.minFilter = THREE.LinearFilter;
+              
+              // TORNATO A REPEAT: ma ora funziona senza sfarfallare.
+              // Questo permette all'immagine di ripetersi se il muro è enorme.
+              texture.wrapS = THREE.RepeatWrapping; 
+              texture.wrapT = THREE.RepeatWrapping;
+              
+              // Il LinearFilter permette di ripetere foto anche se non hanno proporzioni quadrate
+              texture.minFilter = THREE.LinearFilter; 
+              texture.magFilter = THREE.LinearFilter;
+              texture.generateMipmaps = false;
               texture.needsUpdate = true;
               
               window.userTexture = texture;
@@ -45,7 +52,6 @@
           this.meshVisibile = true;
           this.usaImmagine = false;
           
-          // Aggiunto polygonOffset per evitare lo sfarfallio (Z-fighting)
           this.matWireframe = new THREE.MeshBasicMaterial({
             color: 0x00FF00, transparent: true, opacity: 0.6,
             side: THREE.DoubleSide, wireframe: true,
@@ -140,7 +146,8 @@
           return entity;
         },
 
-        applicaUVEspanse: function(geometry) {
+        // NUOVA LOGICA: EFFETTO COPERTA (World-Scale UVs)
+        applicaUVScalate: function(geometry) {
           geometry.computeBoundingBox();
           const box = geometry.boundingBox;
           if (!box) return;
@@ -152,27 +159,36 @@
           const sizeY = box.max.y - box.min.y;
           const sizeZ = box.max.z - box.min.z;
 
+          // FATTORE DI SCALA: Quanto deve essere grande fisicamente un'immagine?
+          // 1.5 significa che ogni copia della tua foto coprirà 1 metro e mezzo di spazio reale.
+          // Se la superficie è enorme, l'immagine si ripeterà automaticamente
+          const grandezzaImmagineMetri = 1.5; 
+
           for (let i = 0; i < pos.count; i++) {
             const x = pos.getX(i);
             const y = pos.getY(i);
             const z = pos.getZ(i);
 
             let u = 0, v = 0;
-            if (sizeY < 0.1) {
-              u = sizeX > 0 ? (x - box.min.x) / sizeX : 0;
-              v = sizeZ > 0 ? (z - box.min.z) / sizeZ : 0;
+            
+            // Usiamo direttamente le coordinate spaziali reali in metri (x, y, z)
+            // in modo che non ci siano MAI deformazioni o stiramenti
+            if (sizeY < 0.2) {
+              // Superfici orizzontali (pavimenti, tavoli)
+              u = x / grandezzaImmagineMetri;
+              v = z / grandezzaImmagineMetri;
             } else {
-              const orizzontale = sizeX > sizeZ ? sizeX : sizeZ;
-              const asseOrizzontale = sizeX > sizeZ ? x : z;
-              const minOrizzontale = sizeX > sizeZ ? box.min.x : box.min.z;
-
-              u = orizzontale > 0 ? (asseOrizzontale - minOrizzontale) / orizzontale : 0;
-              v = sizeY > 0 ? (y - box.min.y) / sizeY : 0;
+              // Superfici verticali (muri, armadi)
+              if (sizeX > sizeZ) {
+                u = x / grandezzaImmagineMetri;
+              } else {
+                u = z / grandezzaImmagineMetri;
+              }
+              v = y / grandezzaImmagineMetri;
             }
 
-            // BLOCCO DI SICUREZZA: Impossibile sforare il range 0.0 - 1.0 (Niente più ripetizioni)
-            uvs[i * 2] = Math.max(0, Math.min(1, u));
-            uvs[i * 2 + 1] = Math.max(0, Math.min(1, v));
+            uvs[i * 2] = u;
+            uvs[i * 2 + 1] = v;
           }
           
           geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
@@ -186,7 +202,7 @@
           }
           const geometry = new THREE.ShapeGeometry(shape);
           geometry.rotateX(Math.PI / 2); 
-          this.applicaUVEspanse(geometry); 
+          this.applicaUVScalate(geometry); 
           return geometry;
         },
 
@@ -195,19 +211,17 @@
           geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(xrMesh.vertices), 3));
           geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(xrMesh.indices), 1));
           geometry.computeVertexNormals();
-          this.applicaUVEspanse(geometry); 
+          this.applicaUVScalate(geometry); 
           return geometry;
         }
       });
 
-      // COMPONENTE PER LA CREAZIONE DELLA "BOLLA / BUCO"
+      // LA BOLLA MAGICA CHE CANCELLA LA TEXTURE
       AFRAME.registerComponent('strumento-buco', {
         init: function () {
           this.bollaCorrente = null;
           this.geomSfera = new THREE.SphereGeometry(1, 32, 32);
           
-          // Questo è il materiale "Magico". colorWrite=false e depthWrite=true 
-          // significa che è invisibile ma cancella la mesh dietro di sé!
           this.matBuco = new THREE.MeshBasicMaterial({
             colorWrite: false,
             depthWrite: true
@@ -217,12 +231,11 @@
             const raycaster = this.el.components.raycaster;
             const hit = raycaster.intersections[0];
             
-            // Se miriamo alla mesh (superficie), creiamo la bolla iniziale
             if (hit && hit.object.el && hit.object.el.classList.contains('superficie')) {
               const bolla = new THREE.Mesh(this.geomSfera, this.matBuco);
               bolla.position.copy(hit.point);
-              bolla.scale.set(0.05, 0.05, 0.05); // Inizia piccola (5 cm)
-              bolla.renderOrder = -1; // Ordine di rendering speciale: viene disegnata PRIMA della mesh
+              bolla.scale.set(0.05, 0.05, 0.05);
+              bolla.renderOrder = -1; // Disegna la bolla prima della mesh
               
               this.el.sceneEl.object3D.add(bolla);
               this.bollaCorrente = bolla;
@@ -230,18 +243,15 @@
           });
 
           this.el.addEventListener('triggerup', () => {
-            // Quando lasci il grilletto, smettiamo di farla crescere e rimane lì fissa
             this.bollaCorrente = null; 
           });
         },
 
         tick: function (time, delta) {
-          // Finché tieni premuto il grilletto, la bolla cresce
           if (this.bollaCorrente) {
-            const crescita = (0.5 * delta) / 1000; // Cresce di mezzo metro al secondo
+            const crescita = (0.5 * delta) / 1000;
             this.bollaCorrente.scale.addScalar(crescita);
             
-            // Limite massimo per non coprire tutto il mondo (raggio 1.5 metri max)
             if (this.bollaCorrente.scale.x > 1.5) {
               this.bollaCorrente.scale.set(1.5, 1.5, 1.5);
             }
@@ -249,14 +259,12 @@
         }
       });
 
-      // CONTROLLO TASTI (Nascondi Mesh e Nascondi Pannello)
+      // CONTROLLO TASTI (A, X e Y)
       AFRAME.registerComponent('controlli-base', {
         init: function () {
-          // Tasto A o X per nascondere/mostrare la mesh
           this.el.addEventListener('abuttondown', () => this.attivaToggleMesh());
           this.el.addEventListener('xbuttondown', () => this.attivaToggleMesh());
           
-          // Tasto Y per nascondere/mostrare il pannello UI dell'immagine
           this.el.addEventListener('ybuttondown', () => {
             const pannello = document.querySelector('#pannello-ar');
             if (pannello) {
@@ -284,14 +292,12 @@
     <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" gestore-spazio>
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
 
-      <!-- Controller Destro e Sinistro con il nuovo strumento per fare i buchi -->
       <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .interfaccia, .superficie; far: 10;" controlli-base strumento-buco></a-entity>
       <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .interfaccia, .superficie; far: 10;" controlli-base strumento-buco></a-entity>
 
-      <!-- PANNELLO AR (Raccolto in un'entità per essere nascosto con Y) -->
+      <!-- PANNELLO AR (Mostra/Nascondi con tasto Y) -->
       <a-entity id="pannello-ar" position="0 1.2 -1.5">
         <a-text value="Menu AR (Nascondi con Y)" align="center" position="0 0.4 0" color="#FFFFFF" scale="0.7 0.7 0.7"></a-text>
-        
         <a-entity id="btn-immagine" class="interfaccia" geometry="primitive: plane; width: 1.2; height: 0.3" material="color: #4CAF50" position="0 0.1 0">
           <a-text id="testo-btn-img" value="Applica Immagine" align="center" color="#FFF" z-offset="0.01"></a-text>
         </a-entity>
