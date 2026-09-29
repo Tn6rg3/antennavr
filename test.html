@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Texture, Bolle e PC</title>
+    <title>AR Studio Pro - Definitivo</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <style>
@@ -17,7 +17,6 @@
     <script>
       window.userTexture = null;
 
-      // GESTIONE INTERFACCIA 2D (Foto + Connessione PC)
       document.addEventListener('DOMContentLoaded', () => {
         
         // 1. Caricamento Foto
@@ -44,15 +43,17 @@
           }
         });
 
-        // 2. Connessione PC (WebRTC)
+        // 2. Connessione PC (Risolto il blocco infinito)
         document.getElementById('btn-connetti-pc').addEventListener('click', () => {
           const btn = document.getElementById('btn-connetti-pc');
-          btn.innerText = "Connessione in corso...";
+          btn.innerText = "Ricerca PC in corso...";
           btn.style.background = "#FF9800";
           
           const peerQuest = new Peer(); 
+          
           peerQuest.on('open', () => {
-            const chiamata = peerQuest.call('schermo-quest-secreto-123', null);
+            // Usa lo stesso ID del file PC
+            const chiamata = peerQuest.call('schermo-quest-italia-8899', null);
             
             chiamata.on('stream', flussoVideoRemoto => {
               const videoElemento = document.getElementById('video-pc-ricevuto');
@@ -61,13 +62,23 @@
               videoElemento.play().then(() => {
                 btn.innerText = "✅ PC Connesso!";
                 btn.style.background = "#4CAF50";
-              }).catch(e => console.error("Errore video:", e));
+                
+                // Rende visibile il televisore virtuale solo quando arriva il video!
+                document.querySelector('#schermo-virtuale').setAttribute('visible', 'true');
+              }).catch(e => {
+                console.error("Errore video:", e);
+                btn.innerText = "Errore di Riproduzione";
+              });
             });
+          });
+
+          peerQuest.on('error', err => {
+            btn.innerText = "Nessun PC trovato! Apri la pagina dal PC.";
+            btn.style.background = "#F44336";
           });
         });
       });
 
-      // GESTORE SPAZIO (Mesh, Texture e Muri)
       AFRAME.registerComponent('gestore-spazio', {
         init: function () {
           this.planes = new Map();
@@ -92,7 +103,6 @@
             }
           });
         },
-
         toggleVisibilitaMesh: function() {
           this.meshVisibile = !this.meshVisibile;
           const oGriglia = this.meshVisibile ? 0.6 : 0.0;
@@ -100,12 +110,10 @@
           this.matWirePiani.opacity = oGriglia; this.matWireMesh.opacity = oGriglia;
           this.matImgPiani.opacity = oImg; this.matImgMesh.opacity = oImg;
         },
-
         aggiornaMateriali: function() {
           this.planes.forEach(d => { d.entity.getObject3D('mesh').material = this.usaImmagine ? this.matImgPiani : this.matWirePiani; });
           this.meshes.forEach(d => { d.entity.getObject3D('mesh').material = this.usaImmagine ? this.matImgMesh : this.matWireMesh; });
         },
-
         tick: function () {
           const renderer = this.el.sceneEl.renderer;
           if (!renderer.xr.isPresenting) return;
@@ -131,7 +139,6 @@
               if (pose) pData.entity.object3D.matrix.fromArray(pose.transform.matrix);
             });
           }
-
           if (frame.detectedMeshes) {
             frame.detectedMeshes.forEach(xrMesh => {
               let mData = this.meshes.get(xrMesh);
@@ -150,7 +157,6 @@
             });
           }
         },
-
         creaEntitaSuperficie: function(geometry, materiale) {
           const entity = document.createElement('a-entity');
           entity.classList.add('superficie'); 
@@ -160,25 +166,22 @@
           this.el.sceneEl.appendChild(entity);
           return entity;
         },
-
         applicaUVScalate: function(geometry) {
           geometry.computeVertexNormals();
           const pos = geometry.attributes.position;
           const norm = geometry.attributes.normal;
           const uvs = new Float32Array(pos.count * 2);
-          const grandezzaMetri = 4.0; // Scala 4 Metri
+          const grandezzaMetri = 4.0;
 
           for (let i = 0; i < pos.count; i++) {
             const nx = Math.abs(norm.getX(i)), ny = Math.abs(norm.getY(i)), nz = Math.abs(norm.getZ(i));
             const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-
             if (ny >= nx && ny >= nz) { uvs[i*2] = x / grandezzaMetri; uvs[i*2+1] = z / grandezzaMetri; } 
             else if (nx >= ny && nx >= nz) { uvs[i*2] = z / grandezzaMetri; uvs[i*2+1] = y / grandezzaMetri; } 
             else { uvs[i*2] = x / grandezzaMetri; uvs[i*2+1] = y / grandezzaMetri; }
           }
           geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
         },
-
         createPlaneGeometry: function(plane) {
           const shape = new THREE.Shape();
           if (plane.polygon.length > 0) {
@@ -196,7 +199,6 @@
         }
       });
 
-      // STRUMENTO BOLLA (Eraser)
       AFRAME.registerComponent('strumento-buco', {
         init: function () {
           this.bollaAttiva = null;
@@ -253,14 +255,15 @@
         }
       });
 
-      // CONTROLLI BOTTONI
       AFRAME.registerComponent('controlli-base', {
         init: function () {
           this.el.addEventListener('abuttondown', () => this.attivaToggleMesh());
           this.el.addEventListener('xbuttondown', () => this.attivaToggleMesh());
+          
           this.el.addEventListener('ybuttondown', () => {
             const pannello = document.querySelector('#pannello-ar');
-            if (pannello) pannello.setAttribute('visible', !pannello.getAttribute('visible'));
+            // RISOLTO IL PROBLEMA DELLA SCRITTA: object3D.visible fa sparire TUTTO infallibilmente
+            if (pannello) pannello.object3D.visible = !pannello.object3D.visible;
           });
         },
         attivaToggleMesh: function() {
@@ -283,14 +286,13 @@
       <h3 style="margin-top:0;">2. Schermo PC</h3>
       <button id="btn-connetti-pc" class="btn-ui" style="background: #2196F3;">Connetti al PC</button>
       
-      <p style="font-size:12px; color:#555; margin-bottom:0;">Entra in AR solo dopo aver fatto questi passaggi.</p>
+      <p style="font-size:12px; color:#555; margin-bottom:0;">Assicurati che il PC stia trasmettendo tramite il suo link GitHub prima di cliccare.</p>
     </div>
 
     <!-- SCENA AR -->
     <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" gestore-spazio>
       
       <a-assets>
-        <!-- Elemento video invisibile che riceve lo stream dal PC -->
         <video id="video-pc-ricevuto" autoplay playsinline crossorigin="anonymous"></video>
       </a-assets>
 
@@ -300,9 +302,8 @@
       <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .interfaccia, .superficie, .bolla-buco; far: 10;" controlli-base strumento-buco></a-entity>
       <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .interfaccia, .superficie, .bolla-buco; far: 10;" controlli-base strumento-buco></a-entity>
 
-      <!-- MONITOR VIRTUALE DEL PC -->
-      <!-- Usa la classe .superficie così puoi bucarlo con le bolle come fosse un muro! -->
-      <a-video src="#video-pc-ricevuto" width="1.6" height="0.9" position="0 1.2 -2.5" class="superficie"></a-video>
+      <!-- MONITOR VIRTUALE (Inizialmente invisibile) -->
+      <a-video id="schermo-virtuale" src="#video-pc-ricevuto" width="1.6" height="0.9" position="0 1.2 -2.5" class="superficie" visible="false"></a-video>
 
       <!-- PANNELLO AR FLUTTUANTE -->
       <a-entity id="pannello-ar" position="0 1.2 -1.5">
