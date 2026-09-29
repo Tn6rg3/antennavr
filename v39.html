@@ -109,6 +109,7 @@
                 this.initPersistentElements(); this.setupGlobalEventDelegation(); this.setupMmanaFileLoader();
                 window.saveAntennaToDB = this.saveAntennaToDB.bind(this); window.loadAntennaFromDB = this.loadAntennaFromDB.bind(this); window.deleteAntennaFromDB = this.deleteAntennaFromDB.bind(this);
                 this.refreshDBList(); this.loadFromStorage();
+                if (this.menuUI) this.menuUI.setAttribute('visible', true);
                 this.updateLaserVisibility();
             } catch (error) { console.error("Errore inizializzazione:", error); }
           },
@@ -582,6 +583,9 @@
                             if (pose) {
                                 currentWorldPos = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
                             }
+                        }
+                        if (!currentWorldPos && pData.worldPos) {
+                            currentWorldPos = pData.worldPos;
                         }
 
                         if (currentWorldPos && pData.panelEl && pData.panelEl.object3D) {
@@ -1341,14 +1345,14 @@
     <input type="file" id="file-mmana" accept=".maa">
 </div>
 
-<!-- CONFIGURAZIONE WEBXR PER ANCORAGGIO PARI AI PANNELLI DI SISTEMA META QUEST 3 -->
-<a-scene webxr="referenceSpaceType: local-floor; requiredFeatures: local-floor; optionalFeatures: hit-test, anchors, spatial-tracking;" vr-mode-ui="enabled: true">
+<!-- CONFIGURAZIONE WEBXR PER ANCORAGGIO E COMPATIBILITA' BROWSER -->
+<a-scene webxr="referenceSpaceType: local-floor; optionalFeatures: local-floor, hit-test, anchors, spatial-tracking;" vr-mode-ui="enabled: true">
 
-    <a-entity id="cameraRig" position="0 0 0">
-        <a-camera id="camera" position="0 0 0" look-controls="enabled: true; touchEnabled: false"></a-camera>
+    <a-entity id="cameraRig">
+        <a-camera id="camera" position="0 1.6 0" look-controls="enabled: true; touchEnabled: false"></a-camera>
 
         <a-entity id="left-controller" oculus-touch-controls="hand: left">
-            <a-entity id="menu-ui" visible="false" position="0 0.15 -0.45" rotation="-30 0 0">
+            <a-entity id="menu-ui" visible="true" position="0 0.15 -0.45" rotation="-30 0 0">
                 <a-plane width="0.55" height="0.95" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
 
                 <a-text value="CONFIGURATORE ANTENNE PRO V38" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
