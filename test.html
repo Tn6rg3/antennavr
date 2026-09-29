@@ -2,67 +2,62 @@
 <html>
   <head>
     <meta charset="utf-8">
-  
-    <title>Stanza Verde AR - Mesh Esatta</title>
+    <title>Stanza Verde AR - Piani + Mesh</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script>
-      AFRAME.registerComponent('colora-mesh-verde', {
+      AFRAME.registerComponent('scanner-verde', {
         init: function () {
+          // Teniamo traccia sia dei piani che delle mesh
+          this.planes = new Map();
           this.meshes = new Map();
           
-          // Materiale verde per la mesh. 
-          // Consiglio: cambia wireframe in 'true' se vuoi vedere la griglia stile Matrix
+          // Materiale Stile "Matrix" / Cyberpunk
           this.material = new THREE.MeshBasicMaterial({
-            color: 0x00FF00,
+            color: 0x00FF00, // Verde brillante
             transparent: true,
-            opacity: 0.4,
+            opacity: 0.6,
             side: THREE.DoubleSide,
-            wireframe: false 
-          });
-
-          this.warningText = document.querySelector('#avviso-stanza');
-          this.checkTimer = null;
-
-          this.el.sceneEl.addEventListener('enter-vr', () => {
-            if (this.el.sceneEl.is('ar-mode')) {
-              this.checkTimer = setTimeout(() => {
-                if (this.meshes.size === 0) {
-                  this.warningText.setAttribute('visible', 'true');
-                }
-              }, 4000); // Aspettiamo 4 secondi, la mesh è più pesante da caricare
-            }
-          });
-
-          this.el.sceneEl.addEventListener('exit-vr', () => {
-            clearTimeout(this.checkTimer);
-            this.warningText.setAttribute('visible', 'false');
+            wireframe: true // Modifica in 'false' per riavere i pannelli solidi semi-trasparenti
           });
         },
 
-       tick: function () {
+        tick: function () {
           const renderer = this.el.sceneEl.renderer;
           if (!renderer.xr.isPresenting) return;
 
           const frame = this.el.sceneEl.frame;
           if (!frame) return;
 
-          // Diagnostica: controlliamo se l'API esiste nel browser
-          if (frame.detectedMeshes === undefined) {
-             this.warningText.setAttribute('value', 'Errore: API Mesh non supportata.\nAssicurati che WebXR Incubations sia Enabled in chrome://flags');
-             return;
-          }
-
           const refSpace = renderer.xr.getReferenceSpace();
           if (!refSpace) return;
 
-          if (frame.detectedMeshes) {
-            // Se troviamo la mesh, nascondiamo l'avviso
-            if (frame.detectedMeshes.size > 0) {
-                 this.warningText.setAttribute('visible', 'false');
-            }
+          // 1. GESTIONE DEI PIANI (Muri, Pavimento, Soffitto)
+          if (frame.detectedPlanes) {
+            frame.detectedPlanes.forEach(plane => {
+              let planeData = this.planes.get(plane);
 
+              if (!planeData) {
+                const geometry = this.createPlaneGeometry(plane);
+                const mesh = new THREE.Mesh(geometry, this.material);
+                mesh.matrixAutoUpdate = false;
+                this.el.object3D.add(mesh);
+                
+                planeData = { mesh: mesh, lastTime: plane.lastChangedTime };
+                this.planes.set(plane, planeData);
+              } else if (plane.lastChangedTime > planeData.lastTime) {
+                planeData.mesh.geometry.dispose();
+                planeData.mesh.geometry = this.createPlaneGeometry(plane);
+                planeData.lastTime = plane.lastChangedTime;
+              }
+              
+              const pose = frame.getPose(plane.planeSpace, refSpace);
+              if (pose) planeData.mesh.matrix.fromArray(pose.transform.matrix);
+            });
+          }
+
+          // 2. GESTIONE DELLE MESH (Mobili, oggetti complessi)
+          if (frame.detectedMeshes) {
             frame.detectedMeshes.forEach(xrMesh => {
-              // ... qui rimane il codice precedente per creare la geometria ...
               let meshData = this.meshes.get(xrMesh);
 
               if (!meshData) {
@@ -73,34 +68,40 @@
                 
                 meshData = { mesh: threeMesh, lastTime: xrMesh.lastChangedTime };
                 this.meshes.set(xrMesh, meshData);
-              } 
-              else if (xrMesh.lastChangedTime > meshData.lastTime) {
+              } else if (xrMesh.lastChangedTime > meshData.lastTime) {
                 meshData.mesh.geometry.dispose();
                 meshData.mesh.geometry = this.createMeshGeometry(xrMesh);
                 meshData.lastTime = xrMesh.lastChangedTime;
               }
               
               const pose = frame.getPose(xrMesh.meshSpace, refSpace);
-              if (pose) {
-                meshData.mesh.matrix.fromArray(pose.transform.matrix);
-              }
+              if (pose) meshData.mesh.matrix.fromArray(pose.transform.matrix);
             });
           }
         },
 
-        // Converte i dati grezzi della scansione del Quest in una vera forma 3D Three.js
+        // Geometria per i Piani 2D
+        createPlaneGeometry: function(plane) {
+          const shape = new THREE.Shape();
+          if (plane.polygon.length > 0) {
+            shape.moveTo(plane.polygon[0].x, plane.polygon[0].z);
+            for (let i = 1; i < plane.polygon.length; i++) {
+              shape.lineTo(plane.polygon[i].x, plane.polygon[i].z);
+            }
+          }
+          const geometry = new THREE.ShapeGeometry(shape);
+          geometry.rotateX(Math.PI / 2); 
+          return geometry;
+        },
+
+        // Geometria per le Mesh 3D
         createMeshGeometry: function(xrMesh) {
           const geometry = new THREE.BufferGeometry();
-          
-          // I vertici (punti nello spazio)
           const vertices = new Float32Array(xrMesh.vertices);
-          // Gli indici (come i punti si collegano per formare triangoli)
           const indices = new Uint32Array(xrMesh.indices);
           
           geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
           geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-          
-          // Calcola le normali per permettere alla luce di riflettere (utile se aggiungi luci)
           geometry.computeVertexNormals();
           return geometry;
         }
@@ -108,22 +109,12 @@
     </script>
   </head>
   <body>
-    <!-- Richiediamo 'mesh' per avere la topologia 3D esatta -->
-<a-scene 
-  webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, mesh, mesh-detection, plane-detection;" 
-  colora-mesh-verde>      
+    <!-- Richiediamo TUTTE le funzionalità spaziali per coprire ogni elemento della stanza -->
+    <a-scene 
+      webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" 
+      scanner-verde>
+      
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
-
-      <a-entity id="avviso-stanza" visible="false" position="0 1.5 -1.5">
-        <a-plane color="#000" opacity="0.8" width="2" height="0.6" position="0 0 -0.01"></a-plane>
-        <a-text 
-          value="Nessuna Mesh trovata!\n\n1. Controlla di aver scansionato la stanza\n2. Consenti la condivisione dei Dati Spaziali quando il browser te lo chiede" 
-          align="center" 
-          color="#FF3333" 
-          width="4">
-        </a-text>
-      </a-entity>
-
     </a-scene>
   </body>
 </html>
