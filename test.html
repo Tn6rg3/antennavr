@@ -23,7 +23,12 @@
             document.getElementById('status').innerText = "Caricamento in corso...";
             
             new THREE.TextureLoader().load(url, function(texture) {
-              // RIMOSSO IL REPEAT: Ora l'immagine si spalmerà (ClampToEdge è il default)
+              // RISOLUZIONE PROBLEMA IMMAGINE:
+              // Disattiviamo i mipmaps per permettere foto di QUALSIASI dimensione (non solo potenze di 2)
+              texture.generateMipmaps = false;
+              texture.minFilter = THREE.LinearFilter;
+              texture.magFilter = THREE.LinearFilter;
+              
               window.userTexture = texture;
               document.getElementById('status').innerText = "✅ Immagine pronta! Entra in AR.";
             });
@@ -61,7 +66,7 @@
                 document.querySelector('#testo-btn-img').setAttribute('value', 'Applica Immagine');
               }
             } else {
-              document.querySelector('#testo-btn-img').setAttribute('value', 'Carica file dal PC prima!');
+              document.querySelector('#testo-btn-img').setAttribute('value', 'Carica foto prima!');
               setTimeout(() => document.querySelector('#testo-btn-img').setAttribute('value', 'Applica Immagine'), 2500);
             }
           });
@@ -145,39 +150,41 @@
           return entity;
         },
 
-        // NUOVA FUNZIONE: Calcola i bordi estremi della forma e stira l'immagine (0 a 1)
+        // NUOVA LOGICA UV: Adatta l'immagine stirandola agli estremi della superficie scansionata
         applicaUVEspanse: function(geometry) {
           geometry.computeBoundingBox();
-          const box = geometry.boundingBox;
+          const min = geometry.boundingBox.min;
+          const max = geometry.boundingBox.max;
+          
+          const sizeX = max.x - min.x;
+          const sizeY = max.y - min.y;
+          const sizeZ = max.z - min.z;
+
           const pos = geometry.attributes.position;
           const uvs = new Float32Array(pos.count * 2);
-          
-          const dimX = box.max.x - box.min.x;
-          const dimY = box.max.y - box.min.y;
-          const dimZ = box.max.z - box.min.z;
 
-          // Trova le due dimensioni più grandi per capire l'orientamento (es. muro verticale vs pavimento)
-          let asseU = 'x', asseV = 'y';
-          if (dimZ > dimY && dimX > dimY) { asseU = 'x'; asseV = 'z'; }
-          else if (dimZ > dimX && dimY > dimX) { asseU = 'y'; asseV = 'z'; }
+          // Identifichiamo quali sono i due assi principali della superficie (es: muro = X,Y | pavimento = X,Z)
+          let uAxis = 'x', vAxis = 'y';
+          if (sizeZ > sizeY && sizeX > sizeY) { uAxis = 'x'; vAxis = 'z'; }
+          else if (sizeZ > sizeX && sizeY > sizeX) { uAxis = 'y'; vAxis = 'z'; }
 
           for (let i = 0; i < pos.count; i++) {
             const x = pos.getX(i);
             const y = pos.getY(i);
             const z = pos.getZ(i);
 
-            let valU = asseU === 'x' ? x : (asseU === 'y' ? y : z);
-            let valV = asseV === 'x' ? x : (asseV === 'y' ? y : z);
+            let valU = uAxis === 'x' ? x : (uAxis === 'y' ? y : z);
+            let valV = vAxis === 'x' ? x : (vAxis === 'y' ? y : z);
             
-            let dimU = asseU === 'x' ? dimX : (asseU === 'y' ? dimY : dimZ);
-            let dimV = asseV === 'x' ? dimX : (asseV === 'y' ? dimY : dimZ);
+            let minU = uAxis === 'x' ? min.x : (uAxis === 'y' ? min.y : min.z);
+            let minV = vAxis === 'x' ? min.x : (vAxis === 'y' ? min.y : min.z);
             
-            let minU = asseU === 'x' ? box.min.x : (asseU === 'y' ? box.min.y : box.min.z);
-            let minV = asseV === 'x' ? box.min.x : (asseV === 'y' ? box.min.y : box.min.z);
+            let rangeU = uAxis === 'x' ? sizeX : (uAxis === 'y' ? sizeY : sizeZ);
+            let rangeV = vAxis === 'x' ? sizeX : (vAxis === 'y' ? sizeY : sizeZ);
 
-            // Stira la coordinata da 0.0 (inizio foto) a 1.0 (fine foto)
-            uvs[i * 2] = dimU === 0 ? 0 : (valU - minU) / dimU;
-            uvs[i * 2 + 1] = dimV === 0 ? 0 : (valV - minV) / dimV;
+            // Evita divisioni per zero
+            uvs[i * 2] = rangeU === 0 ? 0 : (valU - minU) / rangeU;
+            uvs[i * 2 + 1] = rangeV === 0 ? 0 : (valV - minV) / rangeV;
           }
           
           geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
@@ -191,7 +198,7 @@
           }
           const geometry = new THREE.ShapeGeometry(shape);
           geometry.rotateX(Math.PI / 2); 
-          this.applicaUVEspanse(geometry); // Applica la stiratura
+          this.applicaUVEspanse(geometry); 
           return geometry;
         },
 
@@ -200,27 +207,16 @@
           geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(xrMesh.vertices), 3));
           geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(xrMesh.indices), 1));
           geometry.computeVertexNormals();
-          this.applicaUVEspanse(geometry); // Applica la stiratura
+          this.applicaUVEspanse(geometry); 
           return geometry;
         }
       });
 
-      AFRAME.registerComponent('controlli-avanzati', {
+      // CONTROLLO TASTI (Solo per nascondere la mesh, RIMOSSO LO SPAWNER DEI CUBI)
+      AFRAME.registerComponent('controlli-base', {
         init: function () {
           this.el.addEventListener('abuttondown', () => this.attivaToggle());
           this.el.addEventListener('xbuttondown', () => this.attivaToggle());
-
-          this.el.addEventListener('click', (evento) => {
-            if (!evento.detail.intersectedEl) return;
-            if (evento.detail.intersectedEl.classList.contains('superficie')) {
-              const punto = evento.detail.intersection.point;
-              const cubo = document.createElement('a-entity');
-              cubo.setAttribute('geometry', 'primitive: box; width: 0.15; height: 0.15; depth: 0.15');
-              cubo.setAttribute('material', 'color: #FF2255');
-              cubo.setAttribute('position', `${punto.x} ${punto.y + 0.075} ${punto.z}`);
-              this.el.sceneEl.appendChild(cubo);
-            }
-          });
         },
         
         attivaToggle: function() {
@@ -241,8 +237,9 @@
     <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" gestore-spazio>
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
 
-      <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .interfaccia, .superficie; far: 10;" controlli-avanzati></a-entity>
-      <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .interfaccia, .superficie; far: 10;" controlli-avanzati></a-entity>
+      <!-- Controller con controlli base: non generano più oggetti -->
+      <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .interfaccia; far: 10;" controlli-base></a-entity>
+      <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .interfaccia; far: 10;" controlli-base></a-entity>
 
       <a-entity position="0 1.2 -1.5">
         <a-text value="Menu AR" align="center" position="0 0.4 0" color="#FFFFFF" scale="0.8 0.8 0.8"></a-text>
