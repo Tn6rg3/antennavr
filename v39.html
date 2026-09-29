@@ -108,6 +108,7 @@
 
                 this.initPersistentElements(); this.setupGlobalEventDelegation(); this.setupMmanaFileLoader();
                 window.saveAntennaToDB = this.saveAntennaToDB.bind(this); window.loadAntennaFromDB = this.loadAntennaFromDB.bind(this); window.deleteAntennaFromDB = this.deleteAntennaFromDB.bind(this);
+                window.toggleARMenu = this.toggleMenu.bind(this);
                 this.refreshDBList(); this.loadFromStorage();
                 if (this.menuUI) this.menuUI.setAttribute('visible', true);
                 this.updateLaserVisibility();
@@ -740,7 +741,12 @@
                 if (intersects) {
                   for (let i = 0; i < intersects.length; i++) {
                     let el = intersects[i];
-                    if (el.closest && (el.closest('#menu-ui') || el.closest('#guy-wires-ui'))) { hitUI = true; break; }
+                    if (el.closest) {
+                      let mUI = el.closest('#menu-ui');
+                      let gwUI = el.closest('#guy-wires-ui');
+                      if (mUI && (this.menuUI.getAttribute('visible') === true || this.menuUI.getAttribute('visible') === 'true')) { hitUI = true; break; }
+                      if (gwUI && (this.gwUI.getAttribute('visible') === true || this.gwUI.getAttribute('visible') === 'true')) { hitUI = true; break; }
+                    }
                   }
                 }
                 if (hitUI) return;
@@ -1228,12 +1234,22 @@
             scene.addEventListener('mousedown', (evt) => {
               let now = Date.now(); if (now - this.lastClickTime < 250) return;
               let target = evt.target.closest('.clickable'); if(!target) return;
-              let isVis = target.getAttribute('visible'); if (isVis === false || isVis === 'false') return;
-              let parent = target.parentElement; if (parent && (parent.getAttribute('visible') === false || parent.getAttribute('visible') === 'false')) return;
+
+              let isVisibleInHierarchy = (el) => {
+                  if (!el || el.tagName === 'A-SCENE') return true;
+                  let v = el.getAttribute ? el.getAttribute('visible') : true;
+                  if (v === false || v === 'false') return false;
+                  if (el.id === 'left-controller' || el.id === 'right-controller') return true;
+                  return isVisibleInHierarchy(el.parentElement);
+              };
+              if (!isVisibleInHierarchy(target)) return;
 
               this.lastClickTime = now; let id = target.id; let mathRound = (num) => Math.round(num * 100) / 100;
 
-              if (id === 'btn-laser-toggle') {
+              if (id === 'btn-close-menu') {
+                  this.toggleMenu();
+              }
+              else if (id === 'btn-laser-toggle') {
                   let txt = document.querySelector('#txt-laser-toggle'); let btn = document.querySelector('#btn-laser-toggle');
                   if (this.pointerMode === 'TOUCH') {
                       this.pointerMode = 'LIDAR';
@@ -1332,6 +1348,9 @@
 <body>
 
 <div id="ui-2d-container">
+    <h3>CONFIGURATORE AR</h3>
+    <button class="action" onclick="window.toggleARMenu()">MOSTRA / NASCONDI MENU 3D</button>
+    <hr>
     <h3>DATABASE SCENE MULTIPLE</h3>
     <input type="text" id="save-name" placeholder="Es. Campo Scout">
     <button class="action" onclick="window.saveAntennaToDB()">SALVA SCENA NEL VISORE</button>
@@ -1352,10 +1371,13 @@
         <a-camera id="camera" position="0 1.6 0" look-controls="enabled: true; touchEnabled: false"></a-camera>
 
         <a-entity id="left-controller" oculus-touch-controls="hand: left">
-            <a-entity id="menu-ui" visible="true" position="0 0.15 -0.45" rotation="-30 0 0">
+            <a-entity id="menu-ui" visible="true" position="0 0.1 -0.5" rotation="-15 0 0">
                 <a-plane width="0.55" height="0.95" color="#1A1A1A" material="opacity: 0.96; shader: flat"></a-plane>
 
-                <a-text value="CONFIGURATORE ANTENNE PRO V38" position="0 0.44 0.01" align="center" scale="0.11 0.11 0.11" color="#FFEB3B"></a-text>
+                <a-text value="CONFIGURATORE ANTENNE PRO V38" position="-0.08 0.44 0.01" align="center" scale="0.10 0.10 0.10" color="#FFEB3B"></a-text>
+                <a-plane id="btn-close-menu" class="clickable" btn-interaction width="0.14" height="0.035" color="#D32F2F" position="0.18 0.44 0.02">
+                    <a-text value="[X] CHIUDI" align="center" scale="0.06 0.06 0.06" color="#FFFFFF"></a-text>
+                </a-plane>
 
                 <a-plane width="0.52" height="0.08" color="#2A2A2A" position="0 0.38 0.01">
                     <a-text id="info-text" value="Appoggia il controller destro a terra e premi il grilletto." position="0 0 0.01" align="center" scale="0.05 0.05 0.05" color="#00E676"></a-text>
