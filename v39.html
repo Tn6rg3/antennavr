@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V42 - Modelli 3D (GLB, OBJ, STL) + Hardware Anchors</title>
+  <title>Antenne AR Pro V43 - Modelli 3D in Scala Reale + Anchors</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
     #ui-2d-container { position: absolute; top: 15px; left: 15px; z-index: 9999; background: #111; color: #00E676; padding: 15px; border: 2px solid #FFEB3B; border-radius: 8px; font-family: monospace; max-width: 320px; max-height: 90vh; overflow-y: auto; }
@@ -15,7 +15,6 @@
     hr { border-color: #333; margin: 15px 0; }
   </style>
   <script>
-    // Componente per orientamento etichette verso la camera
     AFRAME.registerComponent('look-at-camera', { 
       tick: function () { 
         let cameraEl = document.querySelector('#camera'); 
@@ -27,7 +26,6 @@
       } 
     });
     
-    // Feedback visivo bottoni VR
     AFRAME.registerComponent('btn-interaction', {
       init: function () {
         let el = this.el; 
@@ -54,7 +52,7 @@
       }
     });
 
-    // Parser STL Binary & ASCII autonomo
+    // PARSER STL AGGIORNATO (Calcolo millimetri -> metri)
     function parseSTLGeometry(buffer) {
         let reader = new DataView(buffer);
         let isBinary = true;
@@ -112,6 +110,12 @@
                 geom.computeVertexNormals();
             }
         }
+
+        // --- CONVERSIONE SCALA DI STAMPA 3D IN SCALA REALE AR ---
+        // Gli STL sono in millimetri. Il WebXR usa i metri. Moltiplichiamo tutto x 0.001.
+        geom.scale(0.001, 0.001, 0.001); 
+
+        // Centratura perfetta
         geom.center();
         geom.computeBoundingBox();
         if (geom.boundingBox) {
@@ -120,7 +124,6 @@
         return geom;
     }
 
-    // Componente A-Frame per renderizzare file STL
     AFRAME.registerComponent('stl-model', {
       schema: { type: 'string' },
       init: function() {
@@ -425,7 +428,6 @@
 
         let sceneEl = this.el.sceneEl; let frame = sceneEl.frame;
         
-        // GESTIONE ANCHOR HARDWARE
         if (sceneEl.is('ar-mode') && frame) {
             let refSpace = sceneEl.renderer.xr.getReferenceSpace();
             if (!this.sceneAnchor && !this.requestingAnchor && frame.createAnchor) {
@@ -1021,7 +1023,7 @@
           
           let type = this.antennaTypes[ant.antIdx];
 
-          // ----- RENDER MODELLO 3D (GLB / OBJ / STL) -----
+          // ----- RENDER MODELLO 3D -----
           if (type === 'Modello 3D') {
               if (ant.pointA.base) {
                   this.createBasePanel(ant.pointA.base, container);
@@ -1037,7 +1039,6 @@
                           modelEl.setAttribute('stl-model', this.loaded3DUrl);
                       }
 
-                      // Allineamento automatico al terreno per GLB e OBJ
                       if (this.loaded3DFormat !== 'stl') {
                           modelEl.addEventListener('model-loaded', () => {
                               let obj3D = modelEl.getObject3D('mesh');
@@ -1046,7 +1047,7 @@
                                   let center = new THREE.Vector3();
                                   box.getCenter(center);
                                   obj3D.position.x -= center.x;
-                                  obj3D.position.y -= box.min.y; // Poggia esattamente la base a terra
+                                  obj3D.position.y -= box.min.y; 
                                   obj3D.position.z -= center.z;
                               }
                           });
@@ -1236,7 +1237,6 @@
       },
 
       setupFileLoaders: function() {
-        // MMANA-GAL Loader
         let fileInput = document.querySelector('#file-mmana'); 
         if(fileInput) {
             fileInput.addEventListener('change', (evt) => {
@@ -1255,29 +1255,22 @@
             });
         }
         
-        // MODELLI 3D (GLB / GLTF / OBJ / STL) Loader Unificato
         let fileInput3D = document.querySelector('#file-3d-model');
         if(fileInput3D) {
             fileInput3D.addEventListener('change', (evt) => {
                 let file = evt.target.files[0];
                 if(file) {
                     let name = file.name.toLowerCase();
-                    if (this.loaded3DUrl) URL.revokeObjectURL(this.loaded3DUrl); // Libera memoria
+                    if (this.loaded3DUrl) URL.revokeObjectURL(this.loaded3DUrl); 
                     this.loaded3DUrl = URL.createObjectURL(file);
                     
-                    if (name.endsWith('.glb') || name.endsWith('.gltf')) {
-                        this.loaded3DFormat = 'glb';
-                    } else if (name.endsWith('.obj')) {
-                        this.loaded3DFormat = 'obj';
-                    } else if (name.endsWith('.stl')) {
-                        this.loaded3DFormat = 'stl';
-                    } else {
-                        alert("Formato non riconosciuto. Usa .GLB, .OBJ o .STL");
-                        return;
-                    }
+                    if (name.endsWith('.glb') || name.endsWith('.gltf')) { this.loaded3DFormat = 'glb'; }
+                    else if (name.endsWith('.obj')) { this.loaded3DFormat = 'obj'; }
+                    else if (name.endsWith('.stl')) { this.loaded3DFormat = 'stl'; }
+                    else { alert("Formato non riconosciuto. Usa .GLB, .OBJ o .STL"); return; }
 
                     this.current.antIdx = this.antennaTypes.indexOf('Modello 3D');
-                    alert(`Modello ${this.loaded3DFormat.toUpperCase()} caricato!\nIndossa il visore e premi il grilletto sul pavimento.`);
+                    alert(`Modello ${this.loaded3DFormat.toUpperCase()} pronto!\nIndossa il visore, premi il grilletto sul pavimento.`);
                     this.refreshAll();
                 }
             });
