@@ -1124,7 +1124,8 @@
     <input type="file" id="file-mmana" accept=".maa">
   </div>
 
-  <a-scene webxr="optionalFeatures: local-floor, hit-test;" vr-mode-ui="enabled: true">
+  <!-- AGGIUNTA DEGLI ANCHORS PER MAGGIORE STABILITÀ -->
+  <a-scene webxr="optionalFeatures: local-floor, hit-test, anchors;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
