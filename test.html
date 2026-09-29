@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio - Effetto Coperta</title>
+    <title>AR Studio - Pro</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <style>
       #ui-2d {
@@ -25,13 +25,8 @@
             const img = new Image();
             img.onload = function() {
               const texture = new THREE.Texture(img);
-              
-              // TORNATO A REPEAT: ma ora funziona senza sfarfallare.
-              // Questo permette all'immagine di ripetersi se il muro è enorme.
               texture.wrapS = THREE.RepeatWrapping; 
               texture.wrapT = THREE.RepeatWrapping;
-              
-              // Il LinearFilter permette di ripetere foto anche se non hanno proporzioni quadrate
               texture.minFilter = THREE.LinearFilter; 
               texture.magFilter = THREE.LinearFilter;
               texture.generateMipmaps = false;
@@ -52,43 +47,60 @@
           this.meshVisibile = true;
           this.usaImmagine = false;
           
-          this.matWireframe = new THREE.MeshBasicMaterial({
-            color: 0x00FF00, transparent: true, opacity: 0.6,
-            side: THREE.DoubleSide, wireframe: true,
-            polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
+          // RISOLTO LO SFARFALLIO: Offset 3 per i Piani (Spinti indietro)
+          this.matWirePiani = new THREE.MeshBasicMaterial({
+            color: 0x00FF00, transparent: true, opacity: 0.6, side: THREE.DoubleSide, wireframe: true,
+            polygonOffset: true, polygonOffsetFactor: 3, polygonOffsetUnits: 3
+          });
+          this.matImgPiani = new THREE.MeshBasicMaterial({
+            color: 0xFFFFFF, transparent: true, opacity: 0.95, side: THREE.DoubleSide,
+            polygonOffset: true, polygonOffsetFactor: 3, polygonOffsetUnits: 3
           });
 
-          this.matImmagine = new THREE.MeshBasicMaterial({
-            color: 0xFFFFFF, transparent: true, opacity: 0.95,
-            side: THREE.DoubleSide,
+          // Offset 1 per le Mesh (Tenute in primo piano)
+          this.matWireMesh = new THREE.MeshBasicMaterial({
+            color: 0x00FF00, transparent: true, opacity: 0.6, side: THREE.DoubleSide, wireframe: true,
+            polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
+          });
+          this.matImgMesh = new THREE.MeshBasicMaterial({
+            color: 0xFFFFFF, transparent: true, opacity: 0.95, side: THREE.DoubleSide,
             polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
           });
 
           document.querySelector('#btn-immagine').addEventListener('click', () => {
             if (window.userTexture) {
               this.usaImmagine = !this.usaImmagine;
-              if (this.usaImmagine) {
-                this.matImmagine.map = window.userTexture;
-                this.matImmagine.needsUpdate = true;
-                this.aggiornaMateriali(this.matImmagine);
-                document.querySelector('#testo-btn-img').setAttribute('value', 'Rimetti Griglia');
-              } else {
-                this.aggiornaMateriali(this.matWireframe);
-                document.querySelector('#testo-btn-img').setAttribute('value', 'Applica Immagine');
-              }
+              this.matImgPiani.map = window.userTexture;
+              this.matImgMesh.map = window.userTexture;
+              this.matImgPiani.needsUpdate = true;
+              this.matImgMesh.needsUpdate = true;
+              
+              this.aggiornaMateriali();
+              
+              const txt = this.usaImmagine ? 'Rimetti Griglia' : 'Applica Immagine';
+              document.querySelector('#testo-btn-img').setAttribute('value', txt);
             }
           });
         },
 
         toggleVisibilitaMesh: function() {
           this.meshVisibile = !this.meshVisibile;
-          this.matWireframe.opacity = this.meshVisibile ? 0.6 : 0.0;
-          this.matImmagine.opacity = this.meshVisibile ? 0.95 : 0.0;
+          const opacitaGriglia = this.meshVisibile ? 0.6 : 0.0;
+          const opacitaImg = this.meshVisibile ? 0.95 : 0.0;
+          
+          this.matWirePiani.opacity = opacitaGriglia;
+          this.matWireMesh.opacity = opacitaGriglia;
+          this.matImgPiani.opacity = opacitaImg;
+          this.matImgMesh.opacity = opacitaImg;
         },
 
-        aggiornaMateriali: function(nuovoMateriale) {
-          this.planes.forEach(d => d.entity.getObject3D('mesh').material = nuovoMateriale);
-          this.meshes.forEach(d => d.entity.getObject3D('mesh').material = nuovoMateriale);
+        aggiornaMateriali: function() {
+          this.planes.forEach(d => {
+            d.entity.getObject3D('mesh').material = this.usaImmagine ? this.matImgPiani : this.matWirePiani;
+          });
+          this.meshes.forEach(d => {
+            d.entity.getObject3D('mesh').material = this.usaImmagine ? this.matImgMesh : this.matWireMesh;
+          });
         },
 
         tick: function () {
@@ -99,13 +111,12 @@
           const refSpace = renderer.xr.getReferenceSpace();
           if (!refSpace) return;
 
-          const materialeAttuale = this.usaImmagine ? this.matImmagine : this.matWireframe;
-
           if (frame.detectedPlanes) {
             frame.detectedPlanes.forEach(plane => {
               let pData = this.planes.get(plane);
               if (!pData) {
-                const entity = this.creaEntitaSuperficie(this.createPlaneGeometry(plane), materialeAttuale);
+                const mat = this.usaImmagine ? this.matImgPiani : this.matWirePiani;
+                const entity = this.creaEntitaSuperficie(this.createPlaneGeometry(plane), mat);
                 pData = { entity: entity, lastTime: plane.lastChangedTime };
                 this.planes.set(plane, pData);
               } else if (plane.lastChangedTime > pData.lastTime) {
@@ -122,7 +133,8 @@
             frame.detectedMeshes.forEach(xrMesh => {
               let mData = this.meshes.get(xrMesh);
               if (!mData) {
-                const entity = this.creaEntitaSuperficie(this.createMeshGeometry(xrMesh), materialeAttuale);
+                const mat = this.usaImmagine ? this.matImgMesh : this.matWireMesh;
+                const entity = this.creaEntitaSuperficie(this.createMeshGeometry(xrMesh), mat);
                 mData = { entity: entity, lastTime: xrMesh.lastChangedTime };
                 this.meshes.set(xrMesh, mData);
               } else if (xrMesh.lastChangedTime > mData.lastTime) {
@@ -146,51 +158,36 @@
           return entity;
         },
 
-        // NUOVA LOGICA: EFFETTO COPERTA (World-Scale UVs)
+        // RISOLTO LO STIRAMENTO (Triplanar Mapping perfetto) + SCALA 4 METRI
         applicaUVScalate: function(geometry) {
-          geometry.computeBoundingBox();
-          const box = geometry.boundingBox;
-          if (!box) return;
-
+          geometry.computeVertexNormals();
           const pos = geometry.attributes.position;
+          const norm = geometry.attributes.normal;
           const uvs = new Float32Array(pos.count * 2);
 
-          const sizeX = box.max.x - box.min.x;
-          const sizeY = box.max.y - box.min.y;
-          const sizeZ = box.max.z - box.min.z;
-
-          // FATTORE DI SCALA: Quanto deve essere grande fisicamente un'immagine?
-          // 1.5 significa che ogni copia della tua foto coprirà 1 metro e mezzo di spazio reale.
-          // Se la superficie è enorme, l'immagine si ripeterà automaticamente
-          const grandezzaImmagineMetri = 1.5; 
+          const grandezzaMetri = 4.0; // Immagine impostata a 4 Metri
 
           for (let i = 0; i < pos.count; i++) {
+            const nx = Math.abs(norm.getX(i));
+            const ny = Math.abs(norm.getY(i));
+            const nz = Math.abs(norm.getZ(i));
+            
             const x = pos.getX(i);
             const y = pos.getY(i);
             const z = pos.getZ(i);
 
-            let u = 0, v = 0;
-            
-            // Usiamo direttamente le coordinate spaziali reali in metri (x, y, z)
-            // in modo che non ci siano MAI deformazioni o stiramenti
-            if (sizeY < 0.2) {
-              // Superfici orizzontali (pavimenti, tavoli)
-              u = x / grandezzaImmagineMetri;
-              v = z / grandezzaImmagineMetri;
+            // Calcola quale asse è predominante (es. Soffitto/Pavimento vs Muri Laterali vs Muri Frontali)
+            if (ny >= nx && ny >= nz) {
+              uvs[i * 2] = x / grandezzaMetri;
+              uvs[i * 2 + 1] = z / grandezzaMetri;
+            } else if (nx >= ny && nx >= nz) {
+              uvs[i * 2] = z / grandezzaMetri;
+              uvs[i * 2 + 1] = y / grandezzaMetri;
             } else {
-              // Superfici verticali (muri, armadi)
-              if (sizeX > sizeZ) {
-                u = x / grandezzaImmagineMetri;
-              } else {
-                u = z / grandezzaImmagineMetri;
-              }
-              v = y / grandezzaImmagineMetri;
+              uvs[i * 2] = x / grandezzaMetri;
+              uvs[i * 2 + 1] = y / grandezzaMetri;
             }
-
-            uvs[i * 2] = u;
-            uvs[i * 2 + 1] = v;
           }
-          
           geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
         },
 
@@ -210,56 +207,79 @@
           const geometry = new THREE.BufferGeometry();
           geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(xrMesh.vertices), 3));
           geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(xrMesh.indices), 1));
-          geometry.computeVertexNormals();
           this.applicaUVScalate(geometry); 
           return geometry;
         }
       });
 
-      // LA BOLLA MAGICA CHE CANCELLA LA TEXTURE
+      // STRUMENTO BOLLA MIGLIORATO (Grilletto per allargare, Grip per chiudere)
       AFRAME.registerComponent('strumento-buco', {
         init: function () {
-          this.bollaCorrente = null;
+          this.bollaAttiva = null;
+          this.azione = null; // 'cresce' o 'riduce'
           this.geomSfera = new THREE.SphereGeometry(1, 32, 32);
-          
-          this.matBuco = new THREE.MeshBasicMaterial({
-            colorWrite: false,
-            depthWrite: true
-          });
+          this.matBuco = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true });
 
+          // GRILLETTO: Crea o ingrandisce
           this.el.addEventListener('triggerdown', () => {
-            const raycaster = this.el.components.raycaster;
-            const hit = raycaster.intersections[0];
-            
-            if (hit && hit.object.el && hit.object.el.classList.contains('superficie')) {
-              const bolla = new THREE.Mesh(this.geomSfera, this.matBuco);
-              bolla.position.copy(hit.point);
-              bolla.scale.set(0.05, 0.05, 0.05);
-              bolla.renderOrder = -1; // Disegna la bolla prima della mesh
+            const hit = this.el.components.raycaster.intersections[0];
+            if (!hit) return;
+
+            // Se miriamo a una bolla già esistente
+            if (hit.object.el && hit.object.el.classList.contains('bolla-buco')) {
+              this.bollaAttiva = hit.object.el.object3D;
+              this.azione = 'cresce';
+            } 
+            // Se miriamo a un muro nuovo
+            else if (hit.object.el && hit.object.el.classList.contains('superficie')) {
+              const bollaEl = document.createElement('a-entity');
+              bollaEl.classList.add('bolla-buco'); // Aggiunto per essere trovata dal laser
               
-              this.el.sceneEl.object3D.add(bolla);
-              this.bollaCorrente = bolla;
+              const mesh = new THREE.Mesh(this.geomSfera, this.matBuco);
+              mesh.renderOrder = -1;
+              bollaEl.setObject3D('mesh', mesh);
+              bollaEl.object3D.position.copy(hit.point);
+              bollaEl.object3D.scale.set(0.05, 0.05, 0.05);
+              
+              this.el.sceneEl.appendChild(bollaEl);
+              this.bollaAttiva = bollaEl.object3D;
+              this.azione = 'cresce';
             }
           });
+          this.el.addEventListener('triggerup', () => { this.bollaAttiva = null; });
 
-          this.el.addEventListener('triggerup', () => {
-            this.bollaCorrente = null; 
+          // TASTO LATERALE (Grip/Presa): Rimpicciolisce ed elimina
+          this.el.addEventListener('gripdown', () => {
+            const hit = this.el.components.raycaster.intersections[0];
+            if (hit && hit.object.el && hit.object.el.classList.contains('bolla-buco')) {
+              this.bollaAttiva = hit.object.el.object3D;
+              this.azione = 'riduce';
+            }
           });
+          this.el.addEventListener('gripup', () => { this.bollaAttiva = null; });
         },
 
         tick: function (time, delta) {
-          if (this.bollaCorrente) {
-            const crescita = (0.5 * delta) / 1000;
-            this.bollaCorrente.scale.addScalar(crescita);
+          if (this.bollaAttiva) {
+            const velocitaScale = (0.8 * delta) / 1000;
             
-            if (this.bollaCorrente.scale.x > 1.5) {
-              this.bollaCorrente.scale.set(1.5, 1.5, 1.5);
+            if (this.azione === 'cresce') {
+              this.bollaAttiva.scale.addScalar(velocitaScale);
+              if (this.bollaAttiva.scale.x > 3.0) this.bollaAttiva.scale.set(3, 3, 3); // Limite max 3 metri
+            } 
+            else if (this.azione === 'riduce') {
+              this.bollaAttiva.scale.subScalar(velocitaScale);
+              if (this.bollaAttiva.scale.x <= 0.02) {
+                // Se la bolla diventa troppo piccola, eliminala del tutto
+                const entita = this.bollaAttiva.el;
+                entita.parentNode.removeChild(entita);
+                this.bollaAttiva = null;
+              }
             }
           }
         }
       });
 
-      // CONTROLLO TASTI (A, X e Y)
       AFRAME.registerComponent('controlli-base', {
         init: function () {
           this.el.addEventListener('abuttondown', () => this.attivaToggleMesh());
@@ -273,7 +293,6 @@
             }
           });
         },
-        
         attivaToggleMesh: function() {
           const gestore = this.el.sceneEl.components['gestore-spazio'];
           if (gestore) gestore.toggleVisibilitaMesh();
@@ -284,7 +303,7 @@
   <body>
 
     <div id="ui-2d">
-      <h2>1. Scegli una foto per la stanza</h2>
+      <h2>1. Scegli una foto per la stanza (4 Metri)</h2>
       <input type="file" id="file-upload" accept="image/*"><br><br>
       <span id="status" style="color: #4CAF50; font-weight: bold;">In attesa dell'immagine...</span>
     </div>
@@ -292,10 +311,10 @@
     <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" gestore-spazio>
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
 
-      <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .interfaccia, .superficie; far: 10;" controlli-base strumento-buco></a-entity>
-      <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .interfaccia, .superficie; far: 10;" controlli-base strumento-buco></a-entity>
+      <!-- Aggiunta della classe .bolla-buco al laser per poterle mirare e rimpicciolire -->
+      <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .interfaccia, .superficie, .bolla-buco; far: 10;" controlli-base strumento-buco></a-entity>
+      <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .interfaccia, .superficie, .bolla-buco; far: 10;" controlli-base strumento-buco></a-entity>
 
-      <!-- PANNELLO AR (Mostra/Nascondi con tasto Y) -->
       <a-entity id="pannello-ar" position="0 1.2 -1.5">
         <a-text value="Menu AR (Nascondi con Y)" align="center" position="0 0.4 0" color="#FFFFFF" scale="0.7 0.7 0.7"></a-text>
         <a-entity id="btn-immagine" class="interfaccia" geometry="primitive: plane; width: 1.2; height: 0.3" material="color: #4CAF50" position="0 0.1 0">
