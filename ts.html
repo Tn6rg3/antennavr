@@ -2,50 +2,47 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Trasmetti Schermo a Meta Quest</title>
+  <title>PC Sender - AR Studio</title>
   <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
   <style>
     body { font-family: sans-serif; text-align: center; padding: 50px; background: #222; color: white; }
-    button { padding: 20px; font-size: 20px; background: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-    button:hover { background: #45a049; }
+    button { padding: 20px; font-size: 20px; background: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 10px; }
     video { width: 80%; max-width: 800px; margin-top: 20px; border: 4px solid #555; border-radius: 10px; background: #000; }
   </style>
 </head>
 <body>
 
-  <h1>Condivisione Schermo in AR</h1>
-  <button id="start">1. Condividi il tuo Schermo</button>
+  <h1>Trasmetti al Meta Quest</h1>
+  <button id="start">Condividi Schermo al Quest</button>
   <h3 id="status" style="color: #aaa;">In attesa...</h3>
   
   <video id="mioSchermo" autoplay muted></video>
 
   <script>
-    // ID segreto per farci trovare dal Quest
-    const peerPC = new Peer('schermo-quest-secreto-123'); 
-    let streamSchermo = null;
-
-    peerPC.on('open', id => {
-      document.getElementById('status').innerText = "Connesso al server. Clicca il bottone verde per avviare.";
-    });
-
     document.getElementById('start').addEventListener('click', async () => {
       try {
-        streamSchermo = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        // Cattura lo schermo
+        const streamSchermo = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
         document.getElementById('mioSchermo').srcObject = streamSchermo;
-        document.getElementById('status').innerText = "In trasmissione! Ora metti il Quest e connettiti.";
-        document.getElementById('status').style.color = "#4CAF50";
-      } catch (err) {
-        alert("Errore nella condivisione schermo: " + err);
-      }
-    });
+        document.getElementById('status').innerText = "Elaborazione in corso...";
+        
+        // Crea un ponte temporaneo
+        const peerPC = new Peer();
+        
+        peerPC.on('open', () => {
+          // Chiama il codice segreto del visore
+          const call = peerPC.call('quest-italia-pro-847291', streamSchermo);
+          
+          document.getElementById('status').innerText = "✅ In trasmissione! Guarda nel visore.";
+          document.getElementById('status').style.color = "#00FF00";
+        });
+        
+        peerPC.on('error', err => {
+          document.getElementById('status').innerText = "Errore di connessione: " + err;
+        });
 
-    peerPC.on('call', call => {
-      if (streamSchermo) {
-        call.answer(streamSchermo); 
-        document.getElementById('status').innerText = "Visore Connesso! Trasmissione in corso...";
-        document.getElementById('status').style.color = "#00FF00";
-      } else {
-        alert("Il Quest si è connesso, ma non hai ancora condiviso lo schermo dal PC!");
+      } catch (err) {
+        alert("Errore nella condivisione schermo. Riprova.");
       }
     });
   </script>
