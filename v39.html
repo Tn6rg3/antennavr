@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Antenne AR Pro V45 - Libreria Media Stabile + Occlusione Mani</title>
+  <title>Antenne AR Pro V45 - Libreria Media Stabile + Auto-Scale STL + VIDEO</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <!-- Aframe Extras per abilitare il supporto alle Animazioni dei modelli GLB -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
@@ -51,29 +51,6 @@
             el.setAttribute('scale', '1 1 1'); 
             if(el.getAttribute('material')) el.setAttribute('material', 'color', originalColor); 
         });
-      }
-    });
-
-    // COMPONENTE OCCLUSORE: Rende gli oggetti invisibili ma coprono ciò che sta dietro (es. le foto virtuali)
-    AFRAME.registerComponent('occluder', {
-      init: function () {
-        let applyOccluder = () => {
-          let mesh = this.el.getObject3D('mesh');
-          if (mesh) {
-            mesh.traverse(function (node) {
-              if (node.isMesh && node.material) {
-                // Non disegna il colore (trasparente) ma disegna la profondità!
-                node.material.colorWrite = false;
-                node.material.depthWrite = true;
-                // Renderizzato prima per mascherare
-                node.renderOrder = -1;
-              }
-            });
-          }
-        };
-        this.el.addEventListener('model-loaded', applyOccluder);
-        this.el.addEventListener('loaded', applyOccluder);
-        applyOccluder();
       }
     });
 
@@ -1068,8 +1045,7 @@
                                   if (v && v.paused) v.play().catch(e => console.warn('Autoplay bloccato:', e));
                               }, 100);
                           } else {
-                              // Ho rimosso transparent: true per favorire il depthWrite
-                              mediaEl.setAttribute('material', `src: ${asset.elementId}; shader: flat; transparent: false; depthWrite: true; alphaTest: 0.5; side: double`);
+                              mediaEl.setAttribute('material', `src: ${asset.elementId}; shader: flat; transparent: true; depthWrite: true; alphaTest: 0.5; side: double`);
                           }
                       }
 
@@ -1401,7 +1377,7 @@
     <hr>
     <div class="import-box">
       <h3>LIBRERIA MULTIMEDIALE</h3>
-      <p style="color:#FFF59D;">Carica PIU' file: <b>.GLB, .OBJ, .STL, .PNG, .JPG, .MP4, .WEBM</b>. <br>I GLB supportano colori e animazioni.</p>
+      <p style="color:#FFF59D;">Carica PIU' file contemporaneamente: <b>.GLB, .OBJ, .STL, .PNG, .JPG, .MP4, .WEBM</b>. <br>I GLB supportano colori e animazioni.</p>
       <input type="file" id="file-custom-media" accept=".glb,.gltf,.obj,.stl,.png,.jpg,.jpeg,.mp4,.webm" multiple>
     </div>
     <div class="import-box">
@@ -1410,16 +1386,13 @@
     </div>
   </div>
 
-  <a-scene webxr="optionalFeatures: local-floor, hit-test, anchors;" vr-mode-ui="enabled: true">
+  <!-- Aggiunto depth-sensing alle API WebXR -->
+  <a-scene webxr="optionalFeatures: local-floor, hit-test, anchors, depth-sensing;" vr-mode-ui="enabled: true">
     
     <a-entity id="cameraRig">
       <a-camera id="camera" position="0 1.6 0"></a-camera>
       
-      <!-- Controller Sinistro: aggiunta Maschera di Occlusione -->
-      <a-entity id="left-controller" oculus-touch-controls="hand: left" occluder>
-        <!-- Bolla invisibile per coprire la mano che tiene il joystick -->
-        <a-sphere radius="0.08" position="0 -0.03 0.05" occluder></a-sphere>
-
+      <a-entity id="left-controller" oculus-touch-controls="hand: left">
         <a-text value="ANCORA FISICA (Non toccare)\nIl menu fluttua qui sopra." position="0 0.05 0" rotation="-90 0 0" align="center" scale="0.08 0.08 0.08" color="#FF1744"></a-text>
 
         <a-entity id="menu-ui" visible="false" position="0 0.15 -0.2" rotation="-30 0 0">
@@ -1575,17 +1548,9 @@
         </a-entity>
       </a-entity>
       
-      <!-- Controller Destro: aggiunta Maschera di Occlusione -->
-      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg, .antenna-selector, #point-c-hitbox, .video-toggle; far: 10" occluder>
-        <!-- Bolla invisibile per coprire la mano che tiene il joystick -->
-        <a-sphere radius="0.08" position="0 -0.03 0.05" occluder></a-sphere>
+      <a-entity id="right-controller" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .clickable, .gw-collar, .gw-peg, .antenna-selector, #point-c-hitbox, .video-toggle; far: 10">
         <a-sphere id="touch-indicator" radius="0.015" material="color: #00FF00; shader: flat; transparent: true; opacity: 0.8" position="0 -0.07 0.02" visible="false"></a-sphere>
       </a-entity>
-
-      <!-- Se l'utente poggia i joystick, usa il tracciamento delle mani reali per bucare lo schermo! -->
-      <a-entity hand-tracking-controls="hand: left" occluder></a-entity>
-      <a-entity hand-tracking-controls="hand: right" occluder></a-entity>
-
     </a-entity>
 
     <a-entity id="anchor-root">
