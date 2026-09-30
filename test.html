@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Disegno Cornici e HD</title>
+    <title>AR Studio Pro - Architetto Virtuale</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <style>
@@ -14,8 +14,9 @@
       .btn-ui { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; }
     </style>
     <script>
-      window.userTexture = null; window.fotoAggiuntive = []; 
-      window.modalitaStrumento = 'taglio'; // Può essere 'taglio', 'foto', 'schermo'
+      window.userTexture = null; 
+      window.fotoAggiuntive = []; 
+      window.modalitaStrumento = 'taglio'; // taglio -> foto -> schermo -> muro
       window.indiceFoto = 0; 
 
       document.addEventListener('DOMContentLoaded', () => {
@@ -23,9 +24,10 @@
         sceneEl.addEventListener('enter-vr', () => { document.getElementById('ui-2d').style.display = 'none'; });
         sceneEl.addEventListener('exit-vr', () => { document.getElementById('ui-2d').style.display = 'block'; });
 
-        // SFONDO
+        // 1. CARICAMENTO SFONDO GLOBALE
         document.getElementById('file-sfondo').addEventListener('change', function(e) {
           if (e.target.files[0]) {
+            document.getElementById('status-sfondo').innerText = "Caricamento...";
             const img = new Image();
             img.onload = function() {
               const tex = new THREE.Texture(img);
@@ -39,7 +41,7 @@
           }
         });
 
-        // FOTO QUADRI
+        // 2. FOTO MULTIPLE (Quadri)
         document.getElementById('file-foto').addEventListener('change', function(e) {
           const files = e.target.files; window.fotoAggiuntive = [];
           for(let i=0; i<files.length; i++) {
@@ -55,7 +57,7 @@
           }
         });
 
-        // CONNESSIONE PC
+        // 3. PC CONDIVISIONE
         document.getElementById('btn-connetti-pc').addEventListener('click', () => {
           const btn = document.getElementById('btn-connetti-pc');
           btn.innerText = "Attivazione canale..."; btn.style.background = "#FF9800";
@@ -73,11 +75,11 @@
         });
       });
 
-      // CORE AR: SPAZIO
+      // CORE AR: GESTIONE DELLO SPAZIO (Ora separa la Mesh Automatica da quella Custom)
       AFRAME.registerComponent('gestore-spazio', {
         init: function () {
           this.planes = new Map(); this.meshes = new Map();
-          this.meshVisibile = true; this.usaImmagine = false;
+          this.meshAutoVisibile = true; this.usaImmagine = false;
           
           this.matWirePiani = new THREE.MeshBasicMaterial({ color: 0x00FF00, transparent: true, opacity: 0.6, side: THREE.DoubleSide, wireframe: true, polygonOffset: true, polygonOffsetFactor: 3, polygonOffsetUnits: 3 });
           this.matImgPiani = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.95, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 3, polygonOffsetUnits: 3 });
@@ -90,20 +92,29 @@
             this.aggiornaMateriali();
           }
         },
-        toggleVisibilitaMesh: function() {
-          this.meshVisibile = !this.meshVisibile;
-          this.aggiornaMateriali();
+        toggleVisibilitaMeshAutomatica: function() {
+          this.meshAutoVisibile = !this.meshAutoVisibile;
+          // Nascondiamo le entità stesse invece di spegnere il materiale (così i muri custom restano visibili!)
+          this.planes.forEach(d => { d.entity.object3D.visible = this.meshAutoVisibile; });
+          this.meshes.forEach(d => { d.entity.object3D.visible = this.meshAutoVisibile; });
         },
         aggiornaMateriali: function() {
-          const matPiani = this.meshVisibile ? (this.usaImmagine ? this.matImgPiani : this.matWirePiani) : new THREE.MeshBasicMaterial({visible: false});
-          const matMesh = this.meshVisibile ? (this.usaImmagine ? this.matImgMesh : this.matWireMesh) : new THREE.MeshBasicMaterial({visible: false});
+          const matPiani = this.usaImmagine ? this.matImgPiani : this.matWirePiani;
+          const matMesh = this.usaImmagine ? this.matImgMesh : this.matWireMesh;
           
           if(this.usaImmagine){ this.matImgPiani.map = window.userTexture; this.matImgMesh.map = window.userTexture; }
           
+          // Applica ai muri automatici
           this.planes.forEach(d => { d.entity.getObject3D('mesh').material = matPiani; });
           this.meshes.forEach(d => { d.entity.getObject3D('mesh').material = matMesh; });
+          
+          // Applica ai muri CUSTOM creati dall'utente
+          document.querySelectorAll('.superficie-custom').forEach(el => {
+            const m = el.getObject3D('mesh');
+            if (m) m.material = matPiani;
+          });
         },
-        tick: function (time) {
+        tick: function () {
           const renderer = this.el.sceneEl.renderer; if (!renderer.xr.isPresenting) return;
           const frame = this.el.sceneEl.frame; if (!frame) return;
           const refSpace = renderer.xr.getReferenceSpace(); if (!refSpace) return;
@@ -114,6 +125,7 @@
               let pData = this.planes.get(plane);
               if (!pData) {
                 const entity = this.creaEntitaSuperficie(this.createPlaneGeometry(plane));
+                entity.object3D.visible = this.meshAutoVisibile;
                 pData = { entity: entity, lastTime: plane.lastChangedTime };
                 this.planes.set(plane, pData);
               } else if (plane.lastChangedTime > pData.lastTime + sogliaAggiornamentoMs) {
@@ -129,7 +141,8 @@
             frame.detectedMeshes.forEach(xrMesh => {
               let mData = this.meshes.get(xrMesh);
               if (!mData) {
-                const entity = this.creaEntitaSuperficie(this.createMeshGeometry(xrMesh));
+                const entity = this.creaEntitaSuperficie(this.createMeshGeometry(xrMesh), true);
+                entity.object3D.visible = this.meshAutoVisibile;
                 mData = { entity: entity, lastTime: xrMesh.lastChangedTime };
                 this.meshes.set(xrMesh, mData);
               } else if (xrMesh.lastChangedTime > mData.lastTime + sogliaAggiornamentoMs) {
@@ -141,12 +154,12 @@
               if (pose) mData.entity.object3D.matrix.fromArray(pose.transform.matrix);
             });
           }
-          this.aggiornaMateriali();
         },
-        creaEntitaSuperficie: function(geometry) {
+        creaEntitaSuperficie: function(geometry, isMesh = false) {
           const entity = document.createElement('a-entity');
           entity.classList.add('superficie'); 
-          const mesh = new THREE.Mesh(geometry, this.matWireMesh);
+          const mat = isMesh ? this.matWireMesh : this.matWirePiani;
+          const mesh = new THREE.Mesh(geometry, mat);
           entity.setObject3D('mesh', mesh);
           this.el.sceneEl.appendChild(entity); return entity;
         },
@@ -180,7 +193,7 @@
         }
       });
 
-      // IL SUPER-CONTROLLER CON DISEGNO DELLE CORNICI
+      // IL SUPER-CONTROLLER 
       AFRAME.registerComponent('strumenti-controller', {
         init: function () {
           this.oggettoAfferrato = null;
@@ -188,17 +201,14 @@
           this.rotOggettoGrab = new THREE.Quaternion();
           this.rotControllerGrab = new THREE.Quaternion();
           
-          // Stato Disegno (Trascina e rilascia)
           this.statoDisegno = { attivo: false, pInizio: null, asseX: null, asseY: null, normale: null };
           
-          // Materiale Anteprima Azzurrina
           this.matAnteprima = new THREE.MeshBasicMaterial({ color: 0x00FFFF, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
           this.entitaAnteprima = document.createElement('a-entity');
           this.entitaAnteprima.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.matAnteprima));
           this.entitaAnteprima.setAttribute('visible', 'false');
           this.el.sceneEl.appendChild(this.entitaAnteprima);
 
-          // Taglio 2D Piatto Infallibile
           this.matTaglio = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true });
 
           this.testoUI = document.createElement('a-text');
@@ -231,24 +241,53 @@
             if (gestore) gestore.toggleImmagineSfondo();
           });
           
-          // Tasto Y: Taglierino -> Foto -> Schermo PC
+          // TASTO Y: Seleziona Strumento (Ora include CREA MURO)
           this.el.addEventListener('ybuttondown', () => {
             if(window.modalitaStrumento === 'taglio') window.modalitaStrumento = 'foto';
             else if(window.modalitaStrumento === 'foto') window.modalitaStrumento = 'schermo';
+            else if(window.modalitaStrumento === 'schermo') window.modalitaStrumento = 'muro';
             else window.modalitaStrumento = 'taglio';
             
             let t = 'Mod: TAGLIERINO';
-            if (window.modalitaStrumento === 'foto') t = 'Mod: POSIZIONA FOTO';
+            if (window.modalitaStrumento === 'foto') t = 'Mod: APPENDI FOTO';
             if (window.modalitaStrumento === 'schermo') t = 'Mod: POSIZIONA PC';
+            if (window.modalitaStrumento === 'muro') t = 'Mod: CREA MURO';
             
             document.querySelectorAll('[strumenti-controller]').forEach(c => {
               const txt = c.querySelector('a-text'); if(txt) txt.setAttribute('value', t);
             });
           });
 
-          // GRILLETTO GIÙ: Inizia a disegnare la cornice
+          // GRILLETTO
           this.el.addEventListener('triggerdown', () => {
             const hit = this.el.components.raycaster.intersections[0];
+            
+            // LA MAGIA DEL MURO MANUALE (Spawna ovunque, anche nel vuoto)
+            if (window.modalitaStrumento === 'muro') {
+              const muroEl = document.createElement('a-entity');
+              // È una superficie custom (riceve le texture) ED È spostabile (puoi afferrarlo!)
+              muroEl.classList.add('superficie-custom', 'superficie', 'spostabile'); 
+              
+              const gestore = this.el.sceneEl.components['gestore-spazio'];
+              const mat = (gestore && gestore.usaImmagine) ? gestore.matImgPiani : (gestore ? gestore.matWirePiani : new THREE.MeshBasicMaterial());
+              
+              const geom = new THREE.PlaneGeometry(1, 1);
+              const mesh = new THREE.Mesh(geom, mat);
+              muroEl.setObject3D('mesh', mesh);
+              
+              // Nasce davanti al controller
+              const ray = this.el.components.raycaster.raycaster.ray;
+              muroEl.object3D.position.copy(ray.direction.clone().multiplyScalar(1.0).add(ray.origin));
+              muroEl.object3D.lookAt(ray.origin); // Ti guarda
+              
+              this.el.sceneEl.appendChild(muroEl);
+              
+              // Chiamiamo aggiornaUVCustom per la geometria base 1x1
+              this.aggiornaUVCustom(muroEl.object3D);
+              return;
+            }
+
+            // DISEGNO CLASSICO (Richiede una superficie)
             if (!hit || !hit.object || !hit.object.el || !hit.object.el.classList.contains('superficie')) return;
 
             this.statoDisegno.attivo = true;
@@ -267,7 +306,6 @@
             this.entitaAnteprima.object3D.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(this.statoDisegno.asseX, this.statoDisegno.asseY, normale));
           });
 
-          // GRILLETTO SU: Genera l'oggetto definitivo nella cornice disegnata
           this.el.addEventListener('triggerup', () => {
             if (!this.statoDisegno.attivo) return;
             this.statoDisegno.attivo = false;
@@ -280,7 +318,6 @@
             const rotF = meshAnteprima.quaternion.clone();
             
             if (window.modalitaStrumento === 'taglio') {
-              // TAGLIO 2D: Perfetto e a filo muro
               const buco = document.createElement('a-entity');
               buco.classList.add('buco');
               const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.matTaglio);
@@ -292,7 +329,6 @@
               this.el.sceneEl.appendChild(buco);
             } 
             else if (window.modalitaStrumento === 'foto' && window.fotoAggiuntive.length > 0) {
-              // FOTO: Prende la dimensione esatta tracciata!
               const texFoto = window.fotoAggiuntive[window.indiceFoto];
               window.indiceFoto = (window.indiceFoto + 1) % window.fotoAggiuntive.length;
               
@@ -301,22 +337,21 @@
               const mat = new THREE.MeshBasicMaterial({ map: texFoto, transparent: true, side: THREE.DoubleSide });
               fotoEl.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat));
               
-              fotoEl.object3D.position.copy(posF.add(this.statoDisegno.normale.multiplyScalar(0.02))); // Poco avanti
+              fotoEl.object3D.position.copy(posF.add(this.statoDisegno.normale.multiplyScalar(0.02))); 
               fotoEl.object3D.quaternion.copy(rotF);
               fotoEl.object3D.scale.set(scX, scY, 1);
               this.el.sceneEl.appendChild(fotoEl);
             }
             else if (window.modalitaStrumento === 'schermo') {
-              // SCHERMO PC: Si adatta alla cornice disegnata
               const schermo = document.getElementById('schermo-virtuale');
               schermo.setAttribute('visible', 'true');
-              schermo.object3D.position.copy(posF.add(this.statoDisegno.normale.multiplyScalar(0.03))); // Staccato per essere visibile anche nei buchi
+              schermo.object3D.position.copy(posF.add(this.statoDisegno.normale.multiplyScalar(0.03))); 
               schermo.object3D.quaternion.copy(rotF);
               schermo.object3D.scale.set(scX, scY, 1);
             }
           });
 
-          // GRIP: Afferra o Cancella
+          // GRIP
           this.el.addEventListener('gripdown', () => {
             const hits = this.el.components.raycaster.intersections;
             const hitBuco = hits.find(h => h && h.object && h.object.el && h.object.el.classList.contains('buco'));
@@ -336,13 +371,44 @@
           // JOYSTICK
           this.el.addEventListener('thumbstickmoved', (e) => {
             if (this.oggettoAfferrato) {
-              if (Math.abs(e.detail.y) > 0.1) this.distanzaGrab = Math.max(0.2, this.distanzaGrab + (e.detail.y * -0.05));
-              if (Math.abs(e.detail.x) > 0.1) this.oggettoAfferrato.scale.multiplyScalar(Math.max(0.01, 1 + (e.detail.x * 0.04)));
+              // Avvicina / Allontana (Y)
+              if (Math.abs(e.detail.y) > 0.1) {
+                this.distanzaGrab = Math.max(0.2, this.distanzaGrab + (e.detail.y * -0.05));
+              }
+              // Scala (X)
+              if (Math.abs(e.detail.x) > 0.1) {
+                const fattoreScala = Math.max(0.01, 1 + (e.detail.x * 0.04));
+                this.oggettoAfferrato.scale.multiplyScalar(fattoreScala);
+                
+                // SE è un MURO CUSTOM, aggiorna la sua Texture (UV) per non sgranare l'immagine!
+                if (this.oggettoAfferrato.el && this.oggettoAfferrato.el.classList.contains('superficie-custom')) {
+                  this.aggiornaUVCustom(this.oggettoAfferrato);
+                }
+              }
             }
           });
         },
 
-        // ANIMAZIONE ANTEPRIMA DISEGNO e GRAB
+        // Mantiene proporzionata la texture sui muri custom creati da te, simulando i moduli da 4 metri
+        aggiornaUVCustom: function(obj3D) {
+          const mesh = obj3D.el.getObject3D('mesh');
+          if (!mesh) return;
+          const geom = mesh.geometry;
+          const scaleX = obj3D.scale.x; 
+          const scaleY = obj3D.scale.y; 
+          
+          const pos = geom.attributes.position;
+          const uvs = geom.attributes.uv.array;
+          for(let i=0; i<pos.count; i++) {
+            const px = pos.getX(i); 
+            const py = pos.getY(i);
+            // Mappa da -0.5/0.5 a Coordinate Spaziali scalate per i 4 Metri
+            uvs[i*2] = (px + 0.5) * (scaleX / 4.0);
+            uvs[i*2+1] = (py + 0.5) * (scaleY / 4.0);
+          }
+          geom.attributes.uv.needsUpdate = true;
+        },
+
         tick: function () {
           if (this.oggettoAfferrato) {
             const ray = this.el.components.raycaster.raycaster.ray;
@@ -368,7 +434,7 @@
         },
         attivaToggleMesh: function() {
           const gestore = this.el.sceneEl.components['gestore-spazio'];
-          if (gestore) gestore.toggleVisibilitaMesh();
+          if (gestore) gestore.toggleVisibilitaMeshAutomatica();
         }
       });
     </script>
@@ -389,7 +455,7 @@
       <button id="btn-connetti-pc" class="btn-ui" style="background: #2196F3;">Apri Canale PC</button>
     </div>
 
-    <!-- AR SCENE (Risoluzione Forzata: framebufferScaleFactor) -->
+    <!-- AR SCENE -->
     <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection; framebufferScaleFactor: 2.0;" gestore-spazio>
       <a-assets>
         <video id="video-pc-ricevuto" autoplay muted playsinline crossorigin="anonymous"></video>
@@ -400,8 +466,7 @@
       <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .superficie, .buco, .spostabile; far: 10;" strumenti-controller></a-entity>
       <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .superficie, .buco, .spostabile; far: 10;" strumenti-controller></a-entity>
 
-      <!-- SCHERMO PC (Spostabile) -->
-      <!-- Usa width=1 height=1 così si scala perfettamente sulle misure disegnate dal controller -->
+      <!-- SCHERMO PC -->
       <a-video id="schermo-virtuale" class="spostabile" src="#video-pc-ricevuto" width="1" height="1" visible="false"></a-video>
 
     </a-scene>
