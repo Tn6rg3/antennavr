@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>PC Sender - AR Studio</title>
+  <title>PC Sender - Alta Qualità</title>
   <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
   <style>
     body { font-family: sans-serif; text-align: center; padding: 50px; background: #222; color: white; }
@@ -11,41 +11,30 @@
   </style>
 </head>
 <body>
-
-  <h1>Trasmetti al Meta Quest</h1>
+  <h1>Trasmetti al Meta Quest (HD 1080p 60fps)</h1>
   <button id="start">Condividi Schermo al Quest</button>
   <h3 id="status" style="color: #aaa;">In attesa...</h3>
-  
   <video id="mioSchermo" autoplay muted></video>
 
   <script>
     document.getElementById('start').addEventListener('click', async () => {
       try {
-        // Cattura lo schermo
-        const streamSchermo = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        // FORZATURA ALTA QUALITÀ VIDEO
+        const streamSchermo = await navigator.mediaDevices.getDisplayMedia({ 
+          video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } }, 
+          audio: false 
+        });
         document.getElementById('mioSchermo').srcObject = streamSchermo;
         document.getElementById('status').innerText = "Elaborazione in corso...";
         
-        // Crea un ponte temporaneo
         const peerPC = new Peer();
-        
         peerPC.on('open', () => {
-          // Chiama il codice segreto del visore
           const call = peerPC.call('quest-italia-pro-847291', streamSchermo);
-          
-          document.getElementById('status').innerText = "✅ In trasmissione! Guarda nel visore.";
+          document.getElementById('status').innerText = "✅ In trasmissione Alta Qualità! Guarda nel visore.";
           document.getElementById('status').style.color = "#00FF00";
         });
-        
-        peerPC.on('error', err => {
-          document.getElementById('status').innerText = "Errore di connessione: " + err;
-        });
-
-      } catch (err) {
-        alert("Errore nella condivisione schermo. Riprova.");
-      }
+      } catch (err) { alert("Errore. Riprova."); }
     });
   </script>
-
 </body>
 </html>
