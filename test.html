@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Ottimizzato HD</title>
+    <title>AR Studio Pro - Massima Qualità</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <style>
@@ -25,7 +25,7 @@
         sceneEl.addEventListener('enter-vr', () => { document.getElementById('ui-2d').style.display = 'none'; });
         sceneEl.addEventListener('exit-vr', () => { document.getElementById('ui-2d').style.display = 'block'; });
 
-        // 1. CARICAMENTO SFONDO
+        // 1. CARICAMENTO SFONDO MURI (Altissima Qualità)
         document.getElementById('file-sfondo').addEventListener('change', function(e) {
           if (e.target.files[0]) {
             document.getElementById('status-sfondo').innerText = "Caricamento...";
@@ -34,6 +34,7 @@
               const tex = new THREE.Texture(img);
               tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
               tex.minFilter = tex.magFilter = THREE.LinearFilter;
+              tex.anisotropy = 8; // Forza la nitidezza massima in VR
               tex.generateMipmaps = false; tex.needsUpdate = true;
               window.userTexture = tex;
               document.getElementById('status-sfondo').innerText = "✅ Sfondo pronto (Usa tasto B)";
@@ -42,7 +43,7 @@
           }
         });
 
-        // 2. CARICAMENTO FOTO (Quadri)
+        // 2. CARICAMENTO FOTO (Quadri HD)
         document.getElementById('file-foto').addEventListener('change', function(e) {
           const files = e.target.files;
           window.fotoAggiuntive = [];
@@ -53,6 +54,7 @@
             img.onload = function() {
               const tex = new THREE.Texture(img);
               tex.minFilter = tex.magFilter = THREE.LinearFilter;
+              tex.anisotropy = 8; // Qualità fotografica
               tex.generateMipmaps = false; tex.needsUpdate = true;
               window.fotoAggiuntive.push(tex);
               document.getElementById('status-foto').innerText = `✅ ${window.fotoAggiuntive.length} Foto pronte!`;
@@ -75,13 +77,13 @@
               vid.play().then(() => {
                 btn.innerText = "✅ PC Connesso!"; btn.style.background = "#4CAF50";
                 document.querySelector('#schermo-virtuale').setAttribute('visible', 'true');
-              }).catch(e => console.log(e));
+              });
             });
           });
         });
       });
 
-      // CORE AR: GESTIONE SPAZIO (Ottimizzato Anti-Scatti)
+      // CORE AR: GESTIONE SPAZIO E MESH
       AFRAME.registerComponent('gestore-spazio', {
         init: function () {
           this.planes = new Map(); this.meshes = new Map();
@@ -114,8 +116,7 @@
           const renderer = this.el.sceneEl.renderer; if (!renderer.xr.isPresenting) return;
           const frame = this.el.sceneEl.frame; if (!frame) return;
           const refSpace = renderer.xr.getReferenceSpace(); if (!refSpace) return;
-
-          // FRENO MOTORE (Anti-Stuttering)
+          
           const sogliaAggiornamentoMs = 500; 
 
           if (frame.detectedPlanes) {
@@ -191,7 +192,7 @@
         }
       });
 
-      // IL SUPER-CONTROLLER: Ergonomia GRAB infallibile + Foto dritte + Taglio Piatto
+      // CONTROLLER LOGIC: Taglierino Volume, Foto, Grab e Clamp sui Muri
       AFRAME.registerComponent('strumenti-controller', {
         init: function () {
           this.oggettoAfferrato = null;
@@ -204,6 +205,7 @@
           };
           this.matTaglio = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true });
 
+          // Testo UI fluttuante
           this.testoUI = document.createElement('a-text');
           this.testoUI.setAttribute('value', 'Mod: TAGLIERINO');
           this.testoUI.setAttribute('position', '0 0.12 -0.1');
@@ -229,6 +231,7 @@
             return normale;
           };
 
+          // Tasti A/X (Mostra Mesh) e B (Sfondo)
           this.el.addEventListener('abuttondown', () => this.attivaToggleMesh());
           this.el.addEventListener('xbuttondown', () => this.attivaToggleMesh());
           this.el.addEventListener('bbuttondown', () => {
@@ -236,6 +239,7 @@
             if (gestore) gestore.toggleImmagineSfondo();
           });
           
+          // Tasto Y (Cambia modalità)
           this.el.addEventListener('ybuttondown', () => {
             window.modalitaStrumento = window.modalitaStrumento === 'taglio' ? 'foto' : 'taglio';
             const testo = window.modalitaStrumento === 'taglio' ? 'Mod: TAGLIERINO' : 'Mod: APPENDI FOTO';
@@ -267,15 +271,13 @@
               const entitaBuco = document.createElement('a-entity');
               entitaBuco.classList.add('buco');
               
-              // MODIFICA: Ora è un PIANO 2D (PlaneGeometry) senza volume
-              const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.matTaglio);
+              // RIPRISTINATO IL CUBO PER IL TAGLIO (Volume = Buchi Perfetti)
+              const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.5), this.matTaglio);
               mesh.renderOrder = -1;
               mesh.quaternion.setFromRotationMatrix(matriceRotazione);
               
               entitaBuco.setObject3D('mesh', mesh);
-              
-              // Posizionato appena davanti al muro (1 millimetro) per evitare compenetrazioni
-              entitaBuco.object3D.position.copy(hit.point.clone().add(normaleSicura.multiplyScalar(0.005)));
+              entitaBuco.object3D.position.copy(hit.point);
               
               this.el.sceneEl.appendChild(entitaBuco);
               this.statoTaglio.entitaPrincipale = entitaBuco; 
@@ -292,9 +294,7 @@
                 const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), mat);
                 
                 mesh.quaternion.setFromRotationMatrix(matriceRotazione);
-                
                 fotoEl.setObject3D('mesh', mesh);
-                // Posizionato 2 cm davanti al muro
                 fotoEl.object3D.position.copy(hit.point.clone().add(normaleSicura.multiplyScalar(0.02)));
                 
                 this.el.sceneEl.appendChild(fotoEl);
@@ -307,7 +307,7 @@
             this.statoTaglio.entitaPrincipale = null;
           });
 
-          // GRIP
+          // GRIP: Afferra o Cancella
           this.el.addEventListener('gripdown', () => {
             const hits = this.el.components.raycaster.intersections;
             
@@ -331,27 +331,43 @@
              this.oggettoAfferrato = null;
           });
 
-          // JOYSTICK
+          // JOYSTICK: Scala (X) e Allontana (Y)
           this.el.addEventListener('thumbstickmoved', (e) => {
             if (this.oggettoAfferrato) {
+              // Asse Y: Distanza
               if (Math.abs(e.detail.y) > 0.1) {
                 this.distanzaGrab += (e.detail.y * -0.05);
                 this.distanzaGrab = Math.max(0.1, this.distanzaGrab);
               }
+              // Asse X: Scalare Oggetto
               if (Math.abs(e.detail.x) > 0.1) {
-                const s = 1 + (e.detail.x * 0.04);
-                this.oggettoAfferrato.scale.multiplyScalar(Math.max(0.01, s));
+                const fattore = 1 + (e.detail.x * 0.04);
+                this.oggettoAfferrato.scale.multiplyScalar(fattore);
+                // Previene che sparisca diventando troppo piccolo
+                this.oggettoAfferrato.scale.clampScalar(0.05, 10.0);
               }
             }
           });
         },
 
-        // ANIMAZIONI
+        // ANIMAZIONI IN TEMPO REALE
         tick: function () {
           
+          // GRAB FLUIDO CON BLOCCO SUI MURI (Si appoggia, non trapassa)
           if (this.oggettoAfferrato) {
             const ray = this.el.components.raycaster.raycaster.ray;
-            const targetPos = ray.direction.clone().multiplyScalar(this.distanzaGrab).add(ray.origin);
+            let distanzaIdeale = this.distanzaGrab;
+
+            // Sensore Muro: Evita di trapassare la mesh
+            const hits = this.el.components.raycaster.intersections;
+            const hitMuro = hits.find(h => h && h.object && h.object.el && h.object.el.classList.contains('superficie'));
+            
+            if (hitMuro && hitMuro.distance < distanzaIdeale) {
+              // Blocca l'oggetto a 3 centimetri PRIMA di toccare il muro
+              distanzaIdeale = Math.max(0.1, hitMuro.distance - 0.03);
+            }
+
+            const targetPos = ray.direction.clone().multiplyScalar(distanzaIdeale).add(ray.origin);
             this.oggettoAfferrato.position.copy(targetPos);
             
             const currentControllerRot = this.el.object3D.quaternion.clone();
@@ -359,6 +375,7 @@
             this.oggettoAfferrato.quaternion.copy(deltaRot.multiply(this.rotOggettoGrab));
           }
 
+          // DISEGNO TAGLIERINO VOLUMETRICO
           if (this.statoTaglio.attivo && this.statoTaglio.entitaPrincipale) {
             const hit = this.el.components.raycaster.intersections[0];
             if (hit && hit.point) {
@@ -375,12 +392,9 @@
               
               const meshObj = this.statoTaglio.entitaPrincipale.getObject3D('mesh');
               if (meshObj) {
-                // Modifica solo X e Y per scalare il piano piatto, lasciando Z inalterato
+                // Modifica solo X e Y per larghezza/altezza, Z resta 0.5m di spessore per tagliare bene
                 meshObj.scale.set(larghezza, altezza, 1);
-                
-                // Aggiorniamo la posizione del centro, mantenendo l'offset di 1 millimetro fuori dal muro
-                const normaleMuro = new THREE.Vector3().crossVectors(this.statoTaglio.asseY, this.statoTaglio.asseX).normalize();
-                meshObj.position.copy(centro).add(normaleMuro.multiplyScalar(0.005));
+                meshObj.position.copy(centro);
               }
             }
           }
@@ -413,8 +427,8 @@
       <button id="btn-connetti-pc" class="btn-ui" style="background: #2196F3;">Apri Canale PC</button>
     </div>
 
-    <!-- SCENA AR IN ALTA DEFINIZIONE (framebufferScaleFactor: 2.0) -->
-    <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection; framebufferScaleFactor: 2.0;" gestore-spazio>
+    <!-- SCENA AR ALTA DEFINIZIONE (Antialiasing, Foveation spento, Scala Framebuffer 2x) -->
+    <a-scene antialias="true" renderer="colorManagement: true;" webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio>
       
       <a-assets>
         <video id="video-pc-ricevuto" autoplay muted playsinline crossorigin="anonymous"></video>
@@ -426,8 +440,8 @@
       <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .superficie, .buco, .spostabile; far: 10;" strumenti-controller></a-entity>
       <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" raycaster="objects: .superficie, .buco, .spostabile; far: 10;" strumenti-controller></a-entity>
 
-      <!-- SCHERMO PC (Spostabile) -->
-      <a-video id="schermo-virtuale" class="spostabile" src="#video-pc-ricevuto" width="1.6" height="0.9" position="0 1.2 -2.5" visible="false"></a-video>
+      <!-- SCHERMO PC -->
+      <a-video id="schermo-virtuale" class="spostabile" src="#video-pc-ricevuto" width="1.6" height="0.9" position="0 1.2 -2.5" visible="false" shader="flat"></a-video>
 
     </a-scene>
   </body>
