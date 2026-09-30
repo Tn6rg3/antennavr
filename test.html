@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Ottimizzato</title>
+    <title>AR Studio Pro - Ottimizzato HD</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <style>
@@ -115,7 +115,7 @@
           const frame = this.el.sceneEl.frame; if (!frame) return;
           const refSpace = renderer.xr.getReferenceSpace(); if (!refSpace) return;
 
-          // FRENO MOTORE (Anti-Stuttering): Aggiorna la mesh fisica solo se è passato abbastanza tempo
+          // FRENO MOTORE (Anti-Stuttering)
           const sogliaAggiornamentoMs = 500; 
 
           if (frame.detectedPlanes) {
@@ -191,16 +191,14 @@
         }
       });
 
-      // IL SUPER-CONTROLLER: Ergonomia GRAB infallibile + Foto dritte
+      // IL SUPER-CONTROLLER: Ergonomia GRAB infallibile + Foto dritte + Taglio Piatto
       AFRAME.registerComponent('strumenti-controller', {
         init: function () {
-          // Stato Grab Rinnovato (Senza attach/detach)
           this.oggettoAfferrato = null;
           this.distanzaGrab = 0;
           this.rotOggettoGrab = new THREE.Quaternion();
           this.rotControllerGrab = new THREE.Quaternion();
           
-          // Stato Taglio
           this.statoTaglio = {
             attivo: false, puntoInizio: null, asseX: null, asseY: null, entitaPrincipale: null
           };
@@ -254,7 +252,6 @@
 
             const normaleSicura = ottieniNormaleSicura(hit, this.el);
             
-            // Calcolo infallibile per l'orientamento dritto (Sia per il buco che per le foto)
             let up = new THREE.Vector3(0, 1, 0);
             if (Math.abs(normaleSicura.y) > 0.9) up.set(0, 0, -1);
             const asseX = new THREE.Vector3().crossVectors(up, normaleSicura).normalize();
@@ -269,11 +266,17 @@
 
               const entitaBuco = document.createElement('a-entity');
               entitaBuco.classList.add('buco');
-              const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.5), this.matTaglio);
+              
+              // MODIFICA: Ora è un PIANO 2D (PlaneGeometry) senza volume
+              const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.matTaglio);
               mesh.renderOrder = -1;
               mesh.quaternion.setFromRotationMatrix(matriceRotazione);
               
               entitaBuco.setObject3D('mesh', mesh);
+              
+              // Posizionato appena davanti al muro (1 millimetro) per evitare compenetrazioni
+              entitaBuco.object3D.position.copy(hit.point.clone().add(normaleSicura.multiplyScalar(0.005)));
+              
               this.el.sceneEl.appendChild(entitaBuco);
               this.statoTaglio.entitaPrincipale = entitaBuco; 
             } 
@@ -283,15 +286,15 @@
                 window.indiceFoto = (window.indiceFoto + 1) % window.fotoAggiuntive.length;
                 
                 const fotoEl = document.createElement('a-entity');
-                fotoEl.classList.add('spostabile'); // Permette di afferrarla!
+                fotoEl.classList.add('spostabile'); 
                 
                 const mat = new THREE.MeshBasicMaterial({ map: texFoto, transparent: true, side: THREE.DoubleSide });
                 const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), mat);
                 
-                // Mantiene la foto DRITTA e non inclinata in diagonale
                 mesh.quaternion.setFromRotationMatrix(matriceRotazione);
                 
                 fotoEl.setObject3D('mesh', mesh);
+                // Posizionato 2 cm davanti al muro
                 fotoEl.object3D.position.copy(hit.point.clone().add(normaleSicura.multiplyScalar(0.02)));
                 
                 this.el.sceneEl.appendChild(fotoEl);
@@ -304,7 +307,7 @@
             this.statoTaglio.entitaPrincipale = null;
           });
 
-          // GRIP: Afferra Schermo/Foto o Cancella Buco
+          // GRIP
           this.el.addEventListener('gripdown', () => {
             const hits = this.el.components.raycaster.intersections;
             
@@ -316,11 +319,9 @@
 
             const hitSpostabile = hits.find(h => h && h.object && h.object.el && h.object.el.classList.contains('spostabile'));
             if (hitSpostabile) {
-              // NUOVO GRAB: Non stacca l'oggetto dalla scena (Così non si bugga il raycaster)
               this.oggettoAfferrato = hitSpostabile.object.el.object3D;
               this.distanzaGrab = hitSpostabile.distance;
               
-              // Salva la rotazione iniziale per muoverlo in modo naturale col polso
               this.rotOggettoGrab.copy(this.oggettoAfferrato.quaternion);
               this.rotControllerGrab.copy(this.el.object3D.quaternion).invert();
             }
@@ -330,16 +331,14 @@
              this.oggettoAfferrato = null;
           });
 
-          // JOYSTICK: Scala e Allontana
+          // JOYSTICK
           this.el.addEventListener('thumbstickmoved', (e) => {
             if (this.oggettoAfferrato) {
               if (Math.abs(e.detail.y) > 0.1) {
-                // Modifica la distanza di tenuta
                 this.distanzaGrab += (e.detail.y * -0.05);
-                this.distanzaGrab = Math.max(0.2, this.distanzaGrab); // Non schiacciartelo in faccia
+                this.distanzaGrab = Math.max(0.1, this.distanzaGrab);
               }
               if (Math.abs(e.detail.x) > 0.1) {
-                // Modifica la scala in grandezza
                 const s = 1 + (e.detail.x * 0.04);
                 this.oggettoAfferrato.scale.multiplyScalar(Math.max(0.01, s));
               }
@@ -347,24 +346,19 @@
           });
         },
 
-        // ANIMAZIONI IN TEMPO REALE
+        // ANIMAZIONI
         tick: function () {
           
-          // 1. Logica del Grab Fluido (Nessun blocco del raycaster!)
           if (this.oggettoAfferrato) {
             const ray = this.el.components.raycaster.raycaster.ray;
-            
-            // Muove l'oggetto calcolando la traiettoria del laser
             const targetPos = ray.direction.clone().multiplyScalar(this.distanzaGrab).add(ray.origin);
             this.oggettoAfferrato.position.copy(targetPos);
             
-            // Ruota l'oggetto seguendo dolcemente il polso
             const currentControllerRot = this.el.object3D.quaternion.clone();
             const deltaRot = currentControllerRot.multiply(this.rotControllerGrab);
             this.oggettoAfferrato.quaternion.copy(deltaRot.multiply(this.rotOggettoGrab));
           }
 
-          // 2. Disegno del Taglio (Senza blocchi vettoriali)
           if (this.statoTaglio.attivo && this.statoTaglio.entitaPrincipale) {
             const hit = this.el.components.raycaster.intersections[0];
             if (hit && hit.point) {
@@ -381,8 +375,12 @@
               
               const meshObj = this.statoTaglio.entitaPrincipale.getObject3D('mesh');
               if (meshObj) {
-                meshObj.position.copy(centro);
+                // Modifica solo X e Y per scalare il piano piatto, lasciando Z inalterato
                 meshObj.scale.set(larghezza, altezza, 1);
+                
+                // Aggiorniamo la posizione del centro, mantenendo l'offset di 1 millimetro fuori dal muro
+                const normaleMuro = new THREE.Vector3().crossVectors(this.statoTaglio.asseY, this.statoTaglio.asseX).normalize();
+                meshObj.position.copy(centro).add(normaleMuro.multiplyScalar(0.005));
               }
             }
           }
@@ -415,8 +413,8 @@
       <button id="btn-connetti-pc" class="btn-ui" style="background: #2196F3;">Apri Canale PC</button>
     </div>
 
-    <!-- SCENA AR -->
-    <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection;" gestore-spazio>
+    <!-- SCENA AR IN ALTA DEFINIZIONE (framebufferScaleFactor: 2.0) -->
+    <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection; framebufferScaleFactor: 2.0;" gestore-spazio>
       
       <a-assets>
         <video id="video-pc-ricevuto" autoplay muted playsinline crossorigin="anonymous"></video>
