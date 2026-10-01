@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - 4K Raw Resolution</title>
+    <title>AR Studio Pro - Stencil Mask & Max Quality</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -13,7 +13,18 @@
     </style>
     <script>
       window.fileCaricati = []; window.scenaSalvata = []; window.statoApp = { modalita: 'inserisci' };
-      window.matTaglioFinale = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); 
+      
+      // ==============================================
+      // MAGIA STENCIL BUFFER: Il buco taglia solo il muro!
+      // ==============================================
+      window.matTaglioFinale = new THREE.MeshBasicMaterial({ 
+        colorWrite: false, 
+        depthWrite: false, // FONDAMENTALE: Non nasconde i modelli 3D o i video
+        stencilWrite: true,
+        stencilRef: 1,
+        stencilFunc: THREE.AlwaysStencilFunc,
+        stencilZPass: THREE.ReplaceStencilOp
+      }); 
 
       AFRAME.registerComponent('occlusione-mani', {
         init: function () {
@@ -24,30 +35,26 @@
         }
       });
 
-      // ==============================================
-      // FOTO 4K: MIPMAP DISATTIVATI PER NITIDEZZA PURA
-      // ==============================================
       AFRAME.registerComponent('foto-alta-qualita', {
         schema: {url: {type: 'string'}},
         init: function () {
           new THREE.TextureLoader().load(this.data.url, (texture) => {
-            texture.generateMipmaps = false; // BLUCCA LA SFOCATURA 3D!
-            texture.minFilter = THREE.LinearFilter; // Filtro tagliente 1:1
-            texture.magFilter = THREE.LinearFilter;
             texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy();
+            texture.minFilter = THREE.LinearMipmapLinearFilter;
+            texture.magFilter = THREE.LinearFilter;
             texture.encoding = THREE.sRGBEncoding;
-
+            texture.generateMipmaps = true;
+            
             const ratio = texture.image.width / texture.image.height;
             let width = 0.8; let height = 0.8; if (ratio > 1) height = width / ratio; else width = height * ratio;
-            const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true });
+            
+            // toneMapped: false previene l'oscuramento finto dei colori
+            const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, toneMapped: false });
             this.el.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(width, height), material));
           });
         }
       });
 
-      // ==============================================
-      // VIDEO 4K RAW
-      // ==============================================
       AFRAME.registerComponent('video-alta-qualita', {
         schema: {url: {type: 'string'}},
         init: function () {
@@ -55,16 +62,15 @@
           vid.src = this.data.url; vid.id = this.el.getAttribute('data-asset-id'); vid.crossOrigin = 'anonymous';
           vid.autoplay = true; vid.loop = true; vid.muted = false; vid.playsInline = true;
           document.querySelector('a-assets').appendChild(vid);
+
           vid.addEventListener('loadedmetadata', () => {
             const ratio = vid.videoWidth / vid.videoHeight;
             const texture = new THREE.VideoTexture(vid);
-            texture.generateMipmaps = false; // Forza il video raw senza compressioni grafiche
-            texture.minFilter = THREE.LinearFilter; 
-            texture.magFilter = THREE.LinearFilter; 
-            texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy(); 
+            texture.minFilter = THREE.LinearFilter; texture.magFilter = THREE.LinearFilter;
+            texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy();
             texture.encoding = THREE.sRGBEncoding;
             
-            this.el.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2 / ratio), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide })));
+            this.el.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2 / ratio), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, toneMapped: false })));
             vid.play().catch(e => console.log(e));
           });
         }
@@ -115,17 +121,31 @@
         peerQuest.on('call', call => {
           call.answer();
           call.on('stream', stream => {
-            document.getElementById('status-pc').innerText = "💻 PC 4K Connesso! (Apri Menu Tasto Y)"; document.getElementById('status-pc').style.color = "#00FFCC";
+            document.getElementById('status-pc').innerText = "💻 PC Connesso! (Apri Menu Tasto Y)"; document.getElementById('status-pc').style.color = "#00FFCC";
             let vid = document.getElementById('video-stream-pc');
             if (!vid) { vid = document.createElement('video'); vid.id = 'video-stream-pc'; vid.autoplay = true; vid.muted = true; vid.playsInline = true; document.querySelector('a-assets').appendChild(vid); }
             vid.srcObject = stream; vid.play().catch(e => console.error(e));
-            if (!window.fileCaricati.find(f => f.tipo === 'stream-pc')) { window.fileCaricati.unshift({ nome: "💻 Schermo PC (4K)", tipo: 'stream-pc', idElem: 'video-stream-pc' }); window.dispatchEvent(new Event('file-aggiornati')); }
+            if (!window.fileCaricati.find(f => f.tipo === 'stream-pc')) { window.fileCaricati.unshift({ nome: "💻 Schermo PC (HD)", tipo: 'stream-pc', idElem: 'video-stream-pc' }); window.dispatchEvent(new Event('file-aggiornati')); }
           });
         });
       });
 
       AFRAME.registerComponent('gestore-spazio-occulto', {
-        init: function () { this.planes = new Map(); this.meshes = new Map(); this.matOcclusione = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); },
+        init: function () { 
+          this.planes = new Map(); this.meshes = new Map(); 
+          
+          // MATERIALE MURO STENCIL: Disegna la maschera invisibile SOLO dove non c'è il buco!
+          this.matOcclusione = new THREE.MeshBasicMaterial({ 
+            colorWrite: false, 
+            depthWrite: true,
+            stencilWrite: true,
+            stencilRef: 1,
+            stencilFunc: THREE.NotEqualStencilFunc,
+            stencilFail: THREE.KeepStencilOp,
+            stencilZFail: THREE.KeepStencilOp,
+            stencilZPass: THREE.KeepStencilOp
+          }); 
+        },
         tick: function () {
           const renderer = this.el.sceneEl.renderer; const frame = this.el.sceneEl.frame; const refSpace = renderer?.xr?.getReferenceSpace();
           if (!renderer.xr.isPresenting || !frame || !refSpace) return;
@@ -146,7 +166,9 @@
         },
         creaEntita: function(geom) {
           const entity = document.createElement('a-entity'); entity.classList.add('muro'); 
-          const mesh = new THREE.Mesh(geom, this.matOcclusione); mesh.renderOrder = -1; entity.setObject3D('mesh', mesh); entity.object3D.matrixAutoUpdate = false;
+          const mesh = new THREE.Mesh(geom, this.matOcclusione); 
+          mesh.renderOrder = -1; // Muro disegnato dopo il buco, prima degli oggetti
+          entity.setObject3D('mesh', mesh); entity.object3D.matrixAutoUpdate = false;
           this.el.sceneEl.appendChild(entity); return entity;
         },
         createPlaneGeometry: function(plane) {
@@ -210,7 +232,12 @@
         },
         aggiornaListaMenu: function() {
           Array.from(this.menuContainer.children).forEach(child => { if (child.classList.contains('menu-file') || child.classList.contains('menu-info')) this.menuContainer.removeChild(child); });
-          if (window.statoApp.modalita === 'taglia') return;
+          if (window.statoApp.modalita === 'taglia') {
+            const txt = document.createElement('a-text');
+            txt.setAttribute('value', 'Punta su muri o oggetti\ne trascina il grilletto.');
+            txt.setAttribute('scale', '0.06 0.06 0.06'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0.03 0');
+            txt.classList.add('menu-info'); this.menuContainer.appendChild(txt); return;
+          }
           window.fileCaricati.forEach((file, index) => {
             const btn = document.createElement('a-plane'); btn.setAttribute('width', '0.22'); btn.setAttribute('height', '0.04'); btn.setAttribute('color', file.tipo === 'stream-pc' ? '#007ACC' : '#333333'); btn.setAttribute('position', `0 ${0.03 - (index * 0.045)} 0`); btn.classList.add('menu-btn', 'menu-file');
             const txt = document.createElement('a-text'); txt.setAttribute('value', file.nome.length > 18 ? file.nome.substring(0,18)+'...' : file.nome); txt.setAttribute('scale', '0.07 0.07 0.07'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0 0.01'); btn.appendChild(txt);
@@ -231,12 +258,8 @@
           else if (file.tipo === 'stream-pc') {
             const vid = document.getElementById(file.idElem);
             const texture = new THREE.VideoTexture(vid); 
-            texture.generateMipmaps = false; 
-            texture.minFilter = THREE.LinearFilter; 
-            texture.magFilter = THREE.LinearFilter; 
-            texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy(); 
-            texture.encoding = THREE.sRGBEncoding;
-            entity.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.9), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide })));
+            texture.minFilter = THREE.LinearFilter; texture.magFilter = THREE.LinearFilter; texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy(); texture.encoding = THREE.sRGBEncoding;
+            entity.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.9), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, toneMapped: false })));
           }
           document.querySelector('a-scene').appendChild(entity);
         }
@@ -281,7 +304,10 @@
             if (this.statoTaglio.attivo && this.statoTaglio.entity) {
               const mesh = this.statoTaglio.entity.getObject3D('mesh');
               const profondita = 2.0;
-              mesh.geometry.dispose(); mesh.geometry = new THREE.BoxGeometry(1, 1, profondita); mesh.material = window.matTaglioFinale; mesh.renderOrder = -10; 
+              mesh.geometry.dispose(); mesh.geometry = new THREE.BoxGeometry(1, 1, profondita); 
+              mesh.material = window.matTaglioFinale; 
+              mesh.renderOrder = -10; // Buco disegnato prima di tutto!
+              
               const posAttuale = this.statoTaglio.entity.object3D.position.clone();
               const posSullaSuperficie = posAttuale.sub(this.statoTaglio.normale.clone().multiplyScalar(0.01));
               const offsetCentramento = (profondita / 2) - 0.05; 
@@ -356,14 +382,14 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;"><b>Qualità 4K Attivata.</b> Nessuna compressione visiva su foto e schermo PC.</p>
+      <p style="font-size: 12px; color: #555;"><b>Fix Maschera e Qualità:</b> Gli oggetti 3D e le foto non vengono più tagliati dai buchi, solo i muri veri vengono nascosti!</p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
       <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
     </div>
 
-    <!-- Antialiasing a false velocizza il render 4K, foveationLevel: 0 tiene tutto nitido -->
-    <a-scene antialias="false" renderer="colorManagement: true; highRefreshRate: true;" webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
+    <!-- Antialias=true per togliere l'effetto seghettato (migliora nitidezza testuale) -->
+    <a-scene antialias="true" renderer="colorManagement: true; highRefreshRate: true; physicallyCorrectLights: true;" webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
       <a-light type="ambient" color="#ffffff" intensity="1.0"></a-light>
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
       <a-assets></a-assets>
