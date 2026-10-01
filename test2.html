@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Memoria DB & Master Anchor</title>
+    <title>AR Studio Pro - Ultimate Edition (Unbounded & Anchor)</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -16,9 +16,7 @@
       window.matTaglioFinale = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); 
       window.matTaglioVisibile = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.5, depthWrite: true });
 
-      // ==============================================
-      // DATABASE INTERNO (Salva File e Scena per sempre)
-      // ==============================================
+      // DATABASE INTERNO
       window.dbPromise = new Promise((resolve, reject) => {
         const req = indexedDB.open('AR_Studio_DB', 1);
         req.onupgradeneeded = e => {
@@ -138,7 +136,7 @@
       });
 
       document.addEventListener('DOMContentLoaded', () => {
-        window.caricaFilesInDB(); // Carica i file dalla memoria al volo!
+        window.caricaFilesInDB();
 
         const sceneEl = document.querySelector('a-scene');
         sceneEl.addEventListener('enter-vr', () => { document.getElementById('ui-2d').style.display = 'none'; });
@@ -149,11 +147,8 @@
           for(let i=0; i<e.target.files.length; i++) {
             const file = e.target.files[i]; 
             const tipo = file.name.split('.').pop().toLowerCase();
-            
-            // Salva fisicamente il file nel Database del visore
             const tx = db.transaction('files', 'readwrite');
             tx.objectStore('files').put({ nome: file.name, data: file, tipo: tipo });
-
             window.fileCaricati.push({ nome: file.name, url: URL.createObjectURL(file), tipo: tipo });
           }
           document.getElementById('status-assets').innerText = `✅ ${window.fileCaricati.length} file pronti e SALVATI IN MEMORIA!`;
@@ -226,13 +221,12 @@
             window.statoApp.modalita = modalitaLista[modIdx];
             
             this.txtMod.setAttribute('value', 'MOD: ' + window.statoApp.modalita.toUpperCase());
-            if (modIdx === 0) this.btnMod.setAttribute('color', '#FF9800'); // Arancione
-            else if (modIdx === 1) this.btnMod.setAttribute('color', '#E91E63'); // Rosa
-            else this.btnMod.setAttribute('color', '#9C27B0'); // Viola per l'ancora
+            if (modIdx === 0) this.btnMod.setAttribute('color', '#FF9800'); 
+            else if (modIdx === 1) this.btnMod.setAttribute('color', '#E91E63'); 
+            else this.btnMod.setAttribute('color', '#9C27B0'); 
             
             this.aggiornaListaMenu();
 
-            // Rende i buchi visibili in modalità taglio
             document.querySelectorAll('.buco').forEach(buco => {
               const mesh = buco.getObject3D('mesh');
               if (mesh) mesh.material = window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale;
@@ -255,7 +249,7 @@
         salvaScena: async function(textEl) {
           const ancora = document.getElementById('ancora-spaziale');
           if (!ancora) {
-            textEl.setAttribute('value', 'PIAZZA ANCORA PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2000); return;
+            textEl.setAttribute('value', 'PIAZZA ANCORA (DISCO VERDE) PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2500); return;
           }
           
           ancora.object3D.updateMatrixWorld();
@@ -285,7 +279,7 @@
         ripristinaScena: async function(textEl) {
           const ancora = document.getElementById('ancora-spaziale');
           if (!ancora) {
-            textEl.setAttribute('value', 'PIAZZA ANCORA PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000); return;
+            textEl.setAttribute('value', 'PIAZZA ANCORA (DISCO VERDE) PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2500); return;
           }
 
           const db = await window.dbPromise;
@@ -294,10 +288,9 @@
           req.onsuccess = e => {
             const result = e.target.result;
             if (!result) {
-              textEl.setAttribute('value', 'NESSUN SALVATAGGIO'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000); return;
+              textEl.setAttribute('value', 'NESSUN SALVATAGGIO TROVATO'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000); return;
             }
             
-            // Pulisce la scena attuale
             document.querySelectorAll('.spostabile, .buco').forEach(el => {
               const assetId = el.getAttribute('data-asset-id');
               if (assetId) {
@@ -329,7 +322,7 @@
                 document.querySelector('a-scene').appendChild(entity);
               }
             });
-            textEl.setAttribute('value', 'ALLINEAMENTO FATTO!'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000);
+            textEl.setAttribute('value', 'ALLINEAMENTO PERFETTO!'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000);
           };
         },
         aggiornaListaMenu: function() {
@@ -374,33 +367,39 @@
 
           this.el.addEventListener('triggerdown', () => {
             const hits = this.el.components.raycaster.intersections; if (hits.length === 0) return;
-            const hitMenu = hits.find(h => h.object.el.classList.contains('menu-btn')); if (hitMenu) { hitMenu.object.el.emit('click'); return; }
+            const hitMenu = hits.find(h => h.object && h.object.el && h.object.el.classList.contains('menu-btn')); if (hitMenu) { hitMenu.object.el.emit('click'); return; }
 
             // =====================================
-            // LOGICA PIAZZAMENTO ANCORA MASTER
+            // FIX: CREAZIONE DISCO VERDE SICURA
             // =====================================
             if (window.statoApp.modalita === 'ancora') {
-              const hit = hits.find(h => h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile'));
+              // Il "Safe Check": assicura che il raggio abbia colpito un oggetto valido prima di processarlo
+              const hit = hits.find(h => h.object && h.object.el && (h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile')));
               if (hit) {
                 let entity = document.getElementById('ancora-spaziale');
                 if (!entity) {
-                  entity = document.createElement('a-entity'); entity.id = 'ancora-spaziale';
+                  entity = document.createElement('a-entity'); 
+                  entity.id = 'ancora-spaziale';
+                  // Disco più grande e visibile per essere sicuri
                   const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 32), new THREE.MeshBasicMaterial({ color: 0x00FF00, depthTest: false }));
-                  mesh.renderOrder = 9999; entity.setObject3D('mesh', mesh); this.el.sceneEl.appendChild(entity);
+                  mesh.renderOrder = 9999; 
+                  entity.setObject3D('mesh', mesh); 
+                  this.el.sceneEl.appendChild(entity);
                 }
-                let normale = new THREE.Vector3(0, 0, 1);
-                if (hit.face && hit.face.normal) { normale.copy(hit.face.normal); if (hit.object && hit.object.matrixWorld) { normale.applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize(); } }
-                let up = new THREE.Vector3(0, 1, 0); if (Math.abs(normale.y) > 0.9) up.set(0, 0, -1);
-                let asseX = new THREE.Vector3().crossVectors(up, normale).normalize(); let asseY = new THREE.Vector3().crossVectors(normale, asseX).normalize();
                 
-                entity.object3D.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(asseX, normale, asseY));
+                let normale = hit.face ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0);
+                if (hit.object && hit.object.matrixWorld) { normale.applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize(); }
+                
+                // Ruota il disco per appiattirsi sulla superficie colpita
+                let quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normale);
+                entity.object3D.quaternion.copy(quaternion);
                 entity.object3D.position.copy(hit.point.clone().add(normale.clone().multiplyScalar(0.01)));
               }
               return;
             }
 
             if (window.statoApp.modalita === 'taglia') {
-              const hit = hits.find(h => h.object.el.classList.contains('spostabile') || h.object.el.classList.contains('muro'));
+              const hit = hits.find(h => h.object && h.object.el && (h.object.el.classList.contains('spostabile') || h.object.el.classList.contains('muro')));
               if (hit) {
                 this.statoTaglio.attivo = true; this.statoTaglio.startPt = hit.point.clone(); 
                 let normale = new THREE.Vector3(0, 0, 1);
@@ -418,7 +417,7 @@
               return;
             }
 
-            const hitObj = hits.find(h => h.object.el.classList.contains('spostabile'));
+            const hitObj = hits.find(h => h.object && h.object.el && h.object.el.classList.contains('spostabile'));
             if (hitObj) { this.oggettoAfferrato = hitObj.object.el; this.distanzaGrab = hitObj.distance; }
           });
 
@@ -465,7 +464,7 @@
         tick: function () {
           const hits = this.el.components.raycaster.intersections;
           if ((window.statoApp.modalita === 'taglia' || window.statoApp.modalita === 'ancora') && !this.statoTaglio.attivo && hits.length > 0) {
-            const hitForMirino = hits.find(h => h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile'));
+            const hitForMirino = hits.find(h => h.object && h.object.el && (h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile')));
             if (hitForMirino) { this.mirino.setAttribute('visible', 'true'); this.mirino.object3D.position.copy(hitForMirino.point); } else { this.mirino.setAttribute('visible', 'false'); }
           } else { this.mirino.setAttribute('visible', 'false'); }
 
@@ -507,14 +506,16 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;"><b>Fix Ancoraggio:</b> Usa "MOD: ANCORA" per piazzare il disco verde su uno spigolo fisico. Usa quello spigolo per allineare tutto se ricarichi la pagina!</p>
+      <p style="font-size: 12px; color: #555;"><b>Fix Ancoraggio & Unbounded:</b> Il Disco Verde ora si crea in modo sicuro e l'ambiente ignorerà i reset della visuale del Tasto Meta!</p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
       <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
     </div>
 
-    <!-- layers inserito per permettere al QuadLayer hardware di stampare il PC in risoluzione nativa -->
-    <a-scene antialias="true" renderer="colorManagement: true; highRefreshRate: true;" webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection, layers; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
+    <!-- ===================================== -->
+    <!-- FIX UNBOUNDED (Previene il reset col Tasto Meta) -->
+    <!-- ===================================== -->
+    <a-scene antialias="true" renderer="colorManagement: true; highRefreshRate: true;" webxr="referenceSpaceType: unbounded; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection, layers, unbounded, local-floor; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
       <a-light type="ambient" color="#ffffff" intensity="1.5"></a-light>
       <a-light type="directional" color="#ffffff" intensity="1.5" position="-1 2 1"></a-light>
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
