@@ -6,34 +6,32 @@
     <!-- A-Frame e dipendenze -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
-    <!-- STLLoader per i file STL -->
+    <!-- Caricatori 3D: STL (senza colori) e GLTF/GLB (con colori e texture) -->
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
+    <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/GLTFLoader.js"></script>
     <style>
       #ui-2d {
         position: absolute; top: 20px; left: 20px; z-index: 999;
         background: rgba(255, 255, 255, 0.95); padding: 20px;
-        border-radius: 10px; font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 320px;
+        border-radius: 10px; font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 340px;
       }
       .btn-ui { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; }
     </style>
     <script>
       window.fileCaricati = [];
 
-      // COMPONENTE STL MIGLIORATO: Centra, scala (max 50cm) e applica materiale
+      // COMPONENTE: Carica STL, lo centra e lo scala a max 50cm
       AFRAME.registerComponent('stl-model', {
         schema: {src: {type: 'string'}},
         init: function () {
           const loader = new THREE.STLLoader();
           loader.load(this.data.src, (geometry) => {
-            
-            // 1. Centra la geometria
             geometry.computeBoundingBox();
             const box = geometry.boundingBox;
             const center = new THREE.Vector3();
             box.getCenter(center);
             geometry.translate(-center.x, -center.y, -center.z);
 
-            // 2. Scala proporzionalmente a max 50cm per evitare che sia gigante e non si veda
             const size = new THREE.Vector3();
             box.getSize(size);
             const maxDim = Math.max(size.x, size.y, size.z);
@@ -41,15 +39,38 @@
               const scale = 0.5 / maxDim; 
               geometry.scale(scale, scale, scale);
             }
-
             geometry.computeVertexNormals();
             
-            // 3. Materiale visibile che reagisce alle luci
-            const material = new THREE.MeshStandardMaterial({ 
-              color: 0x00FFCC, metalness: 0.3, roughness: 0.4, side: THREE.DoubleSide 
-            });
+            const material = new THREE.MeshStandardMaterial({ color: 0x00FFCC, metalness: 0.3, roughness: 0.4, side: THREE.DoubleSide });
             const mesh = new THREE.Mesh(geometry, material);
             this.el.setObject3D('mesh', mesh);
+          });
+        }
+      });
+
+      // COMPONENTE: Carica GLB/GLTF (Modelli a Colori), li centra e scala a max 50cm
+      AFRAME.registerComponent('gltf-colorato', {
+        schema: {url: {type: 'string'}},
+        init: function() {
+          const loader = new THREE.GLTFLoader();
+          loader.load(this.data.url, (gltf) => {
+            const model = gltf.scene;
+            const box = new THREE.Box3().setFromObject(model);
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            
+            const wrapper = new THREE.Group();
+            model.position.sub(center); // Centra l'oggetto nel wrapper
+            wrapper.add(model);
+
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            const maxDim = Math.max(size.x, size.y, size.z);
+            if (maxDim > 0) {
+              const scale = 0.5 / maxDim; 
+              wrapper.scale.set(scale, scale, scale);
+            }
+            this.el.setObject3D('mesh', wrapper);
           });
         }
       });
@@ -72,14 +93,14 @@
         });
       });
 
-      // GESTORE OCCLUSIONE (Muri Invisibili che coprono il 3D)
+      // GESTORE OCCLUSIONE E COLLISIONI (Crea Muri Invisibili per bloccare i file)
       AFRAME.registerComponent('gestore-spazio-occulto', {
         init: function () {
           this.planes = new Map(); 
           this.meshes = new Map();
           this.matOcclusione = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true });
         },
-        tick: function (time) {
+        tick: function () {
           const renderer = this.el.sceneEl.renderer; if (!renderer.xr.isPresenting) return;
           const frame = this.el.sceneEl.frame; if (!frame) return;
           const refSpace = renderer.xr.getReferenceSpace(); if (!refSpace) return;
@@ -104,6 +125,8 @@
         },
         creaEntitaOcclusione: function(geometry) {
           const entity = document.createElement('a-entity');
+          // La classe 'muro' permette al controller di riconoscere l'ostacolo e fermare l'oggetto
+          entity.classList.add('muro');
           const mesh = new THREE.Mesh(geometry, this.matOcclusione);
           mesh.renderOrder = -1; 
           entity.setObject3D('mesh', mesh);
@@ -120,11 +143,10 @@
         }
       });
 
-      // PANNELLO CONTROLLER SINISTRO
+      // PANNELLO CONTROLLER SINISTRO (Menu)
       AFRAME.registerComponent('pannello-sx', {
         init: function() {
           this.menuVisibile = false;
-          
           this.menuContainer = document.createElement('a-entity');
           this.menuContainer.setAttribute('position', '0.1 0.1 -0.1');
           this.menuContainer.setAttribute('rotation', '-45 0 0');
@@ -168,7 +190,6 @@
             btn.addEventListener('raycaster-intersected', () => btn.setAttribute('color', '#555555'));
             btn.addEventListener('raycaster-intersected-cleared', () => btn.setAttribute('color', '#333333'));
             btn.addEventListener('click', () => this.spawnaOggetto(file));
-
             this.menuContainer.appendChild(btn);
           });
         },
@@ -176,20 +197,19 @@
           const entity = document.createElement('a-entity');
           entity.classList.add('spostabile'); 
           
-          // GENERAZIONE ESATTA SUL CONTROLLER SINISTRO
           const pos = new THREE.Vector3();
           this.el.object3D.getWorldPosition(pos);
           entity.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
-
-          // Scala di default per le immagini
           entity.setAttribute('scale', '1 1 1'); 
 
-          if (file.tipo === 'obj') {
+          if (file.tipo === 'glb' || file.tipo === 'gltf') {
+            entity.setAttribute('gltf-colorato', `url: ${file.url}`);
+          } else if (file.tipo === 'obj') {
             entity.setAttribute('obj-model', `obj: url(${file.url})`);
-            entity.setAttribute('material', 'color: #cccccc'); // Aggiunta materiale all'OBJ per sicurezza
+            entity.setAttribute('material', 'color: #cccccc'); 
           } else if (file.tipo === 'stl') {
             entity.setAttribute('stl-model', `src: ${file.url}`);
-          } else if (file.tipo === 'png' || file.tipo === 'jpg') {
+          } else if (file.tipo === 'png' || file.tipo === 'jpg' || file.tipo === 'jpeg') {
             entity.setAttribute('geometry', 'primitive: plane; width: 0.5; height: 0.5');
             entity.setAttribute('material', `src: url(${file.url}); side: double; transparent: true`);
           } else if (file.tipo === 'mp4') {
@@ -197,7 +217,6 @@
             const vid = document.createElement('video');
             vid.src = file.url; vid.id = vidId; vid.autoplay = true; vid.loop = true; vid.muted = false;
             document.querySelector('a-assets').appendChild(vid);
-            
             entity.setAttribute('geometry', 'primitive: plane; width: 0.8; height: 0.45');
             entity.setAttribute('material', `src: #${vidId}; side: double`);
             vid.play().catch(e => console.log(e));
@@ -207,17 +226,16 @@
         }
       });
 
-      // CONTROLLER DESTRO (SPOSTAMENTO CON LEVE)
+      // CONTROLLER DESTRO (Manipolazione Avanzata e Collisioni)
       AFRAME.registerComponent('strumenti-dx', {
         init: function () {
           this.oggettoAfferrato = null;
           this.distanzaGrab = 0;
-          this.stickX = 0;
-          this.stickY = 0;
+          this.stickRotX = 0;
+          this.stickRotY = 0;
           
           this.el.addEventListener('triggerdown', () => {
-            const raycaster = this.el.components.raycaster;
-            const hits = raycaster.intersections;
+            const hits = this.el.components.raycaster.intersections;
             if (hits.length === 0) return;
 
             const hitMenu = hits.find(h => h.object.el.classList.contains('menu-btn'));
@@ -230,42 +248,53 @@
             }
           });
 
-          this.el.addEventListener('triggerup', () => {
-            this.oggettoAfferrato = null;
-          });
+          this.el.addEventListener('triggerup', () => { this.oggettoAfferrato = null; });
 
-          // Registra l'input della Leva (sia asse X che Y)
+          // Levetta Destra: Gestisce la ROTAZIONE (Orizzontale e Verticale)
           this.el.addEventListener('thumbstickmoved', (e) => {
-            this.stickX = e.detail.x; 
-            this.stickY = e.detail.y;
+            this.stickRotY = e.detail.x; // Destra/Sinistra -> Ruota Asse Y
+            this.stickRotX = e.detail.y; // Su/Giù -> Ruota Asse X
           });
 
+          // Tasto A e B: Scala
           this.el.addEventListener('abuttondown', () => {
             if (this.oggettoAfferrato) this.oggettoAfferrato.object3D.scale.multiplyScalar(1.2); 
           });
-
           this.el.addEventListener('bbuttondown', () => {
             if (this.oggettoAfferrato) this.oggettoAfferrato.object3D.scale.multiplyScalar(0.8); 
+          });
+
+          // Levetta Sinistra: Gestisce la DISTANZA (Allontanare/Avvicinare)
+          const controllerSx = document.querySelector('#controller-sx');
+          controllerSx.addEventListener('thumbstickmoved', (e) => {
+            if (this.oggettoAfferrato) {
+              this.distanzaGrab += e.detail.y * -0.05; 
+              this.distanzaGrab = Math.max(0.1, this.distanzaGrab);
+            }
           });
         },
         tick: function () {
           if (this.oggettoAfferrato) {
             
-            // SPINGI / TIRA con la LEVA (Asse Y)
-            if (Math.abs(this.stickY) > 0.1) {
-              this.distanzaGrab += this.stickY * -0.05; 
-              this.distanzaGrab = Math.max(0.1, this.distanzaGrab); // Limite minimo 10 cm
+            // RUOTA con la LEVA DESTRA su entrambi gli assi
+            if (Math.abs(this.stickRotY) > 0.1) this.oggettoAfferrato.object3D.rotation.y -= this.stickRotY * 0.05; 
+            if (Math.abs(this.stickRotX) > 0.1) this.oggettoAfferrato.object3D.rotation.x -= this.stickRotX * 0.05;
+
+            // SISTEMA DI COLLISIONE: Non far attraversare i muri scansionati
+            let distanzaIdeale = this.distanzaGrab;
+            const hits = this.el.components.raycaster.intersections;
+            const hitMuro = hits.find(h => h.object.el.classList.contains('muro'));
+            
+            // Se il raggio colpisce un muro e il muro è più vicino della distanza desiderata
+            if (hitMuro && hitMuro.distance < this.distanzaGrab) {
+              // Ferma l'oggetto a 15 cm dal muro per non farlo compenetrare
+              distanzaIdeale = Math.max(0.05, hitMuro.distance - 0.15); 
             }
 
-            // Applica Distanza
+            // SPOSTAMENTO FINALE
             const ray = this.el.components.raycaster.raycaster.ray;
-            const targetPos = ray.direction.clone().multiplyScalar(this.distanzaGrab).add(ray.origin);
+            const targetPos = ray.direction.clone().multiplyScalar(distanzaIdeale).add(ray.origin);
             this.oggettoAfferrato.object3D.position.copy(targetPos);
-
-            // RUOTA con la LEVA (Asse X)
-            if (Math.abs(this.stickX) > 0.1) {
-              this.oggettoAfferrato.object3D.rotation.y -= this.stickX * 0.05; 
-            }
           }
         }
       });
@@ -274,26 +303,25 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;">Carica STL, OBJ o Immagini. Li troverai sul polso sinistro (Tasto Y).</p>
-      <input type="file" id="file-assets" accept=".obj,.stl,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
+      <p style="font-size: 13px; color: #555;">Carica <b>GLB/GLTF</b> (per i colori), STL, OBJ o Immagini. Li troverai sul polso sinistro (Tasto Y).</p>
+      <!-- Aggiunto supporto a .glb e .gltf nell'input file -->
+      <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
     </div>
 
-    <!-- SCENA AR -->
     <a-scene antialias="true" renderer="colorManagement: true;" webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection" gestore-spazio-occulto>
       
-      <!-- LUCI AGGIUNTE: Fondamentali per vedere i modelli 3D e i materiali Standard -->
       <a-light type="ambient" color="#ffffff" intensity="0.8"></a-light>
       <a-light type="directional" color="#ffffff" intensity="0.6" position="-1 2 1"></a-light>
-
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
       <a-assets></a-assets>
 
-      <!-- CONTROLLER SINISTRO (Menu File su Tasto Y e Spawn point) -->
-      <a-entity laser-controls="hand: left" oculus-touch-controls="hand: left" pannello-sx></a-entity>
+      <!-- CONTROLLER SINISTRO (Menu File su Tasto Y e Levetta per allontanare/avvicinare) -->
+      <a-entity id="controller-sx" laser-controls="hand: left" oculus-touch-controls="hand: left" pannello-sx></a-entity>
 
-      <!-- CONTROLLER DESTRO (Raggio, Afferra e Leve di Spostamento) -->
-      <a-entity laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .spostabile, .menu-btn; far: 10;" cursor="rayOrigin: controller" strumenti-dx></a-entity>
+      <!-- CONTROLLER DESTRO (Raggio, Afferra e Levetta per ruotare orizzontale/verticale) -->
+      <!-- Aggiunta classe .muro al raycaster per intercettare i muri reali -->
+      <a-entity id="controller-dx" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .spostabile, .menu-btn, .muro; far: 10;" cursor="rayOrigin: controller" strumenti-dx></a-entity>
 
     </a-scene>
   </body>
