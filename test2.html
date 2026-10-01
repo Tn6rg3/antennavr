@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Smart Anchor Realign</title>
+    <title>AR Studio Pro - Volumetric Hand Tracking</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -66,6 +66,108 @@
               }
             });
           });
+        }
+      });
+
+      // ==============================================
+      // GESTORE VOLUMETRICO MANI (HAND TRACKING)
+      // ==============================================
+      AFRAME.registerComponent('gestore-mani-volumetrico', {
+        init: function() {
+          this.manoSx = document.querySelector('#mano-sx');
+          this.manoDx = document.querySelector('#mano-dx');
+          this.statoSx = { grabbing: false, obj: null, offsetPos: new THREE.Vector3(), offsetQuat: new THREE.Quaternion() };
+          this.statoDx = { grabbing: false, obj: null, offsetPos: new THREE.Vector3(), offsetQuat: new THREE.Quaternion() };
+          this.distanzaIniziale = 0;
+          this.scalaIniziale = new THREE.Vector3();
+
+          // Avvia i listener per il Pizzico ("Pinch")
+          this.setupHand(this.manoSx, this.statoSx);
+          this.setupHand(this.manoDx, this.statoDx);
+        },
+        setupHand: function(elMano, stato) {
+          elMano.addEventListener('pinchstarted', (e) => {
+            let closest = null; let minD = 1000;
+            const handPos = new THREE.Vector3(); elMano.object3D.getWorldPosition(handPos);
+            
+            // Trova l'oggetto più vicino su cui la mano sta "entrando"
+            document.querySelectorAll('.spostabile').forEach(obj => {
+               const mesh = obj.getObject3D('mesh');
+               if (!mesh) return;
+               const box = new THREE.Box3().setFromObject(mesh);
+               // Allarga la "scatola" di 15cm per facilitare la presa anche se non sei precisissimo
+               box.expandByScalar(0.15); 
+               
+               if (box.containsPoint(handPos)) {
+                   const d = box.getCenter(new THREE.Vector3()).distanceTo(handPos);
+                   if(d < minD) { minD = d; closest = obj; }
+               }
+            });
+
+            if(closest) {
+               stato.grabbing = true; stato.obj = closest;
+               const obj3D = closest.object3D; const hand3D = elMano.object3D;
+               
+               // Controllo Presa a Due Mani (Minority Report mode)
+               if(this.statoSx.grabbing && this.statoDx.grabbing && this.statoSx.obj === this.statoDx.obj) {
+                  const p1 = new THREE.Vector3(); this.manoSx.object3D.getWorldPosition(p1);
+                  const p2 = new THREE.Vector3(); this.manoDx.object3D.getWorldPosition(p2);
+                  this.distanzaIniziale = p1.distanceTo(p2);
+                  this.scalaIniziale.copy(obj3D.scale);
+               } else {
+                   // Presa a Una Mano (Salva la distanza tra polso e oggetto per ruotarlo fluidamente)
+                   const invHandMat = new THREE.Matrix4().copy(hand3D.matrixWorld).invert();
+                   const relMat = new THREE.Matrix4().multiplyMatrices(invHandMat, obj3D.matrixWorld);
+                   relMat.decompose(stato.offsetPos, stato.offsetQuat, new THREE.Vector3());
+               }
+            }
+          });
+
+          elMano.addEventListener('pinchended', (e) => {
+             stato.grabbing = false;
+             
+             // Se stavamo usando due mani e ne lasciamo una, dobbiamo "aggiornare" la mano rimasta
+             const altraStato = (stato === this.statoSx) ? this.statoDx : this.statoSx;
+             const altraMano = (stato === this.statoSx) ? this.manoDx : this.manoSx;
+             
+             if (altraStato.grabbing && altraStato.obj === stato.obj) {
+                 const obj3D = altraStato.obj.object3D; const hand3D = altraMano.object3D;
+                 const invHandMat = new THREE.Matrix4().copy(hand3D.matrixWorld).invert();
+                 const relMat = new THREE.Matrix4().multiplyMatrices(invHandMat, obj3D.matrixWorld);
+                 relMat.decompose(altraStato.offsetPos, altraStato.offsetQuat, new THREE.Vector3());
+             }
+             stato.obj = null;
+          });
+        },
+        tick: function() {
+           // Se stiamo afferrando lo stesso oggetto con due mani
+           if (this.statoSx.grabbing && this.statoDx.grabbing && this.statoSx.obj === this.statoDx.obj) {
+               const p1 = new THREE.Vector3(); this.manoSx.object3D.getWorldPosition(p1);
+               const p2 = new THREE.Vector3(); this.manoDx.object3D.getWorldPosition(p2);
+               
+               // Ingrandisci/Rimpicciolisci in base a quanto allarghi le braccia
+               const currentDist = p1.distanceTo(p2);
+               const ratio = currentDist / this.distanzaIniziale;
+               const obj3D = this.statoSx.obj.object3D;
+               obj3D.scale.copy(this.scalaIniziale).multiplyScalar(ratio);
+               
+               // Posiziona l'oggetto esattamente a metà tra le due mani
+               const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+               obj3D.position.copy(mid);
+           } else {
+               // Logica a 1 mano (Trascinamento e Rotazione col polso)
+               const applyHand = (stato, mano) => {
+                   if(stato.grabbing && stato.obj) {
+                       const obj3D = stato.obj.object3D; const hand3D = mano.object3D;
+                       const handMat = new THREE.Matrix4().copy(hand3D.matrixWorld);
+                       const offsetMat = new THREE.Matrix4().compose(stato.offsetPos, stato.offsetQuat, obj3D.scale); 
+                       const finalMat = new THREE.Matrix4().multiplyMatrices(handMat, offsetMat);
+                       finalMat.decompose(obj3D.position, obj3D.quaternion, new THREE.Vector3());
+                   }
+               };
+               applyHand(this.statoSx, this.manoSx);
+               applyHand(this.statoDx, this.manoDx);
+           }
         }
       });
 
@@ -262,7 +364,7 @@
               const relMat = new THREE.Matrix4().multiplyMatrices(invAnchorMat, el.object3D.matrixWorld);
               saveDati.push({ 
                 tipo: 'oggetto', 
-                assetId: el.getAttribute('data-asset-id'), // SALVO L'ID UNICO!
+                assetId: el.getAttribute('data-asset-id'),
                 fileNome: el.fileDatiOriginali.nome, 
                 matrix: relMat.toArray() 
               });
@@ -271,14 +373,10 @@
           document.querySelectorAll('.buco').forEach(el => {
             el.object3D.updateMatrixWorld();
             let bucoId = el.getAttribute('data-buco-id');
-            if(!bucoId) { bucoId = 'buco_' + Date.now(); el.setAttribute('data-buco-id', bucoId); } // Assicuriamo che abbia un ID
+            if(!bucoId) { bucoId = 'buco_' + Date.now(); el.setAttribute('data-buco-id', bucoId); }
             
             const relMat = new THREE.Matrix4().multiplyMatrices(invAnchorMat, el.object3D.matrixWorld);
-            saveDati.push({ 
-              tipo: 'buco', 
-              bucoId: bucoId, // SALVO L'ID UNICO!
-              matrix: relMat.toArray() 
-            });
+            saveDati.push({ tipo: 'buco', bucoId: bucoId, matrix: relMat.toArray() });
           });
 
           const db = await window.dbPromise;
@@ -290,9 +388,7 @@
 
         ripristinaScena: async function(textEl) {
           const ancora = document.getElementById('ancora-spaziale');
-          if (!ancora) {
-            textEl.setAttribute('value', 'PIAZZA ANCORA (DISCO VERDE) PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2500); return;
-          }
+          if (!ancora) { textEl.setAttribute('value', 'PIAZZA ANCORA (DISCO VERDE) PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2500); return; }
 
           const db = await window.dbPromise;
           const tx = db.transaction('scene', 'readonly');
@@ -300,12 +396,7 @@
           
           req.onsuccess = e => {
             const result = e.target.result;
-            if (!result) {
-              textEl.setAttribute('value', 'NESSUN SALVATAGGIO TROVATO'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000); return;
-            }
-            
-            // NON DISTRUGGIAMO PIÙ LA SCENA.
-            // La aggiorniamo (se gli oggetti esistono) o li creiamo (se è un riavvio di pagina).
+            if (!result) { textEl.setAttribute('value', 'NESSUN SALVATAGGIO TROVATO'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000); return; }
 
             ancora.object3D.updateMatrixWorld();
             const anchorMat = ancora.object3D.matrixWorld;
@@ -319,29 +410,19 @@
               if (item.tipo === 'oggetto') {
                 const existingEl = document.querySelector(`[data-asset-id="${item.assetId}"]`);
                 if (existingEl) {
-                  // L'oggetto esiste già nella stanza (es. hai tolto il visore e c'è stato un drift).
-                  // Trasliamo l'oggetto alla nuova coordinata calcolata senza ricrearlo!
-                  existingEl.object3D.position.copy(pos);
-                  existingEl.object3D.quaternion.copy(quat);
-                  existingEl.object3D.scale.copy(scale);
+                  existingEl.object3D.position.copy(pos); existingEl.object3D.quaternion.copy(quat); existingEl.object3D.scale.copy(scale);
                 } else {
-                  // L'oggetto non esiste (es. hai ricaricato la pagina web). Lo evochiamo.
                   let fileObj = window.fileCaricati.find(f => f.nome === item.fileNome);
                   if (!fileObj && item.fileNome === '💻 PC Schermo') { fileObj = { nome: "💻 PC Schermo", tipo: 'stream-pc', idElem: 'video-stream-pc' }; window.fileCaricati.unshift(fileObj); }
-                  if (fileObj) this.spawnaOggetto(fileObj, pos, quat, scale, item.assetId); // Passo l'ID originale per ricordarlo
+                  if (fileObj) this.spawnaOggetto(fileObj, pos, quat, scale, item.assetId);
                 }
               } 
               else if (item.tipo === 'buco') {
                 const existingBuco = document.querySelector(`[data-buco-id="${item.bucoId}"]`);
                 if (existingBuco) {
-                  // Il buco esiste, lo spostiamo per allinearlo ai muri veri.
-                  existingBuco.object3D.position.copy(pos);
-                  existingBuco.object3D.quaternion.copy(quat);
-                  existingBuco.object3D.scale.copy(scale);
+                  existingBuco.object3D.position.copy(pos); existingBuco.object3D.quaternion.copy(quat); existingBuco.object3D.scale.copy(scale);
                 } else {
-                  // Il buco non esiste, lo generiamo.
-                  const entity = document.createElement('a-entity'); entity.classList.add('buco'); 
-                  entity.setAttribute('data-buco-id', item.bucoId);
+                  const entity = document.createElement('a-entity'); entity.classList.add('buco'); entity.setAttribute('data-buco-id', item.bucoId);
                   const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1.0), window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale); 
                   mesh.renderOrder = -10; entity.setObject3D('mesh', mesh);
                   entity.object3D.position.copy(pos); entity.object3D.quaternion.copy(quat); entity.object3D.scale.copy(scale);
@@ -403,20 +484,14 @@
               if (hit) {
                 let entity = document.getElementById('ancora-spaziale');
                 if (!entity) {
-                  entity = document.createElement('a-entity'); 
-                  entity.id = 'ancora-spaziale';
+                  entity = document.createElement('a-entity'); entity.id = 'ancora-spaziale';
                   const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 32), new THREE.MeshBasicMaterial({ color: 0x00FF00, depthTest: false }));
-                  mesh.renderOrder = 9999; 
-                  entity.setObject3D('mesh', mesh); 
-                  this.el.sceneEl.appendChild(entity);
+                  mesh.renderOrder = 9999; entity.setObject3D('mesh', mesh); this.el.sceneEl.appendChild(entity);
                 }
-                
                 let normale = hit.face ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0);
                 if (hit.object && hit.object.matrixWorld) { normale.applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize(); }
-                
                 let quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normale);
-                entity.object3D.quaternion.copy(quaternion);
-                entity.object3D.position.copy(hit.point.clone().add(normale.clone().multiplyScalar(0.01)));
+                entity.object3D.quaternion.copy(quaternion); entity.object3D.position.copy(hit.point.clone().add(normale.clone().multiplyScalar(0.01)));
               }
               return;
             }
@@ -447,22 +522,14 @@
           this.el.addEventListener('triggerup', () => {
             this.oggettoAfferrato = null;
             if (this.statoTaglio.attivo && this.statoTaglio.entity) {
-              // Assegniamo l'ID al buco appena confermato il taglio
               this.statoTaglio.entity.setAttribute('data-buco-id', 'buco_' + Date.now() + Math.floor(Math.random() * 1000));
-              
-              const mesh = this.statoTaglio.entity.getObject3D('mesh');
-              const profondita = 1.0; 
+              const mesh = this.statoTaglio.entity.getObject3D('mesh'); const profondita = 1.0; 
               mesh.geometry.dispose(); mesh.geometry = new THREE.BoxGeometry(1, 1, profondita); 
-              mesh.material = window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale; 
-              mesh.renderOrder = -10; 
-              
+              mesh.material = window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale; mesh.renderOrder = -10; 
               const posSullaSuperficie = this.statoTaglio.entity.object3D.position.clone().sub(this.statoTaglio.normale.clone().multiplyScalar(0.01));
-              const sporgenzaVersoUtente = 0.15;
-              const offsetCentramento = (profondita / 2) - sporgenzaVersoUtente; 
-              
+              const offsetCentramento = (profondita / 2) - 0.15; 
               const centroPerfetto = posSullaSuperficie.sub(this.statoTaglio.normale.clone().multiplyScalar(offsetCentramento));
               this.statoTaglio.entity.object3D.position.copy(centroPerfetto);
-              
               this.statoTaglio.attivo = false; this.statoTaglio.entity = null;
             }
           });
@@ -532,19 +599,27 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;"><b>Fix Riallineamento:</b> "Ripristina" non distrugge più gli oggetti, li fa scivolare al loro posto seguendo il disco verde!</p>
+      <p style="font-size: 12px; color: #555;"><b>Mani Magiche:</b> Appoggia i controller. Avvicinati agli oggetti, pizzicali per spostarli o ruotarli. Usa due mani per ingrandirli come in Minority Report!</p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
       <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
     </div>
 
-    <a-scene antialias="true" renderer="colorManagement: true; highRefreshRate: true;" webxr="referenceSpaceType: unbounded; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection, layers, unbounded, local-floor; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
+    <!-- AGGIUNTO "hand-tracking" tra i permessi di webxr -->
+    <a-scene antialias="true" renderer="colorManagement: true; highRefreshRate: true;" webxr="referenceSpaceType: unbounded; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection, layers, unbounded, local-floor, hand-tracking; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto gestore-mani-volumetrico>
       <a-light type="ambient" color="#ffffff" intensity="1.5"></a-light>
       <a-light type="directional" color="#ffffff" intensity="1.5" position="-1 2 1"></a-light>
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
       <a-assets></a-assets>
+      
+      <!-- CONTROLLER (Si spengono automaticamente se usi le mani) -->
       <a-entity id="controller-sx" laser-controls="hand: left" oculus-touch-controls="hand: left" pannello-sx occlusione-mani></a-entity>
       <a-entity id="controller-dx" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .spostabile, .menu-btn, .muro, .buco; far: 10;" cursor="rayOrigin: controller" strumenti-dx occlusione-mani></a-entity>
+      
+      <!-- MANI NUDE (Si attivano automaticamente se appoggi i controller) -->
+      <a-entity id="mano-sx" hand-tracking-controls="hand: left"></a-entity>
+      <a-entity id="mano-dx" hand-tracking-controls="hand: right"></a-entity>
+
     </a-scene>
   </body>
 </html>
