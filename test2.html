@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Taglio Stencil Fix & Max Quality</title>
+    <title>AR Studio Pro - Taglio Universale & PC Nativo</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -14,14 +14,10 @@
     <script>
       window.fileCaricati = []; window.scenaSalvata = []; window.statoApp = { modalita: 'inserisci' };
       
-      // IL MATERIALE DEL BUCO: Scrive "1" nella maschera Stencil (Invisibile ma potente)
+      // MATERIALE TAGLIO: Invisibile, ma scarta tutto ciò che si trova dietro di esso!
       window.matTaglioFinale = new THREE.MeshBasicMaterial({ 
         colorWrite: false, 
-        depthWrite: false, // NON copre le foto o gli oggetti 3D
-        stencilWrite: true,
-        stencilRef: 1,
-        stencilFunc: THREE.AlwaysStencilFunc,
-        stencilZPass: THREE.ReplaceStencilOp
+        depthWrite: true 
       }); 
 
       AFRAME.registerComponent('occlusione-mani', {
@@ -33,41 +29,61 @@
         }
       });
 
+      // ==============================================
+      // QUAD LAYER HD (Bypassa il 3D e stampa il PC sulle lenti)
+      // ==============================================
+      AFRAME.registerComponent('video-layer-hd', {
+        schema: { idElem: { type: 'string' } },
+        init: function () {
+          this.video = document.getElementById(this.data.idElem);
+          this.layer = null; 
+          const geometry = new THREE.PlaneGeometry(1.6, 0.9);
+          const texture = new THREE.VideoTexture(this.video); texture.minFilter = THREE.LinearFilter;
+          this.mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide }));
+          this.el.setObject3D('mesh', this.mesh);
+          this.el.sceneEl.addEventListener('enter-vr', () => this.onEnterVR());
+        },
+        onEnterVR: function () {
+          const renderer = this.el.sceneEl.renderer; const session = renderer.xr.getSession();
+          if (!session || !window.XRMediaBinding) return;
+          try {
+            const mediaBinding = new XRMediaBinding(session);
+            const refSpace = renderer.xr.getReferenceSpace();
+            this.layer = mediaBinding.createQuadLayer(this.video, { space: refSpace, layout: 'mono', width: 1.6, height: 0.9 });
+            const baseLayer = session.renderState.baseLayer;
+            session.updateRenderState({ layers: [baseLayer, this.layer] });
+            // Nasconde la mesh finta per lasciare solo il display hardware purissimo
+            this.mesh.visible = false;
+          } catch (e) { console.error("Layer non supportato:", e); }
+        },
+        tick: function () {
+          if (this.layer && this.el.object3D) {
+            const pos = new THREE.Vector3(); const quat = new THREE.Quaternion(); const scale = new THREE.Vector3();
+            this.el.object3D.matrixWorld.decompose(pos, quat, scale);
+            this.layer.transform = new XRRigidTransform({ x: pos.x, y: pos.y, z: pos.z }, { x: quat.x, y: quat.y, z: quat.z, w: quat.w });
+            this.layer.width = 1.6 * scale.x; this.layer.height = 0.9 * scale.y;
+          }
+        }
+      });
+
       AFRAME.registerComponent('foto-alta-qualita', {
         schema: {url: {type: 'string'}},
         init: function () {
           new THREE.TextureLoader().load(this.data.url, (texture) => {
-            texture.generateMipmaps = false; // Niente sfocature 3D
-            texture.minFilter = THREE.LinearFilter;
-            texture.magFilter = THREE.LinearFilter;
-            texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy();
-            texture.encoding = THREE.sRGBEncoding;
-            
-            const ratio = texture.image.width / texture.image.height;
-            let width = 0.8; let height = 0.8; if (ratio > 1) height = width / ratio; else width = height * ratio;
-            
-            const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, toneMapped: false });
-            this.el.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(width, height), material));
+            texture.generateMipmaps = false; texture.minFilter = THREE.LinearFilter; texture.magFilter = THREE.LinearFilter; texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy(); texture.encoding = THREE.sRGBEncoding;
+            const ratio = texture.image.width / texture.image.height; let width = 0.8; let height = 0.8; if (ratio > 1) height = width / ratio; else width = height * ratio;
+            this.el.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, toneMapped: false })));
           });
         }
       });
 
-      AFRAME.registerComponent('video-alta-qualita', {
+      AFRAME.registerComponent('video-base', {
         schema: {url: {type: 'string'}},
         init: function () {
-          const vid = document.createElement('video');
-          vid.src = this.data.url; vid.id = this.el.getAttribute('data-asset-id'); vid.crossOrigin = 'anonymous';
-          vid.autoplay = true; vid.loop = true; vid.muted = false; vid.playsInline = true;
-          document.querySelector('a-assets').appendChild(vid);
-
+          const vid = document.createElement('video'); vid.src = this.data.url; vid.id = this.el.getAttribute('data-asset-id'); vid.crossOrigin = 'anonymous'; vid.autoplay = true; vid.loop = true; vid.muted = false; vid.playsInline = true; document.querySelector('a-assets').appendChild(vid);
           vid.addEventListener('loadedmetadata', () => {
-            const ratio = vid.videoWidth / vid.videoHeight;
-            const texture = new THREE.VideoTexture(vid);
-            texture.generateMipmaps = false; // Disabilita compressioni video
-            texture.minFilter = THREE.LinearFilter; texture.magFilter = THREE.LinearFilter;
-            texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy();
-            texture.encoding = THREE.sRGBEncoding;
-            
+            const ratio = vid.videoWidth / vid.videoHeight; const texture = new THREE.VideoTexture(vid);
+            texture.generateMipmaps = false; texture.minFilter = THREE.LinearFilter; texture.magFilter = THREE.LinearFilter; texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy(); texture.encoding = THREE.sRGBEncoding;
             this.el.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2 / ratio), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, toneMapped: false })));
             vid.play().catch(e => console.log(e));
           });
@@ -87,19 +103,6 @@
         }
       });
 
-      AFRAME.registerComponent('gltf-colorato', {
-        schema: {url: {type: 'string'}},
-        init: function() {
-          new THREE.GLTFLoader().load(this.data.url, (gltf) => {
-            const box = new THREE.Box3().setFromObject(gltf.scene);
-            const wrapper = new THREE.Group(); gltf.scene.position.sub(box.getCenter(new THREE.Vector3())); wrapper.add(gltf.scene);
-            const maxDim = Math.max(box.getSize(new THREE.Vector3()).x, box.getSize(new THREE.Vector3()).y, box.getSize(new THREE.Vector3()).z);
-            if (maxDim > 0) wrapper.scale.set(0.5 / maxDim, 0.5 / maxDim, 0.5 / maxDim);
-            this.el.setObject3D('mesh', wrapper);
-          });
-        }
-      });
-
       document.addEventListener('DOMContentLoaded', () => {
         const sceneEl = document.querySelector('a-scene');
         sceneEl.addEventListener('enter-vr', () => { document.getElementById('ui-2d').style.display = 'none'; });
@@ -107,8 +110,7 @@
 
         document.getElementById('file-assets').addEventListener('change', function(e) {
           for(let i=0; i<e.target.files.length; i++) {
-            const file = e.target.files[i];
-            window.fileCaricati.push({ nome: file.name, url: URL.createObjectURL(file), tipo: file.name.split('.').pop().toLowerCase() });
+            const file = e.target.files[i]; window.fileCaricati.push({ nome: file.name, url: URL.createObjectURL(file), tipo: file.name.split('.').pop().toLowerCase() });
           }
           document.getElementById('status-assets').innerText = `✅ ${window.fileCaricati.length} file pronti!`;
           window.dispatchEvent(new Event('file-aggiornati'));
@@ -123,7 +125,7 @@
             let vid = document.getElementById('video-stream-pc');
             if (!vid) { vid = document.createElement('video'); vid.id = 'video-stream-pc'; vid.autoplay = true; vid.muted = true; vid.playsInline = true; document.querySelector('a-assets').appendChild(vid); }
             vid.srcObject = stream; vid.play().catch(e => console.error(e));
-            if (!window.fileCaricati.find(f => f.tipo === 'stream-pc')) { window.fileCaricati.unshift({ nome: "💻 Schermo PC", tipo: 'stream-pc', idElem: 'video-stream-pc' }); window.dispatchEvent(new Event('file-aggiornati')); }
+            if (!window.fileCaricati.find(f => f.tipo === 'stream-pc')) { window.fileCaricati.unshift({ nome: "💻 PC Schermo", tipo: 'stream-pc', idElem: 'video-stream-pc' }); window.dispatchEvent(new Event('file-aggiornati')); }
           });
         });
       });
@@ -131,18 +133,7 @@
       AFRAME.registerComponent('gestore-spazio-occulto', {
         init: function () { 
           this.planes = new Map(); this.meshes = new Map(); 
-          
-          // MATERIALE MURO: Diventa invisibile DOVE trova il valore "1" (cioè il buco)
-          this.matOcclusione = new THREE.MeshBasicMaterial({ 
-            colorWrite: false, 
-            depthWrite: true,
-            stencilWrite: true,
-            stencilRef: 1,
-            stencilFunc: THREE.NotEqualStencilFunc, // Disegna il muro solo se stencil NON è 1
-            stencilFail: THREE.KeepStencilOp,
-            stencilZFail: THREE.KeepStencilOp,
-            stencilZPass: THREE.KeepStencilOp
-          }); 
+          this.matOcclusione = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); 
         },
         tick: function () {
           const renderer = this.el.sceneEl.renderer; const frame = this.el.sceneEl.frame; const refSpace = renderer?.xr?.getReferenceSpace();
@@ -220,7 +211,7 @@
             if (item.tipo === 'oggetto') this.spawnaOggetto(item.file, item.pos, item.rot, item.scale);
             else if (item.tipo === 'buco') {
               const entity = document.createElement('a-entity'); entity.classList.add('buco'); 
-              const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 2.0), window.matTaglioFinale); mesh.renderOrder = -10; entity.setObject3D('mesh', mesh);
+              const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1.0), window.matTaglioFinale); mesh.renderOrder = -10; entity.setObject3D('mesh', mesh);
               entity.object3D.position.copy(item.pos); entity.object3D.rotation.copy(item.rot); entity.object3D.scale.copy(item.scale);
               document.querySelector('a-scene').appendChild(entity);
             }
@@ -250,13 +241,9 @@
           else if (file.tipo === 'obj') { entity.setAttribute('obj-model', `obj: url(${file.url})`); entity.setAttribute('material', 'color: #cccccc'); }
           else if (file.tipo === 'stl') entity.setAttribute('stl-model', `src: ${file.url}`);
           else if (file.tipo === 'png' || file.tipo === 'jpg' || file.tipo === 'jpeg') entity.setAttribute('foto-alta-qualita', `url: ${file.url}`);
-          else if (file.tipo === 'mp4') entity.setAttribute('video-alta-qualita', `url: ${file.url}`);
-          else if (file.tipo === 'stream-pc') {
-            const vid = document.getElementById(file.idElem);
-            const texture = new THREE.VideoTexture(vid); 
-            texture.generateMipmaps = false; texture.minFilter = THREE.LinearFilter; texture.magFilter = THREE.LinearFilter; texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy(); texture.encoding = THREE.sRGBEncoding;
-            entity.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.9), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, toneMapped: false })));
-          }
+          else if (file.tipo === 'mp4') entity.setAttribute('video-base', `url: ${file.url}`);
+          else if (file.tipo === 'stream-pc') entity.setAttribute('video-layer-hd', `idElem: ${file.idElem}`);
+          
           document.querySelector('a-scene').appendChild(entity);
         }
       });
@@ -299,13 +286,27 @@
             this.oggettoAfferrato = null;
             if (this.statoTaglio.attivo && this.statoTaglio.entity) {
               const mesh = this.statoTaglio.entity.getObject3D('mesh');
-              const profondita = 2.0;
-              mesh.geometry.dispose(); mesh.geometry = new THREE.BoxGeometry(1, 1, profondita); mesh.material = window.matTaglioFinale; mesh.renderOrder = -10; 
-              const posAttuale = this.statoTaglio.entity.object3D.position.clone();
-              const posSullaSuperficie = posAttuale.sub(this.statoTaglio.normale.clone().multiplyScalar(0.01));
-              const offsetCentramento = (profondita / 2) - 0.05; 
+              
+              // ==========================================
+              // FIX DISTANZA FOTO: Creiamo un Box spesso 1m
+              // che sporge dal muro di 15 centimetri verso l'utente
+              // divorando (tagliando) muri, foto e oggetti!
+              // ==========================================
+              const profondita = 1.0; 
+              mesh.geometry.dispose(); 
+              mesh.geometry = new THREE.BoxGeometry(1, 1, profondita); 
+              mesh.material = window.matTaglioFinale; 
+              mesh.renderOrder = -10; // Disegnato per primo!
+              
+              const posSullaSuperficie = this.statoTaglio.entity.object3D.position.clone().sub(this.statoTaglio.normale.clone().multiplyScalar(0.01));
+              
+              // Spinge il centro dentro il muro, lasciando fuori solo 15cm (0.15m)
+              const sporgenzaVersoUtente = 0.15;
+              const offsetCentramento = (profondita / 2) - sporgenzaVersoUtente; 
+              
               const centroPerfetto = posSullaSuperficie.sub(this.statoTaglio.normale.clone().multiplyScalar(offsetCentramento));
               this.statoTaglio.entity.object3D.position.copy(centroPerfetto);
+              
               this.statoTaglio.attivo = false; this.statoTaglio.entity = null;
             }
           });
@@ -375,14 +376,14 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;"><b>Motore Fixato:</b> Il taglierino ora usa lo Stencil Buffer attivato!</p>
+      <p style="font-size: 12px; color: #555;"><b>Fix Profondità:</b> Ora il taglio sporge di 15cm dal muro e ingoia/taglia foto e oggetti senza sfarfallare!</p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
       <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
     </div>
 
-    <!-- AGGIUNTO stencil: true per accendere il motore di taglio!! -->
-    <a-scene renderer="stencil: true; antialias: true; colorManagement: true; highRefreshRate: true;" webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
+    <!-- layers inserito per permettere al QuadLayer hardware di stampare il PC in risoluzione nativa -->
+    <a-scene antialias="true" renderer="colorManagement: true; highRefreshRate: true;" webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection, layers; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
       <a-light type="ambient" color="#ffffff" intensity="1.0"></a-light>
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
       <a-assets></a-assets>
