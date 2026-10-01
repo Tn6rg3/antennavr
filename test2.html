@@ -2,11 +2,11 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Fix Modelli 3D</title>
+    <title>AR Studio Pro - Fix GLB 3D Nativo</title>
+    <!-- Rimosso GLTFLoader esterno che causava conflitti, A-Frame lo ha già nativo! -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
-    <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/GLTFLoader.js"></script>
     <style>
       #ui-2d { position: absolute; top: 20px; left: 20px; z-index: 999; background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 10px; font-family: sans-serif; width: 340px; }
       .btn-ui { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; }
@@ -14,8 +14,11 @@
     <script>
       window.fileCaricati = []; window.scenaSalvata = []; window.statoApp = { modalita: 'inserisci' };
       
-      // MATERIALE TAGLIO
-      window.matTaglioFinale = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); 
+      // MATERIALE TAGLIO: Invisibile, ma scarta tutto ciò che si trova dietro di esso!
+      window.matTaglioFinale = new THREE.MeshBasicMaterial({ 
+        colorWrite: false, 
+        depthWrite: true 
+      }); 
 
       AFRAME.registerComponent('occlusione-mani', {
         init: function () {
@@ -26,7 +29,35 @@
         }
       });
 
-      // QUAD LAYER HD 
+      // ==============================================
+      // NUOVO CENTRATORE AUTOMATICO PER MODELLI 3D (GLB)
+      // ==============================================
+      AFRAME.registerComponent('auto-centratore', {
+        init: function() {
+          this.el.addEventListener('model-loaded', () => {
+            const mesh = this.el.getObject3D('mesh');
+            if(!mesh) return;
+            
+            // Trova il centro e la grandezza esatta del modello 3D
+            const box = new THREE.Box3().setFromObject(mesh);
+            const center = new THREE.Vector3(); box.getCenter(center);
+            const size = new THREE.Vector3(); box.getSize(size);
+            
+            // Centra il modello sulle coordinate 0,0,0
+            mesh.position.x = -center.x;
+            mesh.position.y = -center.y;
+            mesh.position.z = -center.z;
+            
+            // Lo rimpicciolisce/ingrandisce per farlo entrare in un cubo di 50 centimetri (0.5m)
+            const maxDim = Math.max(size.x, size.y, size.z);
+            if(maxDim > 0) {
+              const scale = 0.5 / maxDim;
+              this.el.object3D.scale.set(scale, scale, scale);
+            }
+          });
+        }
+      });
+
       AFRAME.registerComponent('video-layer-hd', {
         schema: { idElem: { type: 'string' } },
         init: function () {
@@ -93,28 +124,6 @@
             if (maxDim > 0) geometry.scale(0.5 / maxDim, 0.5 / maxDim, 0.5 / maxDim);
             geometry.computeVertexNormals();
             this.el.setObject3D('mesh', new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x00FFCC, metalness: 0.3, roughness: 0.4, side: THREE.DoubleSide })));
-          });
-        }
-      });
-
-      // ==============================================
-      // IL BLOCCO MANCANTE: IMPORTAZIONE GLTF E GLB
-      // ==============================================
-      AFRAME.registerComponent('gltf-colorato', {
-        schema: {url: {type: 'string'}},
-        init: function() {
-          new THREE.GLTFLoader().load(this.data.url, (gltf) => {
-            const box = new THREE.Box3().setFromObject(gltf.scene); 
-            const center = new THREE.Vector3(); box.getCenter(center);
-            const wrapper = new THREE.Group(); 
-            gltf.scene.position.sub(center); 
-            wrapper.add(gltf.scene);
-            const size = new THREE.Vector3(); box.getSize(size);
-            const maxDim = Math.max(size.x, size.y, size.z);
-            if (maxDim > 0) { const scale = 0.5 / maxDim; wrapper.scale.set(scale, scale, scale); }
-            this.el.setObject3D('mesh', wrapper);
-          }, undefined, function (error) {
-            console.error("Errore caricamento GLTF:", error);
           });
         }
       });
@@ -249,11 +258,18 @@
         },
         spawnaOggetto: function(file, savePos, saveRot, saveScale) {
           const entity = document.createElement('a-entity'); entity.classList.add('spostabile'); entity.fileDatiOriginali = file; 
+          
           if (savePos) { entity.object3D.position.copy(savePos); entity.object3D.rotation.copy(saveRot); entity.object3D.scale.copy(saveScale); }
           else { const pos = new THREE.Vector3(); this.el.object3D.getWorldPosition(pos); entity.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`); entity.setAttribute('scale', '1 1 1'); }
           const assetId = 'asset_' + Date.now() + Math.floor(Math.random() * 1000); entity.setAttribute('data-asset-id', assetId);
 
-          if (file.tipo === 'glb' || file.tipo === 'gltf') entity.setAttribute('gltf-colorato', `url: ${file.url}`);
+          // ===============================================
+          // MODIFICA PER GLTF/GLB: Usa il componente NATIVO
+          // ===============================================
+          if (file.tipo === 'glb' || file.tipo === 'gltf') {
+            entity.setAttribute('gltf-model', `url(${file.url})`);
+            entity.setAttribute('auto-centratore', '');
+          }
           else if (file.tipo === 'obj') { entity.setAttribute('obj-model', `obj: url(${file.url})`); entity.setAttribute('material', 'color: #cccccc'); }
           else if (file.tipo === 'stl') entity.setAttribute('stl-model', `src: ${file.url}`);
           else if (file.tipo === 'png' || file.tipo === 'jpg' || file.tipo === 'jpeg') entity.setAttribute('foto-alta-qualita', `url: ${file.url}`);
@@ -310,7 +326,6 @@
               mesh.renderOrder = -10; 
               
               const posSullaSuperficie = this.statoTaglio.entity.object3D.position.clone().sub(this.statoTaglio.normale.clone().multiplyScalar(0.01));
-              
               const sporgenzaVersoUtente = 0.15;
               const offsetCentramento = (profondita / 2) - sporgenzaVersoUtente; 
               
@@ -386,7 +401,7 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;"><b>Fix Modelli 3D:</b> Risolto il bug di importazione di glb/gltf!</p>
+      <p style="font-size: 12px; color: #555;"><b>Fix Modelli 3D:</b> Importazione GLB ripristinata e automatizzata!</p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
       <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
