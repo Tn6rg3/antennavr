@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - HD Media & Wall Snap</title>
+    <title>AR Studio Pro - Media, Tagli e Occlusione Mani</title>
     <!-- A-Frame e dipendenze -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
@@ -17,10 +17,37 @@
       .btn-ui { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; }
     </style>
     <script>
+      // STATO GLOBALE
       window.fileCaricati = [];
+      window.statoApp = {
+        modalita: 'inserisci' // può essere 'inserisci' o 'taglia'
+      };
 
       // ==========================================
-      // FOTO ALTA QUALITÀ (Filtri migliorati)
+      // OCCLUSIONE MANI (Il corpo taglia il 3D!)
+      // ==========================================
+      AFRAME.registerComponent('occlusione-mani', {
+        init: function () {
+          this.el.addEventListener('model-loaded', () => {
+            const mesh = this.el.getObject3D('mesh');
+            if (mesh) {
+              mesh.traverse((node) => {
+                if (node.isMesh) {
+                  // Trasforma il controller 3D in un mantello dell'invisibilità
+                  node.material = new THREE.MeshBasicMaterial({
+                    colorWrite: false, // Non disegna i colori
+                    depthWrite: true   // Ma blocca la profondità!
+                  });
+                  node.renderOrder = -1;
+                }
+              });
+            }
+          });
+        }
+      });
+
+      // ==========================================
+      // FOTO ALTA QUALITÀ
       // ==========================================
       AFRAME.registerComponent('foto-alta-qualita', {
         schema: {url: {type: 'string'}},
@@ -28,7 +55,7 @@
           const textureLoader = new THREE.TextureLoader();
           textureLoader.load(this.data.url, (texture) => {
             texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy();
-            texture.minFilter = THREE.LinearMipmapLinearFilter; // Mantiene la foto nitida da lontano
+            texture.minFilter = THREE.LinearMipmapLinearFilter;
             texture.magFilter = THREE.LinearFilter;
             texture.encoding = THREE.sRGBEncoding;
             texture.generateMipmaps = true;
@@ -52,19 +79,14 @@
         init: function () {
           const vid = document.createElement('video');
           vid.src = this.data.url;
-          vid.id = this.el.getAttribute('data-asset-id'); // Assegna l'ID per poterlo distruggere dopo
+          vid.id = this.el.getAttribute('data-asset-id'); 
           vid.crossOrigin = 'anonymous';
-          vid.autoplay = true;
-          vid.loop = true;
-          vid.muted = false; 
-          vid.playsInline = true;
-          
+          vid.autoplay = true; vid.loop = true; vid.muted = false; vid.playsInline = true;
           document.querySelector('a-assets').appendChild(vid);
 
           vid.addEventListener('loadedmetadata', () => {
             const ratio = vid.videoWidth / vid.videoHeight;
-            let width = 1.2; 
-            let height = width / ratio;
+            let width = 1.2; let height = width / ratio;
 
             const geometry = new THREE.PlaneGeometry(width, height);
             const texture = new THREE.VideoTexture(vid);
@@ -75,7 +97,6 @@
             
             const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
             this.el.setObject3D('mesh', new THREE.Mesh(geometry, material));
-            
             vid.play().catch(e => console.log(e));
           });
         }
@@ -91,16 +112,12 @@
           loader.load(this.data.src, (geometry) => {
             geometry.computeBoundingBox();
             const box = geometry.boundingBox;
-            const center = new THREE.Vector3();
-            box.getCenter(center);
+            const center = new THREE.Vector3(); box.getCenter(center);
             geometry.translate(-center.x, -center.y, -center.z);
-
-            const size = new THREE.Vector3();
-            box.getSize(size);
+            const size = new THREE.Vector3(); box.getSize(size);
             const maxDim = Math.max(size.x, size.y, size.z);
             if (maxDim > 0) { const scale = 0.5 / maxDim; geometry.scale(scale, scale, scale); }
             geometry.computeVertexNormals();
-            
             const material = new THREE.MeshStandardMaterial({ color: 0x00FFCC, metalness: 0.3, roughness: 0.4, side: THREE.DoubleSide });
             this.el.setObject3D('mesh', new THREE.Mesh(geometry, material));
           });
@@ -114,15 +131,9 @@
           loader.load(this.data.url, (gltf) => {
             const model = gltf.scene;
             const box = new THREE.Box3().setFromObject(model);
-            const center = new THREE.Vector3();
-            box.getCenter(center);
-            
-            const wrapper = new THREE.Group();
-            model.position.sub(center); 
-            wrapper.add(model);
-
-            const size = new THREE.Vector3();
-            box.getSize(size);
+            const center = new THREE.Vector3(); box.getCenter(center);
+            const wrapper = new THREE.Group(); model.position.sub(center); wrapper.add(model);
+            const size = new THREE.Vector3(); box.getSize(size);
             const maxDim = Math.max(size.x, size.y, size.z);
             if (maxDim > 0) { const scale = 0.5 / maxDim; wrapper.scale.set(scale, scale, scale); }
             this.el.setObject3D('mesh', wrapper);
@@ -130,9 +141,7 @@
         }
       });
 
-      // ==========================================
       // UI INIZIALE
-      // ==========================================
       document.addEventListener('DOMContentLoaded', () => {
         const sceneEl = document.querySelector('a-scene');
         sceneEl.addEventListener('enter-vr', () => { document.getElementById('ui-2d').style.display = 'none'; });
@@ -151,13 +160,10 @@
         });
       });
 
-      // ==========================================
-      // OCCLUSIONE E COLLISIONE MURI/MOBILI REALI
-      // ==========================================
+      // OCCLUSIONE MURI REALI
       AFRAME.registerComponent('gestore-spazio-occulto', {
         init: function () {
-          this.planes = new Map(); 
-          this.meshes = new Map();
+          this.planes = new Map(); this.meshes = new Map();
           this.matOcclusione = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true });
         },
         tick: function () {
@@ -226,7 +232,7 @@
       });
 
       // ==========================================
-      // MENU SPAWNER (Controller Sinistro)
+      // MENU SPAWNER E CAMBIO MODALITÀ (Tasto Y)
       // ==========================================
       AFRAME.registerComponent('pannello-sx', {
         init: function() {
@@ -237,38 +243,63 @@
           this.menuContainer.setAttribute('visible', 'false');
           this.el.appendChild(this.menuContainer);
 
-          const titolo = document.createElement('a-text');
-          titolo.setAttribute('value', 'FILE CARICATI');
-          titolo.setAttribute('scale', '0.1 0.1 0.1');
-          titolo.setAttribute('position', '0 0.1 0');
-          titolo.setAttribute('color', '#00FFCC');
-          this.menuContainer.appendChild(titolo);
+          // Tasto Cambio Modalità (Inserisci / Taglia)
+          this.btnMod = document.createElement('a-plane');
+          this.btnMod.setAttribute('width', '0.22');
+          this.btnMod.setAttribute('height', '0.04');
+          this.btnMod.setAttribute('color', '#FF9800');
+          this.btnMod.setAttribute('position', '0 0.15 0');
+          this.btnMod.classList.add('menu-btn');
+
+          this.txtMod = document.createElement('a-text');
+          this.txtMod.setAttribute('value', 'MODALITA: INSERISCI');
+          this.txtMod.setAttribute('scale', '0.07 0.07 0.07');
+          this.txtMod.setAttribute('align', 'center');
+          this.txtMod.setAttribute('position', '0 0 0.01');
+          this.btnMod.appendChild(this.txtMod);
+
+          this.btnMod.addEventListener('click', () => {
+            window.statoApp.modalita = window.statoApp.modalita === 'inserisci' ? 'taglia' : 'inserisci';
+            this.txtMod.setAttribute('value', window.statoApp.modalita === 'inserisci' ? 'MODALITA: INSERISCI' : 'MODALITA: TAGLIO');
+            this.btnMod.setAttribute('color', window.statoApp.modalita === 'inserisci' ? '#FF9800' : '#E91E63');
+            this.aggiornaListaMenu();
+          });
+          this.menuContainer.appendChild(this.btnMod);
 
           this.el.addEventListener('ybuttondown', () => {
             this.menuVisibile = !this.menuVisibile;
             this.menuContainer.setAttribute('visible', this.menuVisibile);
           });
-
           window.addEventListener('file-aggiornati', () => this.aggiornaListaMenu());
         },
         aggiornaListaMenu: function() {
           Array.from(this.menuContainer.children).forEach(child => {
-            if (child.classList.contains('menu-btn')) this.menuContainer.removeChild(child);
+            if (child.classList.contains('menu-file') || child.classList.contains('menu-info')) {
+              this.menuContainer.removeChild(child);
+            }
           });
+
+          if (window.statoApp.modalita === 'taglia') {
+            const txt = document.createElement('a-text');
+            txt.setAttribute('value', 'Trascina il grilletto destro\nsui muri per creare dei portali.');
+            txt.setAttribute('scale', '0.06 0.06 0.06');
+            txt.setAttribute('align', 'center');
+            txt.setAttribute('position', '0 0.05 0');
+            txt.classList.add('menu-info');
+            this.menuContainer.appendChild(txt);
+            return;
+          }
 
           window.fileCaricati.forEach((file, index) => {
             const btn = document.createElement('a-plane');
-            btn.setAttribute('width', '0.2');
-            btn.setAttribute('height', '0.04');
+            btn.setAttribute('width', '0.22'); btn.setAttribute('height', '0.04');
             btn.setAttribute('color', '#333333');
-            btn.setAttribute('position', `0 ${0.05 - (index * 0.05)} 0`);
-            btn.classList.add('menu-btn');
+            btn.setAttribute('position', `0 ${0.08 - (index * 0.05)} 0`);
+            btn.classList.add('menu-btn', 'menu-file');
             
             const txt = document.createElement('a-text');
-            txt.setAttribute('value', file.nome.length > 15 ? file.nome.substring(0,15)+'...' : file.nome);
-            txt.setAttribute('scale', '0.08 0.08 0.08');
-            txt.setAttribute('align', 'center');
-            txt.setAttribute('position', '0 0 0.01');
+            txt.setAttribute('value', file.nome.length > 18 ? file.nome.substring(0,18)+'...' : file.nome);
+            txt.setAttribute('scale', '0.07 0.07 0.07'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0 0.01');
             btn.appendChild(txt);
 
             btn.addEventListener('raycaster-intersected', () => btn.setAttribute('color', '#555555'));
@@ -281,41 +312,36 @@
           const entity = document.createElement('a-entity');
           entity.classList.add('spostabile'); 
           
-          const pos = new THREE.Vector3();
-          this.el.object3D.getWorldPosition(pos);
+          const pos = new THREE.Vector3(); this.el.object3D.getWorldPosition(pos);
           entity.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
           entity.setAttribute('scale', '1 1 1'); 
-
-          // Genera un ID univoco fondamentale per eliminare l'audio dei video
           const assetId = 'asset_' + Date.now() + Math.floor(Math.random() * 1000);
           entity.setAttribute('data-asset-id', assetId);
 
-          if (file.tipo === 'glb' || file.tipo === 'gltf') {
-            entity.setAttribute('gltf-colorato', `url: ${file.url}`);
-          } else if (file.tipo === 'obj') {
-            entity.setAttribute('obj-model', `obj: url(${file.url})`);
-            entity.setAttribute('material', 'color: #cccccc'); 
-          } else if (file.tipo === 'stl') {
-            entity.setAttribute('stl-model', `src: ${file.url}`);
-          } else if (file.tipo === 'png' || file.tipo === 'jpg' || file.tipo === 'jpeg') {
-            entity.setAttribute('foto-alta-qualita', `url: ${file.url}`);
-          } else if (file.tipo === 'mp4') {
-            entity.setAttribute('video-alta-qualita', `url: ${file.url}`);
-          }
+          if (file.tipo === 'glb' || file.tipo === 'gltf') entity.setAttribute('gltf-colorato', `url: ${file.url}`);
+          else if (file.tipo === 'obj') { entity.setAttribute('obj-model', `obj: url(${file.url})`); entity.setAttribute('material', 'color: #cccccc'); }
+          else if (file.tipo === 'stl') entity.setAttribute('stl-model', `src: ${file.url}`);
+          else if (file.tipo === 'png' || file.tipo === 'jpg' || file.tipo === 'jpeg') entity.setAttribute('foto-alta-qualita', `url: ${file.url}`);
+          else if (file.tipo === 'mp4') entity.setAttribute('video-alta-qualita', `url: ${file.url}`);
           
           document.querySelector('a-scene').appendChild(entity);
         }
       });
 
       // ==========================================
-      // MANIPOLATORE E CALAMITA MURI (Controller Destro)
+      // MANIPOLATORE E TAGLIERINO (Controller Destro)
       // ==========================================
       AFRAME.registerComponent('strumenti-dx', {
         init: function () {
-          this.oggettoAfferrato = null;
-          this.distanzaGrab = 0;
+          this.oggettoAfferrato = null; this.distanzaGrab = 0;
           this.stickX = 0; this.stickY = 0; 
           this.stickRotVert = 0; this.stickRotRoll = 0; 
+
+          // Variabili per il Taglierino
+          this.statoTaglio = { attivo: false, startPt: null, asseX: null, asseY: null, entity: null };
+          this.matTaglioBozza = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+          // RenderOrder -10 blocca il rendering di qualsiasi cosa sia dietro al buco, rivelando la stanza fisica
+          this.matTaglioFinale = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); 
 
           this.el.addEventListener('triggerdown', () => {
             const hits = this.el.components.raycaster.intersections;
@@ -324,6 +350,38 @@
             const hitMenu = hits.find(h => h.object.el.classList.contains('menu-btn'));
             if (hitMenu) { hitMenu.object.el.emit('click'); return; }
 
+            // MODALITÀ TAGLIO
+            if (window.statoApp.modalita === 'taglia') {
+              const hit = hits.find(h => h.object.el.classList.contains('spostabile') || h.object.el.classList.contains('muro'));
+              if (hit) {
+                this.statoTaglio.attivo = true;
+                this.statoTaglio.startPt = hit.point.clone();
+                
+                const normale = hit.face.normal.clone();
+                if (hit.object && hit.object.matrixWorld) {
+                   const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+                   normale.applyMatrix3(normalMatrix).normalize();
+                }
+                let up = new THREE.Vector3(0, 1, 0);
+                if (Math.abs(normale.y) > 0.9) up.set(0, 0, -1);
+                this.statoTaglio.asseX = new THREE.Vector3().crossVectors(up, normale).normalize();
+                this.statoTaglio.asseY = new THREE.Vector3().crossVectors(normale, this.statoTaglio.asseX).normalize();
+
+                const entity = document.createElement('a-entity');
+                entity.classList.add('buco'); // Assegniamo la classe buco
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 2.0), this.matTaglioBozza);
+                const rotMat = new THREE.Matrix4().makeBasis(this.statoTaglio.asseX, this.statoTaglio.asseY, normale);
+                mesh.quaternion.setFromRotationMatrix(rotMat);
+                
+                entity.setObject3D('mesh', mesh);
+                entity.setAttribute('position', hit.point);
+                this.el.sceneEl.appendChild(entity);
+                this.statoTaglio.entity = entity;
+              }
+              return;
+            }
+
+            // MODALITÀ INSERISCI (Spostamento)
             const hitObj = hits.find(h => h.object.el.classList.contains('spostabile'));
             if (hitObj) {
               this.oggettoAfferrato = hitObj.object.el;
@@ -331,42 +389,67 @@
             }
           });
 
-          this.el.addEventListener('triggerup', () => { this.oggettoAfferrato = null; });
+          this.el.addEventListener('triggerup', () => {
+            this.oggettoAfferrato = null;
+            // Termina il Taglio: Rendilo invisibile e perforante
+            if (this.statoTaglio.attivo) {
+              this.statoTaglio.attivo = false;
+              if (this.statoTaglio.entity) {
+                const mesh = this.statoTaglio.entity.getObject3D('mesh');
+                mesh.material = this.matTaglioFinale;
+                mesh.renderOrder = -10; 
+                this.statoTaglio.entity = null;
+              }
+            }
+          });
 
-          // ELIMINAZIONE OGGETTO E BLOCCO AUDIO
+          // TASTO GRIP: Elimina File o Buchi
           this.el.addEventListener('gripdown', () => {
             const hits = this.el.components.raycaster.intersections;
-            const hitObj = hits.find(h => h.object && h.object.el && h.object.el.classList.contains('spostabile'));
+            const hitObj = hits.find(h => h.object && h.object.el && (h.object.el.classList.contains('spostabile') || h.object.el.classList.contains('buco')));
             if (hitObj) {
-              // 1. Cerca se c'è un video in riproduzione collegato a questo oggetto
               const assetId = hitObj.object.el.getAttribute('data-asset-id');
               if (assetId) {
                 const videoEl = document.getElementById(assetId);
                 if (videoEl && videoEl.tagName === 'VIDEO') {
-                  videoEl.pause(); // Ferma l'audio!
-                  videoEl.removeAttribute('src'); 
-                  videoEl.load();
-                  videoEl.parentNode.removeChild(videoEl); // Lo rimuove dagli assets
+                  videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.parentNode.removeChild(videoEl);
                 }
               }
-              // 2. Elimina la mesh dalla scena
               hitObj.object.el.parentNode.removeChild(hitObj.object.el);
               if (this.oggettoAfferrato === hitObj.object.el) this.oggettoAfferrato = null;
             }
           });
 
-          // Input Leve
           this.el.addEventListener('thumbstickmoved', (e) => { this.stickX = e.detail.x; this.stickY = e.detail.y; });
           const controllerSx = document.querySelector('#controller-sx');
           controllerSx.addEventListener('thumbstickmoved', (e) => { this.stickRotVert = e.detail.y; this.stickRotRoll = e.detail.x; });
-
-          // Scala (A e B)
           this.el.addEventListener('abuttondown', () => { if (this.oggettoAfferrato) this.oggettoAfferrato.object3D.scale.multiplyScalar(1.2); });
           this.el.addEventListener('bbuttondown', () => { if (this.oggettoAfferrato) this.oggettoAfferrato.object3D.scale.multiplyScalar(0.8); });
         },
+        
         tick: function () {
+          // LOGICA AGGIORNAMENTO TAGLIO IN TEMPO REALE
+          if (this.statoTaglio.attivo && this.statoTaglio.entity) {
+            const hits = this.el.components.raycaster.intersections;
+            if (hits.length > 0) {
+              const ptCorrente = hits[0].point.clone();
+              const diff = new THREE.Vector3().subVectors(ptCorrente, this.statoTaglio.startPt);
+              const larghezza = diff.dot(this.statoTaglio.asseX);
+              const altezza = diff.dot(this.statoTaglio.asseY);
+              
+              const center = this.statoTaglio.startPt.clone()
+                 .add(this.statoTaglio.asseX.clone().multiplyScalar(larghezza / 2))
+                 .add(this.statoTaglio.asseY.clone().multiplyScalar(altezza / 2));
+                 
+              const mesh = this.statoTaglio.entity.getObject3D('mesh');
+              mesh.scale.set(Math.max(Math.abs(larghezza), 0.02), Math.max(Math.abs(altezza), 0.02), 2.0); // 2 metri di profondità per bucare tutto
+              mesh.position.copy(center);
+            }
+            return;
+          }
+
+          // LOGICA SPOSTAMENTO (GIA' ESISTENTE)
           if (this.oggettoAfferrato) {
-            // Distanza manuale
             if (Math.abs(this.stickY) > 0.1) {
               this.distanzaGrab += this.stickY * -0.05; 
               this.distanzaGrab = Math.max(0.1, this.distanzaGrab);
@@ -376,37 +459,25 @@
             let allineaAlMuro = false;
             let normaleMuro = new THREE.Vector3();
 
-            // LETTURA DEI MURI REALI
             const hits = this.el.components.raycaster.intersections;
             const hitMuro = hits.find(h => h.object && h.object.el && h.object.el.classList.contains('muro'));
             
             if (hitMuro) {
-              // LOGICA 1: NON ATTRAVERSARE (Si ferma sempre a 5cm prima del muro)
-              // Usiamo Math.min così la distanza ideale non supera mai la posizione fisica della parete
-              if (this.distanzaGrab > hitMuro.distance - 0.05) {
-                distanzaIdeale = hitMuro.distance - 0.05;
-              }
-
-              // LOGICA 2: WALL SNAP (Se spingi l'oggetto contro il muro, si allinea)
+              if (this.distanzaGrab > hitMuro.distance - 0.05) distanzaIdeale = hitMuro.distance - 0.05;
               if (Math.abs(this.distanzaGrab - hitMuro.distance) < 0.2) {
                 allineaAlMuro = true;
-                // Calcoliamo la direzione in cui guarda la parete
                 const normalMatrix = new THREE.Matrix3().getNormalMatrix(hitMuro.object.matrixWorld);
                 normaleMuro.copy(hitMuro.face.normal).applyMatrix3(normalMatrix).normalize();
               }
             }
 
-            // APPLICA SPOSTAMENTO 
             const ray = this.el.components.raycaster.raycaster.ray;
             const targetPos = ray.direction.clone().multiplyScalar(distanzaIdeale).add(ray.origin);
             this.oggettoAfferrato.object3D.position.copy(targetPos);
 
-            // APPLICA ROTAZIONE (Snap automatico o Manuale)
             if (allineaAlMuro) {
-              // Calamita l'angolazione perfettamente piatta contro il muro
               this.oggettoAfferrato.object3D.lookAt(targetPos.clone().add(normaleMuro));
             } else {
-              // Lascia all'utente la rotazione manuale tramite le levette
               if (Math.abs(this.stickX) > 0.1) this.oggettoAfferrato.object3D.rotation.y -= this.stickX * 0.05; 
               if (Math.abs(this.stickRotVert) > 0.1) this.oggettoAfferrato.object3D.rotation.x -= this.stickRotVert * 0.05; 
               if (Math.abs(this.stickRotRoll) > 0.1) this.oggettoAfferrato.object3D.rotation.z -= this.stickRotRoll * 0.05; 
@@ -420,15 +491,12 @@
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
       <p style="font-size: 13px; color: #555;">
-        <b>Controlli in AR:</b><br>
-        - <b>Allineamento:</b> Spingi un'immagine contro il muro reale e si appiattirà da sola!<br>
-        - <b>Grip (Destro):</b> Elimina file in modo pulito
+        <b>Novità:</b> Usa il menu sul polso per cambiare la modalità in <b>RITAGLIA</b>. Disegna rettangoli sui muri o sui modelli 3D per bucarli!
       </p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
     </div>
 
-    <!-- foveationLevel: 0 DISATTIVA la sfocatura laterale del Quest, garantendo risoluzione 100% su tutto lo schermo -->
     <a-scene antialias="true" renderer="colorManagement: true; highRefreshRate: true;" webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
       
       <a-light type="ambient" color="#ffffff" intensity="0.8"></a-light>
@@ -436,8 +504,11 @@
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
       <a-assets></a-assets>
 
-      <a-entity id="controller-sx" laser-controls="hand: left" oculus-touch-controls="hand: left" pannello-sx></a-entity>
-      <a-entity id="controller-dx" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .spostabile, .menu-btn, .muro; far: 10;" cursor="rayOrigin: controller" strumenti-dx></a-entity>
+      <!-- Aggiunto "occlusione-mani" per nascondere i modelli dietro le mani reali -->
+      <a-entity id="controller-sx" laser-controls="hand: left" oculus-touch-controls="hand: left" pannello-sx occlusione-mani></a-entity>
+      
+      <!-- Aggiunta classe .buco al raycaster per permettere di cancellare i portali -->
+      <a-entity id="controller-dx" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .spostabile, .menu-btn, .muro, .buco; far: 10;" cursor="rayOrigin: controller" strumenti-dx occlusione-mani></a-entity>
 
     </a-scene>
   </body>
