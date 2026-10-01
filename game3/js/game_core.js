@@ -1105,25 +1105,31 @@ window.playNextWord = function() {
         }
     } else if (window.currentMode === 'daily_challenge') {
         // SFIDA GIORNALIERA: Le prime 20 parole sono garantite per tutti.
-        // Oltre la 20ª parola, prosegue SOLO per chi ha fatto ZERO errori e ZERO ripetizioni!
+        // Oltre la 20ª parola, prosegue SOLO per chi ha fatto ZERO errori e ZERO ripetizioni nelle prime 20!
         if (wordIndex >= 20) {
-            const hasErrors = matchDetailsArray.some(m => {
+            const hasErrorsOnFirst20 = matchDetailsArray.slice(0, 20).some(m => {
                 if (!m) return true;
                 if (m.usedReplay) return true;
                 if (m.correct === false) return true;
-                if (m.points === 0 || m.points === undefined) return true;
-                if (m.real && m.typed && m.real.toUpperCase() !== m.typed.toUpperCase()) return true;
+                const realClean = (m.real || "").trim().toUpperCase();
+                const typedClean = (m.typed || "").trim().toUpperCase();
+                if (realClean !== typedClean) return true;
                 return false;
             });
 
-            if (hasErrors) {
+            if (hasErrorsOnFirst20) {
                 return window.finishGame();
             } else {
-                if (wordIndex === 20 && matchDetailsArray.length === 20) {
+                if (wordIndex === 20) {
                     showToast("🌟 PERFETTO! ZERO ERRORI! La Sfida Giornaliera prosegue oltre la 20ª parola!");
                 }
                 if (wordIndex >= gameWords.length - 2) {
-                    gameWords = window.getDailyWords(gameWords.length + 20);
+                    gameWords = window.getDailyWords(gameWords.length + 50);
+                    requestedWordCount = gameWords.length;
+                    window.requestedWordCount = gameWords.length;
+                    if (roomCode) {
+                        db.ref(`rooms/${roomCode}/game_words`).set(gameWords);
+                    }
                 }
             }
         }
@@ -1429,9 +1435,10 @@ window.finishGame = function() {
         setTimeout(() => {
             if (typeof window.finishGameNavigation === 'function') {
                 const savedRoom = roomCode;
+                const actualWordCount = (matchDetailsArray && matchDetailsArray.length > 0) ? matchDetailsArray.length : 20;
                 window.lbManualRouting = true;
                 window.exitRoomCleanly(false, false);
-                window.finishGameNavigation('daily_challenge', 20, true, savedRoom);
+                window.finishGameNavigation('daily_challenge', actualWordCount, true, savedRoom);
             }
         }, 3000);
     }

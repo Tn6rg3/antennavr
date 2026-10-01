@@ -2281,11 +2281,12 @@ if (els.btnPlayDailyNow) {
         window.currentMode = 'daily_challenge';
         window.isSinglePlayer = true;
         currentWpm = baseWpm = 15;
-        requestedWordCount = 20;
+        requestedWordCount = 100;
+        window.requestedWordCount = 100;
 
-        // USA ID UNIVOC_O ANCHE PER LA SFIDA GIORNALIERA
+        // USA ID UNIVOCO ANCHE PER LA SFIDA GIORNALIERA (Pre-carica fino a 100 parole giornaliere)
         roomCode = "DAILY_" + window.myId;
-        gameWords = window.getGameWords(requestedWordCount, window.currentMode);
+        gameWords = window.getDailyWords(100);
         currentTone = parseInt(localStorage.getItem(STORAGE_PREF_TONE)) || 600;
 
         const startDaily = () => {
