@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Real Touch Contact</title>
+    <title>AR Studio Pro - Allineamento 2 Punti & Mani Fisiche</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -12,7 +12,8 @@
       .btn-ui { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; }
     </style>
     <script>
-      window.fileCaricati = []; window.statoApp = { modalita: 'inserisci' };
+      window.fileCaricati = []; 
+      window.statoApp = { modalita: 'inserisci', faseAncora: 1 };
       window.matTaglioFinale = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); 
       window.matTaglioVisibile = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.5, depthWrite: true });
 
@@ -68,9 +69,6 @@
         }
       });
 
-      // ==============================================
-      // CONTATTO FISICO REALE (No Magnete)
-      // ==============================================
       window.statoMani = {
         sx: { attiva: false, obj: null },
         dx: { attiva: false, obj: null },
@@ -78,46 +76,32 @@
         scalaIniziale: new THREE.Vector3()
       };
 
+      // MANI FISICHE (CONTATTO)
       AFRAME.registerComponent('mano-interattiva', {
         init: function() {
           this.isLeft = this.el.id === 'mano-sx';
           this.mioStato = this.isLeft ? window.statoMani.sx : window.statoMani.dx;
           this.altroStato = this.isLeft ? window.statoMani.dx : window.statoMani.sx;
-          
           this.offsetPos = new THREE.Vector3();
           this.offsetQuat = new THREE.Quaternion();
 
-          // L'evento pinch/squeeze si attiva quando fai il pugno o chiudi le dita
           const onGrabStart = (e) => {
             this.altraMano = document.querySelector(this.isLeft ? '#mano-dx' : '#mano-sx');
-            
-            // Troviamo il centro della mano (spostato leggermente verso il palmo/dita)
-            let handPos = new THREE.Vector3();
-            this.el.object3D.getWorldPosition(handPos);
-            const dir = new THREE.Vector3(0, 0, -0.05).applyQuaternion(this.el.object3D.quaternion); // +5cm verso le dita
+            let handPos = new THREE.Vector3(); this.el.object3D.getWorldPosition(handPos);
+            const dir = new THREE.Vector3(0, 0, -0.05).applyQuaternion(this.el.object3D.quaternion); 
             handPos.add(dir);
-
             let touchedObj = null;
 
-            // Controlliamo ESATTAMENTE se la mano è DENTRO la geometria dell'oggetto
             document.querySelectorAll('.spostabile, .buco').forEach(obj => {
               const mesh = obj.getObject3D('mesh');
               if (mesh) {
-                const box = new THREE.Box3().setFromObject(mesh);
-                // Aggiungiamo un piccolissimo margine (3cm) per simulare lo spessore della mano reale e i polpastrelli
-                box.expandByScalar(0.03); 
-                
-                // VERA INTERSEZIONE FISICA: La mano deve essere dentro il Box per poter essere afferrata!
-                if (box.containsPoint(handPos)) {
-                   touchedObj = obj;
-                }
+                const box = new THREE.Box3().setFromObject(mesh); box.expandByScalar(0.03); 
+                if (box.containsPoint(handPos)) touchedObj = obj;
               }
             });
 
             if(touchedObj) {
-              this.mioStato.attiva = true;
-              this.mioStato.obj = touchedObj;
-
+              this.mioStato.attiva = true; this.mioStato.obj = touchedObj;
               if (this.altroStato.attiva && this.altroStato.obj === touchedObj) {
                  const p1 = new THREE.Vector3(); this.el.object3D.getWorldPosition(p1);
                  const p2 = new THREE.Vector3(); this.altraMano.object3D.getWorldPosition(p2);
@@ -134,18 +118,15 @@
           const onGrabEnd = () => {
             this.mioStato.attiva = false;
             if (this.altroStato.attiva && this.altroStato.obj === this.mioStato.obj) {
-               const obj3D = this.altroStato.obj.object3D;
-               const hand3D = this.altraMano.object3D;
+               const obj3D = this.altroStato.obj.object3D; const hand3D = this.altraMano.object3D;
                const invHandMat = new THREE.Matrix4().copy(hand3D.matrixWorld).invert();
                const relMat = new THREE.Matrix4().multiplyMatrices(invHandMat, obj3D.matrixWorld);
-               
                const compAltra = this.altraMano.components['mano-interattiva'];
                relMat.decompose(compAltra.offsetPos, compAltra.offsetQuat, new THREE.Vector3());
             }
             this.mioStato.obj = null;
           };
 
-          // Ascoltiamo sia il pinch che il pugno chiuso (squeeze)
           this.el.addEventListener('pinchstarted', onGrabStart);
           this.el.addEventListener('squeezestarted', onGrabStart);
           this.el.addEventListener('pinchended', onGrabEnd);
@@ -153,29 +134,23 @@
         },
         tick: function() {
           if (!this.mioStato.attiva || !this.mioStato.obj) return;
-
           if (this.altroStato.attiva && this.altroStato.obj === this.mioStato.obj) {
              if (this.isLeft) { 
                const p1 = new THREE.Vector3(); this.el.object3D.getWorldPosition(p1);
                const p2 = new THREE.Vector3(); this.altraMano.object3D.getWorldPosition(p2);
-               
                const currentDist = p1.distanceTo(p2);
                if (window.statoMani.distanzaIniziale > 0) {
                  const ratio = currentDist / window.statoMani.distanzaIniziale;
                  this.mioStato.obj.object3D.scale.copy(window.statoMani.scalaIniziale).multiplyScalar(ratio);
                }
-               
                const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
                this.mioStato.obj.object3D.position.copy(mid);
              }
           } else {
-             const obj3D = this.mioStato.obj.object3D;
-             const hand3D = this.el.object3D;
-             
+             const obj3D = this.mioStato.obj.object3D; const hand3D = this.el.object3D;
              const handMat = new THREE.Matrix4().copy(hand3D.matrixWorld);
              const offsetMat = new THREE.Matrix4().compose(this.offsetPos, this.offsetQuat, obj3D.scale);
              const finalMat = new THREE.Matrix4().multiplyMatrices(handMat, offsetMat);
-             
              finalMat.decompose(obj3D.position, obj3D.quaternion, new THREE.Vector3());
           }
         }
@@ -249,7 +224,6 @@
 
       document.addEventListener('DOMContentLoaded', () => {
         window.caricaFilesInDB();
-
         const sceneEl = document.querySelector('a-scene');
         sceneEl.addEventListener('enter-vr', () => { document.getElementById('ui-2d').style.display = 'none'; });
         sceneEl.addEventListener('exit-vr', () => { document.getElementById('ui-2d').style.display = 'block'; });
@@ -272,7 +246,7 @@
         peerQuest.on('call', call => {
           call.answer();
           call.on('stream', stream => {
-            document.getElementById('status-pc').innerText = "💻 PC Connesso! (Apri Menu Tasto Y)"; document.getElementById('status-pc').style.color = "#00FFCC";
+            document.getElementById('status-pc').innerText = "💻 PC Connesso!"; document.getElementById('status-pc').style.color = "#00FFCC";
             let vid = document.getElementById('video-stream-pc');
             if (!vid) { vid = document.createElement('video'); vid.id = 'video-stream-pc'; vid.autoplay = true; vid.muted = true; vid.playsInline = true; document.querySelector('a-assets').appendChild(vid); }
             vid.srcObject = stream; vid.play().catch(e => console.error(e));
@@ -357,15 +331,34 @@
           this.el.addEventListener('ybuttondown', () => { this.menuVisibile = !this.menuVisibile; this.menuContainer.setAttribute('visible', this.menuVisibile); });
           window.addEventListener('file-aggiornati', () => this.aggiornaListaMenu());
         },
+
+        // FUNZIONE MATEMATICA PER CREARE LA MATRICE DAI 2 PUNTI ROSSI
+        creaMatriceAncora: function(a1, a2) {
+          const p1 = new THREE.Vector3(); a1.object3D.getWorldPosition(p1);
+          const p2 = new THREE.Vector3(); a2.object3D.getWorldPosition(p2);
+          
+          let forward = new THREE.Vector3().subVectors(p2, p1);
+          forward.y = 0; // Costringe l'allineamento sul piano orizzontale
+          if (forward.lengthSq() < 0.0001) forward.set(0, 0, -1);
+          forward.normalize();
+          
+          let up = new THREE.Vector3(0, 1, 0);
+          let right = new THREE.Vector3().crossVectors(up, forward).normalize();
+          
+          const mat = new THREE.Matrix4().makeBasis(right, up, forward);
+          mat.setPosition(p1);
+          return mat;
+        },
         
         salvaScena: async function(textEl) {
-          const ancora = document.getElementById('ancora-spaziale');
-          if (!ancora) {
-            textEl.setAttribute('value', 'PIAZZA ANCORA (DISCO VERDE) PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2500); return;
+          const a1 = document.getElementById('ancora-1');
+          const a2 = document.getElementById('ancora-2');
+          if (!a1 || !a2 || a1.getAttribute('visible') === 'false' || a2.getAttribute('visible') === 'false') {
+            textEl.setAttribute('value', 'PIAZZA I 2 PUNTI ROSSI PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2500); return;
           }
           
-          ancora.object3D.updateMatrixWorld();
-          const invAnchorMat = new THREE.Matrix4().copy(ancora.object3D.matrixWorld).invert();
+          const anchorMat = this.creaMatriceAncora(a1, a2);
+          const invAnchorMat = anchorMat.clone().invert();
 
           const saveDati = [];
           document.querySelectorAll('.spostabile').forEach(el => { 
@@ -384,7 +377,6 @@
             el.object3D.updateMatrixWorld();
             let bucoId = el.getAttribute('data-buco-id');
             if(!bucoId) { bucoId = 'buco_' + Date.now(); el.setAttribute('data-buco-id', bucoId); }
-            
             const relMat = new THREE.Matrix4().multiplyMatrices(invAnchorMat, el.object3D.matrixWorld);
             saveDati.push({ tipo: 'buco', bucoId: bucoId, matrix: relMat.toArray() });
           });
@@ -397,8 +389,11 @@
         },
 
         ripristinaScena: async function(textEl) {
-          const ancora = document.getElementById('ancora-spaziale');
-          if (!ancora) { textEl.setAttribute('value', 'PIAZZA ANCORA (DISCO VERDE) PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2500); return; }
+          const a1 = document.getElementById('ancora-1');
+          const a2 = document.getElementById('ancora-2');
+          if (!a1 || !a2 || a1.getAttribute('visible') === 'false' || a2.getAttribute('visible') === 'false') {
+            textEl.setAttribute('value', 'PIAZZA I 2 PUNTI ROSSI PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2500); return;
+          }
 
           const db = await window.dbPromise;
           const tx = db.transaction('scene', 'readonly');
@@ -408,8 +403,7 @@
             const result = e.target.result;
             if (!result) { textEl.setAttribute('value', 'NESSUN SALVATAGGIO TROVATO'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000); return; }
 
-            ancora.object3D.updateMatrixWorld();
-            const anchorMat = ancora.object3D.matrixWorld;
+            const anchorMat = this.creaMatriceAncora(a1, a2);
 
             result.dati.forEach(item => {
               const relMat = new THREE.Matrix4().fromArray(item.matrix);
@@ -440,7 +434,7 @@
                 }
               }
             });
-            textEl.setAttribute('value', 'ALLINEAMENTO ESEGUITO!'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000);
+            textEl.setAttribute('value', 'ALLINEAMENTO 3D ESEGUITO!'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000);
           };
         },
         aggiornaListaMenu: function() {
@@ -449,7 +443,7 @@
           if (window.statoApp.modalita === 'taglia') {
             const txt = document.createElement('a-text'); txt.setAttribute('value', 'Punta sui muri e\ntrascina il grilletto.'); txt.setAttribute('scale', '0.06 0.06 0.06'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0.03 0'); txt.classList.add('menu-info'); this.menuContainer.appendChild(txt); return;
           } else if (window.statoApp.modalita === 'ancora') {
-            const txt = document.createElement('a-text'); txt.setAttribute('value', 'Punta lo spigolo di un tavolo\ne premi il grilletto per\npiazzare l\'ANCORA MASTER.'); txt.setAttribute('scale', '0.06 0.06 0.06'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0.03 0'); txt.classList.add('menu-info'); this.menuContainer.appendChild(txt); return;
+            const txt = document.createElement('a-text'); txt.setAttribute('value', 'Piazza i DUE PUNTI ROSSI\nin due posti della stanza\nper l\'allineamento.'); txt.setAttribute('scale', '0.06 0.06 0.06'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0.03 0'); txt.classList.add('menu-info'); this.menuContainer.appendChild(txt); return;
           }
 
           window.fileCaricati.forEach((file, index) => {
@@ -489,25 +483,41 @@
             const hits = this.el.components.raycaster.intersections; if (hits.length === 0) return;
             const hitMenu = hits.find(h => h.object && h.object.el && h.object.el.classList.contains('menu-btn')); if (hitMenu) { hitMenu.object.el.emit('click'); return; }
 
+            // ==========================================
+            // LOGICA DEI 2 PUNTI ROSSI PER ANCORAGGIO
+            // ==========================================
             if (window.statoApp.modalita === 'ancora') {
               const hit = hits.find(h => h.object && h.object.el && (h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile')));
               if (hit) {
-                let entity = document.getElementById('ancora-spaziale');
-                if (!entity) {
-                  entity = document.createElement('a-entity'); 
-                  entity.id = 'ancora-spaziale';
-                  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 32), new THREE.MeshBasicMaterial({ color: 0x00FF00, depthTest: false }));
-                  mesh.renderOrder = 9999; 
-                  entity.setObject3D('mesh', mesh); 
-                  this.el.sceneEl.appendChild(entity);
+                if (window.statoApp.faseAncora === 1) {
+                  // Piazza Punto 1
+                  let a1 = document.getElementById('ancora-1');
+                  if (!a1) {
+                    a1 = document.createElement('a-entity'); a1.id = 'ancora-1';
+                    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.04, 16, 16), new THREE.MeshBasicMaterial({ color: 0xFF0000, depthTest: false }));
+                    mesh.renderOrder = 9999; a1.setObject3D('mesh', mesh); this.el.sceneEl.appendChild(a1);
+                  }
+                  a1.object3D.position.copy(hit.point);
+                  a1.setAttribute('visible', 'true');
+                  
+                  // Nasconde temporaneamente il Punto 2 finché non viene posizionato
+                  let a2 = document.getElementById('ancora-2');
+                  if(a2) a2.setAttribute('visible', 'false');
+                  
+                  window.statoApp.faseAncora = 2; // Passa alla fase 2
+                } else {
+                  // Piazza Punto 2
+                  let a2 = document.getElementById('ancora-2');
+                  if (!a2) {
+                    a2 = document.createElement('a-entity'); a2.id = 'ancora-2';
+                    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.04, 16, 16), new THREE.MeshBasicMaterial({ color: 0xFF0000, depthTest: false }));
+                    mesh.renderOrder = 9999; a2.setObject3D('mesh', mesh); this.el.sceneEl.appendChild(a2);
+                  }
+                  a2.object3D.position.copy(hit.point);
+                  a2.setAttribute('visible', 'true');
+                  
+                  window.statoApp.faseAncora = 1; // Torna alla fase 1 per eventuale reset
                 }
-                
-                let normale = hit.face ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0);
-                if (hit.object && hit.object.matrixWorld) { normale.applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize(); }
-                
-                let quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normale);
-                entity.object3D.quaternion.copy(quaternion);
-                entity.object3D.position.copy(hit.point.clone().add(normale.clone().multiplyScalar(0.01)));
               }
               return;
             }
@@ -621,24 +631,21 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;"><b>Tocco Fisico:</b> Ora devi letteralmente appoggiare la mano DENTRO o SULLA superficie dell'oggetto per afferrarlo chiudendo la mano!</p>
+      <p style="font-size: 12px; color: #555;"><b>Ancoraggio 2 Punti:</b> "MOD: ANCORA", piazza due Punti Rossi fisici nella stanza per salvare o ricaricare la rotazione perfetta!</p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
       <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
     </div>
 
-    <!-- WebXR Scene -->
     <a-scene antialias="true" renderer="colorManagement: true; highRefreshRate: true;" webxr="referenceSpaceType: unbounded; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection, layers, unbounded, local-floor, hand-tracking; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
       <a-light type="ambient" color="#ffffff" intensity="1.5"></a-light>
       <a-light type="directional" color="#ffffff" intensity="1.5" position="-1 2 1"></a-light>
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
       <a-assets></a-assets>
       
-      <!-- CONTROLLER LASER -->
       <a-entity id="controller-sx" laser-controls="hand: left" oculus-touch-controls="hand: left" pannello-sx occlusione-mani></a-entity>
       <a-entity id="controller-dx" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .spostabile, .menu-btn, .muro, .buco; far: 10;" cursor="rayOrigin: controller" strumenti-dx occlusione-mani></a-entity>
       
-      <!-- MANI NUDE (Touch Fisico) -->
       <a-entity id="mano-sx" hand-tracking-controls="hand: left" mano-interattiva></a-entity>
       <a-entity id="mano-dx" hand-tracking-controls="hand: right" mano-interattiva></a-entity>
 
