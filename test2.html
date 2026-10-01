@@ -2,10 +2,11 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Fix Texture Nere & Luci</title>
+    <title>AR Studio Pro - Gestione Tagli e Rimozione</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
+    <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/GLTFLoader.js"></script>
     <style>
       #ui-2d { position: absolute; top: 20px; left: 20px; z-index: 999; background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 10px; font-family: sans-serif; width: 340px; }
       .btn-ui { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; }
@@ -13,10 +14,19 @@
     <script>
       window.fileCaricati = []; window.scenaSalvata = []; window.statoApp = { modalita: 'inserisci' };
       
+      // MATERIALE TAGLIO INVISIBILE (Quando sei in modalità Inserisci)
       window.matTaglioFinale = new THREE.MeshBasicMaterial({ 
         colorWrite: false, 
         depthWrite: true 
       }); 
+
+      // NUOVO MATERIALE VISIBILE (Quando sei in modalità Taglio per poterli cancellare)
+      window.matTaglioVisibile = new THREE.MeshBasicMaterial({ 
+        color: 0xffaa00, // Arancione
+        transparent: true, 
+        opacity: 0.5,
+        depthWrite: true 
+      });
 
       AFRAME.registerComponent('occlusione-mani', {
         init: function () {
@@ -27,16 +37,12 @@
         }
       });
 
-      // ==============================================
-      // AUTO-CENTRATORE & CORRETTORE TEXTURE NERE
-      // ==============================================
       AFRAME.registerComponent('auto-centratore', {
         init: function() {
           this.el.addEventListener('model-loaded', () => {
             const mesh = this.el.getObject3D('mesh');
             if(!mesh) return;
             
-            // 1. Centra e scala l'oggetto
             const box = new THREE.Box3().setFromObject(mesh);
             const center = new THREE.Vector3(); box.getCenter(center);
             const size = new THREE.Vector3(); box.getSize(size);
@@ -51,11 +57,8 @@
               this.el.object3D.scale.set(scale, scale, scale);
             }
 
-            // 2. RIPARA LE TEXTURE NERE (Toglie l'effetto specchio vuoto)
             mesh.traverse((node) => {
               if (node.isMesh && node.material) {
-                // Riduciamo la "metallicità" a 0.1 e aumentiamo la rugosità.
-                // Così i colori veri della texture torneranno visibili invece di riflettere il nero!
                 if (node.material.metalness !== undefined) {
                   node.material.metalness = Math.min(node.material.metalness, 0.1); 
                   node.material.roughness = Math.max(node.material.roughness, 0.6); 
@@ -207,10 +210,24 @@
           this.menuContainer = document.createElement('a-entity'); this.menuContainer.setAttribute('position', '0.1 0.1 -0.1'); this.menuContainer.setAttribute('rotation', '-45 0 0'); this.menuContainer.setAttribute('visible', 'false'); this.el.appendChild(this.menuContainer);
           this.btnMod = document.createElement('a-plane'); this.btnMod.setAttribute('width', '0.22'); this.btnMod.setAttribute('height', '0.04'); this.btnMod.setAttribute('color', '#FF9800'); this.btnMod.setAttribute('position', '0 0.18 0'); this.btnMod.classList.add('menu-btn');
           this.txtMod = document.createElement('a-text'); this.txtMod.setAttribute('value', 'MOD: INSERISCI'); this.txtMod.setAttribute('scale', '0.07 0.07 0.07'); this.txtMod.setAttribute('align', 'center'); this.txtMod.setAttribute('position', '0 0 0.01'); this.btnMod.appendChild(this.txtMod);
+          
           this.btnMod.addEventListener('click', () => {
             window.statoApp.modalita = window.statoApp.modalita === 'inserisci' ? 'taglia' : 'inserisci';
             this.txtMod.setAttribute('value', window.statoApp.modalita === 'inserisci' ? 'MOD: INSERISCI' : 'MOD: TAGLIO');
-            this.btnMod.setAttribute('color', window.statoApp.modalita === 'inserisci' ? '#FF9800' : '#E91E63'); this.aggiornaListaMenu();
+            this.btnMod.setAttribute('color', window.statoApp.modalita === 'inserisci' ? '#FF9800' : '#E91E63'); 
+            this.aggiornaListaMenu();
+
+            // ==========================================
+            // LOGICA DI VISIBILITA' DEI BUCHI
+            // Se entriamo in modalità TAGLIO, rendiamo arancioni tutti i buchi creati.
+            // Se torniamo in INSERISCI, tornano invisibili (perforanti).
+            // ==========================================
+            document.querySelectorAll('.buco').forEach(buco => {
+              const mesh = buco.getObject3D('mesh');
+              if (mesh) {
+                mesh.material = window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale;
+              }
+            });
           });
           this.menuContainer.appendChild(this.btnMod);
 
@@ -245,7 +262,10 @@
             if (item.tipo === 'oggetto') this.spawnaOggetto(item.file, item.pos, item.rot, item.scale);
             else if (item.tipo === 'buco') {
               const entity = document.createElement('a-entity'); entity.classList.add('buco'); 
-              const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1.0), window.matTaglioFinale); mesh.renderOrder = -10; entity.setObject3D('mesh', mesh);
+              // Usa il materiale giusto in base alla modalità attiva durante il ripristino
+              const materialeAttivo = window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale;
+              const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1.0), materialeAttivo); 
+              mesh.renderOrder = -10; entity.setObject3D('mesh', mesh);
               entity.object3D.position.copy(item.pos); entity.object3D.rotation.copy(item.rot); entity.object3D.scale.copy(item.scale);
               document.querySelector('a-scene').appendChild(entity);
             }
@@ -272,7 +292,6 @@
           else { const pos = new THREE.Vector3(); this.el.object3D.getWorldPosition(pos); entity.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`); entity.setAttribute('scale', '1 1 1'); }
           const assetId = 'asset_' + Date.now() + Math.floor(Math.random() * 1000); entity.setAttribute('data-asset-id', assetId);
 
-          // CARICAMENTO GLB NATIVO CON CORREZIONE TEXTURE AUTOMATICA
           if (file.tipo === 'glb' || file.tipo === 'gltf') {
             entity.setAttribute('gltf-model', `url(${file.url})`);
             entity.setAttribute('auto-centratore', '');
@@ -329,7 +348,9 @@
               const profondita = 1.0; 
               mesh.geometry.dispose(); 
               mesh.geometry = new THREE.BoxGeometry(1, 1, profondita); 
-              mesh.material = window.matTaglioFinale; 
+              
+              // Applica il materiale arancione visibile dato che siamo in modalità taglia
+              mesh.material = window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale; 
               mesh.renderOrder = -10; 
               
               const posSullaSuperficie = this.statoTaglio.entity.object3D.position.clone().sub(this.statoTaglio.normale.clone().multiplyScalar(0.01));
@@ -345,6 +366,7 @@
 
           this.el.addEventListener('gripdown', () => {
             const hits = this.el.components.raycaster.intersections;
+            // Rileva sia gli oggetti normali che i buchi (ora colorati e facili da mirare)
             const hitObj = hits.find(h => h.object && h.object.el && (h.object.el.classList.contains('spostabile') || h.object.el.classList.contains('buco')));
             if (hitObj) {
               const assetId = hitObj.object.el.getAttribute('data-asset-id');
@@ -366,7 +388,7 @@
         tick: function () {
           const hits = this.el.components.raycaster.intersections;
           if (window.statoApp.modalita === 'taglia' && !this.statoTaglio.attivo && hits.length > 0) {
-            const hitForMirino = hits.find(h => h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile'));
+            const hitForMirino = hits.find(h => h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile') || h.object.el.classList.contains('buco'));
             if (hitForMirino) { this.mirino.setAttribute('visible', 'true'); this.mirino.object3D.position.copy(hitForMirino.point); } else { this.mirino.setAttribute('visible', 'false'); }
           } else { this.mirino.setAttribute('visible', 'false'); }
 
@@ -408,19 +430,16 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;"><b>Fix Texture Nere:</b> Luce ambientale aumentata e correzione specchio applicata sui modelli PBR!</p>
+      <p style="font-size: 12px; color: #555;"><b>Fix Eliminazione Buchi:</b> In Modalità Taglio i buchi sono arancioni. Puntali e premi il tasto Grip (Laterale) per cancellarli!</p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
       <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
     </div>
 
-    <!-- AGGIUNTE LUCI POTENTI PER ILLUMINARE I MODELLI 3D -->
+    <!-- layers inserito per permettere al QuadLayer hardware di stampare il PC in risoluzione nativa -->
     <a-scene antialias="true" renderer="colorManagement: true; highRefreshRate: true;" webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection, layers; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
-      <!-- Luce Ambientale più forte per illuminare le ombre -->
       <a-light type="ambient" color="#ffffff" intensity="1.5"></a-light>
-      <!-- Faro Direzionale per creare i riflessi sui materiali -->
       <a-light type="directional" color="#ffffff" intensity="1.5" position="-1 2 1"></a-light>
-      
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
       <a-assets></a-assets>
       <a-entity id="controller-sx" laser-controls="hand: left" oculus-touch-controls="hand: left" pannello-sx occlusione-mani></a-entity>
