@@ -1296,33 +1296,48 @@ window.finishGame = function() {
                 dbPath = `leaderboard/${modeFolder}/${window.myId}`;
             }
 
-            db.ref(dbPath).once('value', s => {
-                let oldData = s.val();
-                let oldScore = oldData ? (Number(oldData.score) || 0) : 0;
-                let oldWpm = oldData ? (Number(oldData.wpm) || 0) : 0;
-                const myLevel = window.userProgression?.level || 1;
+            // VERIFICA PARAMETRI PERSONALIZZATI (Escludiamo dalla Classifica Ufficiale le partite in Singolo con parametri modificati)
+            const hasCustomParameters = !isActuallyMulti && (
+                !!window.isEasyMode ||
+                !!window.isFixedSpeed ||
+                (window.charSpaceWpm && Number(window.charSpaceWpm) > 0) ||
+                (window.wordSpaceMult && Number(window.wordSpaceMult) !== 1.0)
+            );
 
-                // Aggiorniamo se il punteggio è migliore, OPPURE se il punteggio è uguale ma la velocità è superiore
-                if (!oldData || window.totalScore > oldScore || (window.totalScore === oldScore && window.peakWpm > oldWpm)) {
-                    db.ref(dbPath).set({
-                        name: window.myName,
-                        username: window.myPrivacy ? "" : tgUsername,
-                        score: window.totalScore,
-                        wpm: window.peakWpm,
-                        level: myLevel,
-                        wordCount: window.requestedWordCount,
-                        date: new Date().toLocaleDateString('it-IT'),
-                        privacyLeaderboard: !!window.myPrivacyLeaderboard
-                    });
-                    window.showToast(currentLang === 'it' ? "🏆 Nuovo Record in Classifica!" : "🏆 New Leaderboard Record!");
-                } else {
-                    // Anche se non è record, aggiorniamo il livello se è cambiato
-                    if (oldData && oldData.level !== myLevel) {
-                        db.ref(dbPath).update({ level: myLevel });
+            if (hasCustomParameters) {
+                console.log("GameCore: Partita in Singolo con parametri modificati (Semplice/FixedSpeed/Spaziatura). Esclusa dalla Classifica Ufficiale.");
+                window.showToast(currentLang === 'it'
+                    ? "⚠️ Parametri personalizzati attivi: la partita non entra nella Classifica Ufficiale."
+                    : "⚠️ Custom parameters active: match excluded from Official Leaderboard.");
+            } else {
+                db.ref(dbPath).once('value', s => {
+                    let oldData = s.val();
+                    let oldScore = oldData ? (Number(oldData.score) || 0) : 0;
+                    let oldWpm = oldData ? (Number(oldData.wpm) || 0) : 0;
+                    const myLevel = window.userProgression?.level || 1;
+
+                    // Aggiorniamo se il punteggio è migliore, OPPURE se il punteggio è uguale ma la velocità è superiore
+                    if (!oldData || window.totalScore > oldScore || (window.totalScore === oldScore && window.peakWpm > oldWpm)) {
+                        db.ref(dbPath).set({
+                            name: window.myName,
+                            username: window.myPrivacy ? "" : tgUsername,
+                            score: window.totalScore,
+                            wpm: window.peakWpm,
+                            level: myLevel,
+                            wordCount: window.requestedWordCount,
+                            date: new Date().toLocaleDateString('it-IT'),
+                            privacyLeaderboard: !!window.myPrivacyLeaderboard
+                        });
+                        window.showToast(currentLang === 'it' ? "🏆 Nuovo Record in Classifica!" : "🏆 New Leaderboard Record!");
+                    } else {
+                        // Anche se non è record, aggiorniamo il livello se è cambiato
+                        if (oldData && oldData.level !== myLevel) {
+                            db.ref(dbPath).update({ level: myLevel });
+                        }
+                        window.showToast(currentLang === 'it' ? "Ottima partita! (Non hai superato il tuo record personale)" : "Good game! (Personal best not beaten)");
                     }
-                    window.showToast(currentLang === 'it' ? "Ottima partita! (Non hai superato il tuo record personale)" : "Good game! (Personal best not beaten)");
-                }
-            });
+                });
+            }
 
             // --- SALVATAGGIO RIEPILOGO MATCH (CRONOLOGIA SFIDE) ---
             if (isActuallyMulti) {
