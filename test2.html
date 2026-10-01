@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Mani Magnetiche Perfette</title>
+    <title>AR Studio Pro - Real Touch Contact</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -16,7 +16,6 @@
       window.matTaglioFinale = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); 
       window.matTaglioVisibile = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.5, depthWrite: true });
 
-      // DATABASE INTERNO
       window.dbPromise = new Promise((resolve, reject) => {
         const req = indexedDB.open('AR_Studio_DB', 1);
         req.onupgradeneeded = e => {
@@ -70,7 +69,7 @@
       });
 
       // ==============================================
-      // NUOVO MOTORE MANI (Campo Magnetico e Due Mani)
+      // CONTATTO FISICO REALE (No Magnete)
       // ==============================================
       window.statoMani = {
         sx: { attiva: false, obj: null },
@@ -88,53 +87,52 @@
           this.offsetPos = new THREE.Vector3();
           this.offsetQuat = new THREE.Quaternion();
 
-          // QUANDO UNISCI POLLICE E INDICE (Pizzico)
-          this.el.addEventListener('pinchstarted', (e) => {
+          // L'evento pinch/squeeze si attiva quando fai il pugno o chiudi le dita
+          const onGrabStart = (e) => {
             this.altraMano = document.querySelector(this.isLeft ? '#mano-dx' : '#mano-sx');
             
-            // Trova la posizione del pizzico (o usa il polso + 10cm avanti come fallback)
-            let pinchPos = e.detail.position ? new THREE.Vector3().copy(e.detail.position) : null;
-            if(!pinchPos) {
-               pinchPos = new THREE.Vector3();
-               this.el.object3D.getWorldPosition(pinchPos);
-               const dir = new THREE.Vector3(0, 0, -0.10).applyQuaternion(this.el.object3D.quaternion);
-               pinchPos.add(dir);
-            }
+            // Troviamo il centro della mano (spostato leggermente verso il palmo/dita)
+            let handPos = new THREE.Vector3();
+            this.el.object3D.getWorldPosition(handPos);
+            const dir = new THREE.Vector3(0, 0, -0.05).applyQuaternion(this.el.object3D.quaternion); // +5cm verso le dita
+            handPos.add(dir);
 
-            let closest = null;
-            let minD = 0.4; // 40 cm di raggio magnetico! Facilissimo da afferrare.
+            let touchedObj = null;
 
+            // Controlliamo ESATTAMENTE se la mano è DENTRO la geometria dell'oggetto
             document.querySelectorAll('.spostabile, .buco').forEach(obj => {
-              const objPos = new THREE.Vector3();
-              obj.object3D.getWorldPosition(objPos);
-              const d = objPos.distanceTo(pinchPos);
-              if(d < minD) { minD = d; closest = obj; }
+              const mesh = obj.getObject3D('mesh');
+              if (mesh) {
+                const box = new THREE.Box3().setFromObject(mesh);
+                // Aggiungiamo un piccolissimo margine (3cm) per simulare lo spessore della mano reale e i polpastrelli
+                box.expandByScalar(0.03); 
+                
+                // VERA INTERSEZIONE FISICA: La mano deve essere dentro il Box per poter essere afferrata!
+                if (box.containsPoint(handPos)) {
+                   touchedObj = obj;
+                }
+              }
             });
 
-            if(closest) {
+            if(touchedObj) {
               this.mioStato.attiva = true;
-              this.mioStato.obj = closest;
+              this.mioStato.obj = touchedObj;
 
-              // CONTROLLO PRESA A DUE MANI (Scale)
-              if (this.altroStato.attiva && this.altroStato.obj === closest) {
+              if (this.altroStato.attiva && this.altroStato.obj === touchedObj) {
                  const p1 = new THREE.Vector3(); this.el.object3D.getWorldPosition(p1);
                  const p2 = new THREE.Vector3(); this.altraMano.object3D.getWorldPosition(p2);
                  window.statoMani.distanzaIniziale = p1.distanceTo(p2);
-                 window.statoMani.scalaIniziale.copy(closest.object3D.scale);
+                 window.statoMani.scalaIniziale.copy(touchedObj.object3D.scale);
               } else {
-                 // PRESA SINGOLA: Calcola la differenza di rotazione per non far saltare l'oggetto
                  const invHandMat = new THREE.Matrix4().copy(this.el.object3D.matrixWorld).invert();
-                 const relMat = new THREE.Matrix4().multiplyMatrices(invHandMat, closest.object3D.matrixWorld);
+                 const relMat = new THREE.Matrix4().multiplyMatrices(invHandMat, touchedObj.object3D.matrixWorld);
                  relMat.decompose(this.offsetPos, this.offsetQuat, new THREE.Vector3());
               }
             }
-          });
+          };
 
-          // QUANDO APRI LA MANO (Rilascio)
-          this.el.addEventListener('pinchended', () => {
+          const onGrabEnd = () => {
             this.mioStato.attiva = false;
-            
-            // Se stavamo usando due mani e ne molli una, riaggiorniamo la presa di quella rimasta attaccata!
             if (this.altroStato.attiva && this.altroStato.obj === this.mioStato.obj) {
                const obj3D = this.altroStato.obj.object3D;
                const hand3D = this.altraMano.object3D;
@@ -145,14 +143,19 @@
                relMat.decompose(compAltra.offsetPos, compAltra.offsetQuat, new THREE.Vector3());
             }
             this.mioStato.obj = null;
-          });
+          };
+
+          // Ascoltiamo sia il pinch che il pugno chiuso (squeeze)
+          this.el.addEventListener('pinchstarted', onGrabStart);
+          this.el.addEventListener('squeezestarted', onGrabStart);
+          this.el.addEventListener('pinchended', onGrabEnd);
+          this.el.addEventListener('squeezeended', onGrabEnd);
         },
         tick: function() {
           if (!this.mioStato.attiva || !this.mioStato.obj) return;
 
-          // LOGICA MOVIMENTO DUE MANI (Zoom / Stretch)
           if (this.altroStato.attiva && this.altroStato.obj === this.mioStato.obj) {
-             if (this.isLeft) { // Lo calcola solo la mano sinistra per evitare sfarfallii
+             if (this.isLeft) { 
                const p1 = new THREE.Vector3(); this.el.object3D.getWorldPosition(p1);
                const p2 = new THREE.Vector3(); this.altraMano.object3D.getWorldPosition(p2);
                
@@ -166,7 +169,6 @@
                this.mioStato.obj.object3D.position.copy(mid);
              }
           } else {
-             // LOGICA MOVIMENTO MANO SINGOLA (Trascinamento e Rotazione fluidi 1:1 col polso)
              const obj3D = this.mioStato.obj.object3D;
              const hand3D = this.el.object3D;
              
@@ -619,7 +621,7 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;"><b>Mani Magnetiche V2:</b> Risolto il tracking! Avvicina la mano a 40cm dall'oggetto e pizzica per afferrarlo.</p>
+      <p style="font-size: 12px; color: #555;"><b>Tocco Fisico:</b> Ora devi letteralmente appoggiare la mano DENTRO o SULLA superficie dell'oggetto per afferrarlo chiudendo la mano!</p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
       <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
@@ -636,7 +638,7 @@
       <a-entity id="controller-sx" laser-controls="hand: left" oculus-touch-controls="hand: left" pannello-sx occlusione-mani></a-entity>
       <a-entity id="controller-dx" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .spostabile, .menu-btn, .muro, .buco; far: 10;" cursor="rayOrigin: controller" strumenti-dx occlusione-mani></a-entity>
       
-      <!-- MANI NUDE CON COMPONENTE MAGNETICO (mano-interattiva) -->
+      <!-- MANI NUDE (Touch Fisico) -->
       <a-entity id="mano-sx" hand-tracking-controls="hand: left" mano-interattiva></a-entity>
       <a-entity id="mano-dx" hand-tracking-controls="hand: right" mano-interattiva></a-entity>
 
