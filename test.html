@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Mirino Taglio e Fix Mesh</title>
+    <title>AR Studio Pro - Taglio 2D Preciso</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -201,7 +201,6 @@
           const geom = new THREE.BufferGeometry();
           geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(xrMesh.vertices), 3));
           geom.setIndex(new THREE.BufferAttribute(new Uint32Array(xrMesh.indices), 1));
-          // CORREZIONE CRITICA: Aggiunge le normali per far funzionare il taglio sulle mesh 3D
           geom.computeVertexNormals(); 
           return geom;
         }
@@ -339,12 +338,12 @@
         init: function () {
           this.oggettoAfferrato = null; this.distanzaGrab = 0;
           this.stickX = 0; this.stickY = 0; this.stickRotVert = 0; this.stickRotRoll = 0; 
-          this.statoTaglio = { attivo: false, startPt: null, asseX: null, asseY: null, entity: null };
+          this.statoTaglio = { attivo: false, startPt: null, asseX: null, asseY: null, normale: null, entity: null };
           
-          // MODIFICATO: depthTest: false rende il riquadro rosso visibile anche se disegni "attraverso" una foto appesa!
+          // NUOVO MATERIALE BOZZA: Ora è 2D, piatto e traslucido
           this.matTaglioBozza = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthTest: false });
 
-          // PUNTATORE VISIVO (Mirino)
+          // MIRINO 
           this.mirino = document.createElement('a-entity');
           this.mirino.setAttribute('geometry', 'primitive: sphere; radius: 0.015');
           this.mirino.setAttribute('material', 'color: #ff0000; shader: flat; depthTest: false');
@@ -360,9 +359,9 @@
             if (window.statoApp.modalita === 'taglia') {
               const hit = hits.find(h => h.object.el.classList.contains('spostabile') || h.object.el.classList.contains('muro'));
               if (hit) {
-                this.statoTaglio.attivo = true; this.statoTaglio.startPt = hit.point.clone();
+                this.statoTaglio.attivo = true; 
+                this.statoTaglio.startPt = hit.point.clone();
                 
-                // Calcolo sicuro delle normali
                 let normale = new THREE.Vector3(0, 0, 1);
                 if (hit.face && hit.face.normal) {
                   normale.copy(hit.face.normal);
@@ -371,6 +370,7 @@
                      normale.applyMatrix3(normalMatrix).normalize();
                   }
                 }
+                this.statoTaglio.normale = normale.clone();
                 
                 let up = new THREE.Vector3(0, 1, 0);
                 if (Math.abs(normale.y) > 0.9) up.set(0, 0, -1);
@@ -379,13 +379,21 @@
 
                 const entity = document.createElement('a-entity');
                 entity.classList.add('buco'); 
-                const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 2.0), this.matTaglioBozza);
-                mesh.renderOrder = 9999; // Disegna sempre sopra a tutto durante la bozza
+                
+                // MESH 2D PER IL DISEGNO
+                const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.matTaglioBozza);
+                mesh.renderOrder = 9999; 
+                
                 const rotMat = new THREE.Matrix4().makeBasis(this.statoTaglio.asseX, this.statoTaglio.asseY, normale);
                 mesh.quaternion.setFromRotationMatrix(rotMat);
                 
-                entity.setObject3D('mesh', mesh); entity.setAttribute('position', hit.point);
-                this.el.sceneEl.appendChild(entity); this.statoTaglio.entity = entity;
+                // Leggero offset di 1cm per evitare sfarfallio con la parete
+                const posOffset = hit.point.clone().add(normale.clone().multiplyScalar(0.01));
+                
+                entity.setObject3D('mesh', mesh); 
+                entity.setAttribute('position', posOffset);
+                this.el.sceneEl.appendChild(entity); 
+                this.statoTaglio.entity = entity;
               }
               return;
             }
@@ -400,8 +408,18 @@
               this.statoTaglio.attivo = false;
               if (this.statoTaglio.entity) {
                 const mesh = this.statoTaglio.entity.getObject3D('mesh');
-                mesh.material = window.matTaglioFinale; 
+                
+                // AL RILASCIO: IL QUADRATO PIATTO DIVENTA UN CUBO PROFONDO CHE TAGLIA!
+                mesh.geometry.dispose();
+                mesh.geometry = new THREE.BoxGeometry(1, 1, 2.0); // Cubo profondo 2 metri
+                
+                mesh.material = window.matTaglioFinale; // Diventa invisibile
                 mesh.renderOrder = -10; 
+                
+                // Riporta il blocco dentro il muro togliendo l'offset precedente
+                const meshPos = this.statoTaglio.entity.object3D.position;
+                meshPos.sub(this.statoTaglio.normale.clone().multiplyScalar(0.01));
+                
                 this.statoTaglio.entity = null;
               }
             }
@@ -431,7 +449,7 @@
         tick: function () {
           const hits = this.el.components.raycaster.intersections;
 
-          // Gestione visibilità del Mirino
+          // GESTIONE MIRINO (Visibile solo in modalità taglia prima del clic)
           if (window.statoApp.modalita === 'taglia' && !this.statoTaglio.attivo && hits.length > 0) {
             const hitForMirino = hits.find(h => h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile'));
             if (hitForMirino) {
@@ -444,20 +462,30 @@
             this.mirino.setAttribute('visible', 'false');
           }
 
-          // Aggiornamento Taglio in tempo reale
+          // AGGIORNAMENTO RETTANGOLO IN TEMPO REALE DURANTE IL TRASCINAMENTO
           if (this.statoTaglio.attivo && this.statoTaglio.entity) {
             if (hits.length > 0) {
               const ptCorrente = hits[0].point.clone();
               const diff = new THREE.Vector3().subVectors(ptCorrente, this.statoTaglio.startPt);
-              const larghezza = diff.dot(this.statoTaglio.asseX); const altezza = diff.dot(this.statoTaglio.asseY);
-              const center = this.statoTaglio.startPt.clone().add(this.statoTaglio.asseX.clone().multiplyScalar(larghezza / 2)).add(this.statoTaglio.asseY.clone().multiplyScalar(altezza / 2));
+              
+              const larghezza = diff.dot(this.statoTaglio.asseX); 
+              const altezza = diff.dot(this.statoTaglio.asseY);
+              
+              const center = this.statoTaglio.startPt.clone()
+                  .add(this.statoTaglio.asseX.clone().multiplyScalar(larghezza / 2))
+                  .add(this.statoTaglio.asseY.clone().multiplyScalar(altezza / 2))
+                  .add(this.statoTaglio.normale.clone().multiplyScalar(0.01)); // Offset per mantenerlo 2D visibile sul muro
+                  
               const mesh = this.statoTaglio.entity.getObject3D('mesh');
-              mesh.scale.set(Math.max(Math.abs(larghezza), 0.02), Math.max(Math.abs(altezza), 0.02), 2.0);
+              
+              // Essendo un PlaneGeometry, la scala Z deve restare a 1
+              mesh.scale.set(Math.max(Math.abs(larghezza), 0.02), Math.max(Math.abs(altezza), 0.02), 1.0);
               mesh.position.copy(center);
             }
             return;
           }
 
+          // SPOSTAMENTO NORMALE
           if (this.oggettoAfferrato) {
             if (Math.abs(this.stickY) > 0.1) {
               this.distanzaGrab += this.stickY * -0.05; 
@@ -494,7 +522,7 @@
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
       <p style="font-size: 12px; color: #555;">
-        <b>Aggiornamento Taglio:</b> Ora vedi un mirino rosso dove punti. Seleziona TAGLIO dal menu Y, clicca e trascina. Il quadrato rosso buca la parete ed è visibile anche attraverso le foto!
+        <b>Disegno Preciso:</b> Ora il taglierino disegna un rettangolo 2D rosso piatto sul muro. Appena rilasci il grilletto, perfora la parete.
       </p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
