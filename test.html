@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Taglio Pulito Anti-Sfarfallio</title>
+    <title>AR Studio Pro - 4K Raw Resolution</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -24,12 +24,19 @@
         }
       });
 
+      // ==============================================
+      // FOTO 4K: MIPMAP DISATTIVATI PER NITIDEZZA PURA
+      // ==============================================
       AFRAME.registerComponent('foto-alta-qualita', {
         schema: {url: {type: 'string'}},
         init: function () {
           new THREE.TextureLoader().load(this.data.url, (texture) => {
+            texture.generateMipmaps = false; // BLUCCA LA SFOCATURA 3D!
+            texture.minFilter = THREE.LinearFilter; // Filtro tagliente 1:1
+            texture.magFilter = THREE.LinearFilter;
             texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy();
-            texture.minFilter = THREE.LinearMipmapLinearFilter; texture.magFilter = THREE.LinearFilter; texture.encoding = THREE.sRGBEncoding;
+            texture.encoding = THREE.sRGBEncoding;
+
             const ratio = texture.image.width / texture.image.height;
             let width = 0.8; let height = 0.8; if (ratio > 1) height = width / ratio; else width = height * ratio;
             const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true });
@@ -38,6 +45,9 @@
         }
       });
 
+      // ==============================================
+      // VIDEO 4K RAW
+      // ==============================================
       AFRAME.registerComponent('video-alta-qualita', {
         schema: {url: {type: 'string'}},
         init: function () {
@@ -48,7 +58,12 @@
           vid.addEventListener('loadedmetadata', () => {
             const ratio = vid.videoWidth / vid.videoHeight;
             const texture = new THREE.VideoTexture(vid);
-            texture.minFilter = THREE.LinearFilter; texture.magFilter = THREE.LinearFilter; texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy(); texture.encoding = THREE.sRGBEncoding;
+            texture.generateMipmaps = false; // Forza il video raw senza compressioni grafiche
+            texture.minFilter = THREE.LinearFilter; 
+            texture.magFilter = THREE.LinearFilter; 
+            texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy(); 
+            texture.encoding = THREE.sRGBEncoding;
+            
             this.el.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2 / ratio), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide })));
             vid.play().catch(e => console.log(e));
           });
@@ -100,11 +115,11 @@
         peerQuest.on('call', call => {
           call.answer();
           call.on('stream', stream => {
-            document.getElementById('status-pc').innerText = "💻 PC Connesso! (Apri Menu Tasto Y)"; document.getElementById('status-pc').style.color = "#00FFCC";
+            document.getElementById('status-pc').innerText = "💻 PC 4K Connesso! (Apri Menu Tasto Y)"; document.getElementById('status-pc').style.color = "#00FFCC";
             let vid = document.getElementById('video-stream-pc');
             if (!vid) { vid = document.createElement('video'); vid.id = 'video-stream-pc'; vid.autoplay = true; vid.muted = true; vid.playsInline = true; document.querySelector('a-assets').appendChild(vid); }
             vid.srcObject = stream; vid.play().catch(e => console.error(e));
-            if (!window.fileCaricati.find(f => f.tipo === 'stream-pc')) { window.fileCaricati.unshift({ nome: "💻 Schermo PC", tipo: 'stream-pc', idElem: 'video-stream-pc' }); window.dispatchEvent(new Event('file-aggiornati')); }
+            if (!window.fileCaricati.find(f => f.tipo === 'stream-pc')) { window.fileCaricati.unshift({ nome: "💻 Schermo PC (4K)", tipo: 'stream-pc', idElem: 'video-stream-pc' }); window.dispatchEvent(new Event('file-aggiornati')); }
           });
         });
       });
@@ -215,7 +230,12 @@
           else if (file.tipo === 'mp4') entity.setAttribute('video-alta-qualita', `url: ${file.url}`);
           else if (file.tipo === 'stream-pc') {
             const vid = document.getElementById(file.idElem);
-            const texture = new THREE.VideoTexture(vid); texture.minFilter = THREE.LinearFilter; texture.magFilter = THREE.LinearFilter; texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy(); texture.encoding = THREE.sRGBEncoding;
+            const texture = new THREE.VideoTexture(vid); 
+            texture.generateMipmaps = false; 
+            texture.minFilter = THREE.LinearFilter; 
+            texture.magFilter = THREE.LinearFilter; 
+            texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy(); 
+            texture.encoding = THREE.sRGBEncoding;
             entity.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.9), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide })));
           }
           document.querySelector('a-scene').appendChild(entity);
@@ -260,29 +280,14 @@
             this.oggettoAfferrato = null;
             if (this.statoTaglio.attivo && this.statoTaglio.entity) {
               const mesh = this.statoTaglio.entity.getObject3D('mesh');
-              
-              // ==========================================
-              // FIX SFARFALLIO: Creiamo il volume perforante
-              // ==========================================
               const profondita = 2.0;
-              mesh.geometry.dispose(); 
-              mesh.geometry = new THREE.BoxGeometry(1, 1, profondita); 
-              mesh.material = window.matTaglioFinale; 
-              mesh.renderOrder = -10; 
-              
+              mesh.geometry.dispose(); mesh.geometry = new THREE.BoxGeometry(1, 1, profondita); mesh.material = window.matTaglioFinale; mesh.renderOrder = -10; 
               const posAttuale = this.statoTaglio.entity.object3D.position.clone();
               const posSullaSuperficie = posAttuale.sub(this.statoTaglio.normale.clone().multiplyScalar(0.01));
-              
-              // Spinge il blocco invisibile di quasi 1 metro nel muro, 
-              // facendolo "sporgere" verso l'utente di soli 5 cm (0.05).
-              // Questo taglia di netto l'immagine posta sul muro senza sfarfallare!
               const offsetCentramento = (profondita / 2) - 0.05; 
               const centroPerfetto = posSullaSuperficie.sub(this.statoTaglio.normale.clone().multiplyScalar(offsetCentramento));
-              
               this.statoTaglio.entity.object3D.position.copy(centroPerfetto);
-              
-              this.statoTaglio.attivo = false;
-              this.statoTaglio.entity = null;
+              this.statoTaglio.attivo = false; this.statoTaglio.entity = null;
             }
           });
 
@@ -351,15 +356,15 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;">Fix sfarfallio applicato. Utilizza il file Sender HD aggiornato su PC.</p>
+      <p style="font-size: 12px; color: #555;"><b>Qualità 4K Attivata.</b> Nessuna compressione visiva su foto e schermo PC.</p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
       <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
     </div>
 
-    <a-scene antialias="true" renderer="colorManagement: true; highRefreshRate: true;" webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
-      <a-light type="ambient" color="#ffffff" intensity="0.8"></a-light>
-      <a-light type="directional" color="#ffffff" intensity="0.6" position="-1 2 1"></a-light>
+    <!-- Antialiasing a false velocizza il render 4K, foveationLevel: 0 tiene tutto nitido -->
+    <a-scene antialias="false" renderer="colorManagement: true; highRefreshRate: true;" webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
+      <a-light type="ambient" color="#ffffff" intensity="1.0"></a-light>
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
       <a-assets></a-assets>
       <a-entity id="controller-sx" laser-controls="hand: left" oculus-touch-controls="hand: left" pannello-sx occlusione-mani></a-entity>
