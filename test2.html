@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Taglio Universale & PC Nativo</title>
+    <title>AR Studio Pro - Fix Modelli 3D</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -14,11 +14,8 @@
     <script>
       window.fileCaricati = []; window.scenaSalvata = []; window.statoApp = { modalita: 'inserisci' };
       
-      // MATERIALE TAGLIO: Invisibile, ma scarta tutto ciò che si trova dietro di esso!
-      window.matTaglioFinale = new THREE.MeshBasicMaterial({ 
-        colorWrite: false, 
-        depthWrite: true 
-      }); 
+      // MATERIALE TAGLIO
+      window.matTaglioFinale = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); 
 
       AFRAME.registerComponent('occlusione-mani', {
         init: function () {
@@ -29,9 +26,7 @@
         }
       });
 
-      // ==============================================
-      // QUAD LAYER HD (Bypassa il 3D e stampa il PC sulle lenti)
-      // ==============================================
+      // QUAD LAYER HD 
       AFRAME.registerComponent('video-layer-hd', {
         schema: { idElem: { type: 'string' } },
         init: function () {
@@ -52,7 +47,6 @@
             this.layer = mediaBinding.createQuadLayer(this.video, { space: refSpace, layout: 'mono', width: 1.6, height: 0.9 });
             const baseLayer = session.renderState.baseLayer;
             session.updateRenderState({ layers: [baseLayer, this.layer] });
-            // Nasconde la mesh finta per lasciare solo il display hardware purissimo
             this.mesh.visible = false;
           } catch (e) { console.error("Layer non supportato:", e); }
         },
@@ -99,6 +93,28 @@
             if (maxDim > 0) geometry.scale(0.5 / maxDim, 0.5 / maxDim, 0.5 / maxDim);
             geometry.computeVertexNormals();
             this.el.setObject3D('mesh', new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x00FFCC, metalness: 0.3, roughness: 0.4, side: THREE.DoubleSide })));
+          });
+        }
+      });
+
+      // ==============================================
+      // IL BLOCCO MANCANTE: IMPORTAZIONE GLTF E GLB
+      // ==============================================
+      AFRAME.registerComponent('gltf-colorato', {
+        schema: {url: {type: 'string'}},
+        init: function() {
+          new THREE.GLTFLoader().load(this.data.url, (gltf) => {
+            const box = new THREE.Box3().setFromObject(gltf.scene); 
+            const center = new THREE.Vector3(); box.getCenter(center);
+            const wrapper = new THREE.Group(); 
+            gltf.scene.position.sub(center); 
+            wrapper.add(gltf.scene);
+            const size = new THREE.Vector3(); box.getSize(size);
+            const maxDim = Math.max(size.x, size.y, size.z);
+            if (maxDim > 0) { const scale = 0.5 / maxDim; wrapper.scale.set(scale, scale, scale); }
+            this.el.setObject3D('mesh', wrapper);
+          }, undefined, function (error) {
+            console.error("Errore caricamento GLTF:", error);
           });
         }
       });
@@ -287,20 +303,14 @@
             if (this.statoTaglio.attivo && this.statoTaglio.entity) {
               const mesh = this.statoTaglio.entity.getObject3D('mesh');
               
-              // ==========================================
-              // FIX DISTANZA FOTO: Creiamo un Box spesso 1m
-              // che sporge dal muro di 15 centimetri verso l'utente
-              // divorando (tagliando) muri, foto e oggetti!
-              // ==========================================
               const profondita = 1.0; 
               mesh.geometry.dispose(); 
               mesh.geometry = new THREE.BoxGeometry(1, 1, profondita); 
               mesh.material = window.matTaglioFinale; 
-              mesh.renderOrder = -10; // Disegnato per primo!
+              mesh.renderOrder = -10; 
               
               const posSullaSuperficie = this.statoTaglio.entity.object3D.position.clone().sub(this.statoTaglio.normale.clone().multiplyScalar(0.01));
               
-              // Spinge il centro dentro il muro, lasciando fuori solo 15cm (0.15m)
               const sporgenzaVersoUtente = 0.15;
               const offsetCentramento = (profondita / 2) - sporgenzaVersoUtente; 
               
@@ -376,7 +386,7 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;"><b>Fix Profondità:</b> Ora il taglio sporge di 15cm dal muro e ingoia/taglia foto e oggetti senza sfarfallare!</p>
+      <p style="font-size: 12px; color: #555;"><b>Fix Modelli 3D:</b> Risolto il bug di importazione di glb/gltf!</p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
       <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
