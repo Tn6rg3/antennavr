@@ -2,8 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Fix GLB 3D Nativo</title>
-    <!-- Rimosso GLTFLoader esterno che causava conflitti, A-Frame lo ha già nativo! -->
+    <title>AR Studio Pro - Fix Texture Nere & Luci</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -14,7 +13,6 @@
     <script>
       window.fileCaricati = []; window.scenaSalvata = []; window.statoApp = { modalita: 'inserisci' };
       
-      // MATERIALE TAGLIO: Invisibile, ma scarta tutto ciò che si trova dietro di esso!
       window.matTaglioFinale = new THREE.MeshBasicMaterial({ 
         colorWrite: false, 
         depthWrite: true 
@@ -30,7 +28,7 @@
       });
 
       // ==============================================
-      // NUOVO CENTRATORE AUTOMATICO PER MODELLI 3D (GLB)
+      // AUTO-CENTRATORE & CORRETTORE TEXTURE NERE
       // ==============================================
       AFRAME.registerComponent('auto-centratore', {
         init: function() {
@@ -38,22 +36,33 @@
             const mesh = this.el.getObject3D('mesh');
             if(!mesh) return;
             
-            // Trova il centro e la grandezza esatta del modello 3D
+            // 1. Centra e scala l'oggetto
             const box = new THREE.Box3().setFromObject(mesh);
             const center = new THREE.Vector3(); box.getCenter(center);
             const size = new THREE.Vector3(); box.getSize(size);
             
-            // Centra il modello sulle coordinate 0,0,0
             mesh.position.x = -center.x;
             mesh.position.y = -center.y;
             mesh.position.z = -center.z;
             
-            // Lo rimpicciolisce/ingrandisce per farlo entrare in un cubo di 50 centimetri (0.5m)
             const maxDim = Math.max(size.x, size.y, size.z);
             if(maxDim > 0) {
               const scale = 0.5 / maxDim;
               this.el.object3D.scale.set(scale, scale, scale);
             }
+
+            // 2. RIPARA LE TEXTURE NERE (Toglie l'effetto specchio vuoto)
+            mesh.traverse((node) => {
+              if (node.isMesh && node.material) {
+                // Riduciamo la "metallicità" a 0.1 e aumentiamo la rugosità.
+                // Così i colori veri della texture torneranno visibili invece di riflettere il nero!
+                if (node.material.metalness !== undefined) {
+                  node.material.metalness = Math.min(node.material.metalness, 0.1); 
+                  node.material.roughness = Math.max(node.material.roughness, 0.6); 
+                }
+                node.material.needsUpdate = true;
+              }
+            });
           });
         }
       });
@@ -123,7 +132,7 @@
             const maxDim = Math.max(geometry.boundingBox.getSize(new THREE.Vector3()).x, geometry.boundingBox.getSize(new THREE.Vector3()).y, geometry.boundingBox.getSize(new THREE.Vector3()).z);
             if (maxDim > 0) geometry.scale(0.5 / maxDim, 0.5 / maxDim, 0.5 / maxDim);
             geometry.computeVertexNormals();
-            this.el.setObject3D('mesh', new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x00FFCC, metalness: 0.3, roughness: 0.4, side: THREE.DoubleSide })));
+            this.el.setObject3D('mesh', new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x00FFCC, metalness: 0.1, roughness: 0.8, side: THREE.DoubleSide })));
           });
         }
       });
@@ -263,9 +272,7 @@
           else { const pos = new THREE.Vector3(); this.el.object3D.getWorldPosition(pos); entity.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`); entity.setAttribute('scale', '1 1 1'); }
           const assetId = 'asset_' + Date.now() + Math.floor(Math.random() * 1000); entity.setAttribute('data-asset-id', assetId);
 
-          // ===============================================
-          // MODIFICA PER GLTF/GLB: Usa il componente NATIVO
-          // ===============================================
+          // CARICAMENTO GLB NATIVO CON CORREZIONE TEXTURE AUTOMATICA
           if (file.tipo === 'glb' || file.tipo === 'gltf') {
             entity.setAttribute('gltf-model', `url(${file.url})`);
             entity.setAttribute('auto-centratore', '');
@@ -401,15 +408,19 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;"><b>Fix Modelli 3D:</b> Importazione GLB ripristinata e automatizzata!</p>
+      <p style="font-size: 12px; color: #555;"><b>Fix Texture Nere:</b> Luce ambientale aumentata e correzione specchio applicata sui modelli PBR!</p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
       <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
     </div>
 
-    <!-- layers inserito per permettere al QuadLayer hardware di stampare il PC in risoluzione nativa -->
+    <!-- AGGIUNTE LUCI POTENTI PER ILLUMINARE I MODELLI 3D -->
     <a-scene antialias="true" renderer="colorManagement: true; highRefreshRate: true;" webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection, layers; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
-      <a-light type="ambient" color="#ffffff" intensity="1.0"></a-light>
+      <!-- Luce Ambientale più forte per illuminare le ombre -->
+      <a-light type="ambient" color="#ffffff" intensity="1.5"></a-light>
+      <!-- Faro Direzionale per creare i riflessi sui materiali -->
+      <a-light type="directional" color="#ffffff" intensity="1.5" position="-1 2 1"></a-light>
+      
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
       <a-assets></a-assets>
       <a-entity id="controller-sx" laser-controls="hand: left" oculus-touch-controls="hand: left" pannello-sx occlusione-mani></a-entity>
