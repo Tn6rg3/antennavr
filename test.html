@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - 3D & Media Manipulator</title>
+    <title>AR Studio Pro - 3D & HD Media Manipulator</title>
     <!-- A-Frame e dipendenze -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
@@ -21,47 +21,74 @@
       window.fileCaricati = [];
 
       // ==========================================
-      // NOVITÀ: COMPONENTE FOTO ALTA QUALITÀ
+      // FOTO ALTA QUALITÀ
       // ==========================================
       AFRAME.registerComponent('foto-alta-qualita', {
         schema: {url: {type: 'string'}},
         init: function () {
           const textureLoader = new THREE.TextureLoader();
           textureLoader.load(this.data.url, (texture) => {
-            // 1. Applica il massimo filtro di nitidezza (Anisotropy) del visore
             texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy();
-            texture.minFilter = THREE.LinearMipmapLinearFilter;
+            texture.minFilter = THREE.LinearFilter;
             texture.magFilter = THREE.LinearFilter;
+            texture.encoding = THREE.sRGBEncoding; // Colori vividi HD
             
-            // 2. Calcola le vere proporzioni dell'immagine per non schiacciarla!
             const ratio = texture.image.width / texture.image.height;
-            let width = 0.6; // Grandezza massima base di 60cm
-            let height = 0.6;
-            
-            if (ratio > 1) {
-              // Foto orizzontale
-              height = width / ratio;
-            } else {
-              // Foto verticale
-              width = height * ratio;
-            }
+            let width = 0.8; let height = 0.8;
+            if (ratio > 1) { height = width / ratio; } else { width = height * ratio; }
             
             const geometry = new THREE.PlaneGeometry(width, height);
-            
-            // 3. MeshBasicMaterial non subisce le ombre, i colori restano vividi e accesi
-            const material = new THREE.MeshBasicMaterial({ 
-              map: texture, 
-              side: THREE.DoubleSide, 
-              transparent: true 
-            });
-            
-            const mesh = new THREE.Mesh(geometry, material);
-            this.el.setObject3D('mesh', mesh);
+            const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true });
+            this.el.setObject3D('mesh', new THREE.Mesh(geometry, material));
           });
         }
       });
 
-      // COMPONENTE STL
+      // ==========================================
+      // VIDEO ALTA QUALITÀ (Come schermo Meta Quest)
+      // ==========================================
+      AFRAME.registerComponent('video-alta-qualita', {
+        schema: {url: {type: 'string'}},
+        init: function () {
+          const vid = document.createElement('video');
+          vid.src = this.data.url;
+          vid.crossOrigin = 'anonymous';
+          vid.autoplay = true;
+          vid.loop = true;
+          vid.muted = false; // L'audio va perché si entra cliccando un pulsante prima
+          vid.playsInline = true;
+
+          // Aspetta che il video carichi i suoi dati reali (Risoluzione e Formato)
+          vid.addEventListener('loadedmetadata', () => {
+            const ratio = vid.videoWidth / vid.videoHeight;
+            let width = 1.2; // Schermo largo 1.2 metri
+            let height = width / ratio;
+
+            const geometry = new THREE.PlaneGeometry(width, height);
+            
+            // Creazione Texture Video Avanzata
+            const texture = new THREE.VideoTexture(vid);
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy();
+            texture.encoding = THREE.sRGBEncoding; // Fornisce il contrasto da "Cinema"
+            
+            // Materiale Basic (Flat): non subisce le ombre della stanza, rimane luminoso come uno schermo LED
+            const material = new THREE.MeshBasicMaterial({ 
+              map: texture, 
+              side: THREE.DoubleSide 
+            });
+
+            this.el.setObject3D('mesh', new THREE.Mesh(geometry, material));
+            
+            vid.play().catch(e => console.log("Autoplay video bloccato", e));
+          });
+        }
+      });
+
+      // ==========================================
+      // MODELLI 3D (STL e GLB)
+      // ==========================================
       AFRAME.registerComponent('stl-model', {
         schema: {src: {type: 'string'}},
         init: function () {
@@ -76,20 +103,15 @@
             const size = new THREE.Vector3();
             box.getSize(size);
             const maxDim = Math.max(size.x, size.y, size.z);
-            if (maxDim > 0) {
-              const scale = 0.5 / maxDim; 
-              geometry.scale(scale, scale, scale);
-            }
+            if (maxDim > 0) { const scale = 0.5 / maxDim; geometry.scale(scale, scale, scale); }
             geometry.computeVertexNormals();
             
             const material = new THREE.MeshStandardMaterial({ color: 0x00FFCC, metalness: 0.3, roughness: 0.4, side: THREE.DoubleSide });
-            const mesh = new THREE.Mesh(geometry, material);
-            this.el.setObject3D('mesh', mesh);
+            this.el.setObject3D('mesh', new THREE.Mesh(geometry, material));
           });
         }
       });
 
-      // COMPONENTE GLB/GLTF
       AFRAME.registerComponent('gltf-colorato', {
         schema: {url: {type: 'string'}},
         init: function() {
@@ -107,15 +129,15 @@
             const size = new THREE.Vector3();
             box.getSize(size);
             const maxDim = Math.max(size.x, size.y, size.z);
-            if (maxDim > 0) {
-              const scale = 0.5 / maxDim; 
-              wrapper.scale.set(scale, scale, scale);
-            }
+            if (maxDim > 0) { const scale = 0.5 / maxDim; wrapper.scale.set(scale, scale, scale); }
             this.el.setObject3D('mesh', wrapper);
           });
         }
       });
 
+      // ==========================================
+      // UI INIZIALE E EVENTI
+      // ==========================================
       document.addEventListener('DOMContentLoaded', () => {
         const sceneEl = document.querySelector('a-scene');
         sceneEl.addEventListener('enter-vr', () => { document.getElementById('ui-2d').style.display = 'none'; });
@@ -134,7 +156,9 @@
         });
       });
 
-      // GESTORE OCCLUSIONE E COLLISIONI COMPLETO (Muri + Mobili)
+      // ==========================================
+      // OCCLUSIONE E COLLISIONE MURI/MOBILI REALI
+      // ==========================================
       AFRAME.registerComponent('gestore-spazio-occulto', {
         init: function () {
           this.planes = new Map(); 
@@ -151,7 +175,7 @@
             frame.detectedPlanes.forEach(plane => {
               let pData = this.planes.get(plane);
               if (!pData) {
-                const entity = this.creaEntitaOcclusione(this.createPlaneGeometry(plane));
+                const entity = this.creaEntita(this.createPlaneGeometry(plane));
                 pData = { entity: entity, lastTime: plane.lastChangedTime };
                 this.planes.set(plane, pData);
               } else if (plane.lastChangedTime > pData.lastTime + sogliaMs) {
@@ -168,7 +192,7 @@
             frame.detectedMeshes.forEach(xrMesh => {
               let mData = this.meshes.get(xrMesh);
               if (!mData) {
-                const entity = this.creaEntitaOcclusione(this.createMeshGeometry(xrMesh));
+                const entity = this.creaEntita(this.createMeshGeometry(xrMesh));
                 mData = { entity: entity, lastTime: xrMesh.lastChangedTime };
                 this.meshes.set(xrMesh, mData);
               } else if (xrMesh.lastChangedTime > mData.lastTime + sogliaMs) {
@@ -181,7 +205,7 @@
             });
           }
         },
-        creaEntitaOcclusione: function(geometry) {
+        creaEntita: function(geometry) {
           const entity = document.createElement('a-entity');
           entity.classList.add('muro'); 
           const mesh = new THREE.Mesh(geometry, this.matOcclusione);
@@ -196,17 +220,19 @@
             shape.moveTo(plane.polygon[0].x, plane.polygon[0].z);
             for (let i = 1; i < plane.polygon.length; i++) shape.lineTo(plane.polygon[i].x, plane.polygon[i].z);
           }
-          const geometry = new THREE.ShapeGeometry(shape); geometry.rotateX(Math.PI / 2); return geometry;
+          const geom = new THREE.ShapeGeometry(shape); geom.rotateX(Math.PI / 2); return geom;
         },
         createMeshGeometry: function(xrMesh) {
-          const geometry = new THREE.BufferGeometry();
-          geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(xrMesh.vertices), 3));
-          geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(xrMesh.indices), 1));
-          return geometry;
+          const geom = new THREE.BufferGeometry();
+          geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(xrMesh.vertices), 3));
+          geom.setIndex(new THREE.BufferAttribute(new Uint32Array(xrMesh.indices), 1));
+          return geom;
         }
       });
 
-      // PANNELLO CONTROLLER SINISTRO (Menu)
+      // ==========================================
+      // MENU SPAWNER (Controller Sinistro)
+      // ==========================================
       AFRAME.registerComponent('pannello-sx', {
         init: function() {
           this.menuVisibile = false;
@@ -265,8 +291,7 @@
           entity.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
           entity.setAttribute('scale', '1 1 1'); 
 
-          const assetId = 'asset_' + Date.now() + Math.floor(Math.random() * 1000);
-
+          // SMISTAMENTO DEI FORMATI FILE (Con i nuovi componenti HD)
           if (file.tipo === 'glb' || file.tipo === 'gltf') {
             entity.setAttribute('gltf-colorato', `url: ${file.url}`);
           } else if (file.tipo === 'obj') {
@@ -275,33 +300,26 @@
           } else if (file.tipo === 'stl') {
             entity.setAttribute('stl-model', `src: ${file.url}`);
           
-          // QUI USIAMO IL NUOVO COMPONENTE PER LE IMMAGINI
           } else if (file.tipo === 'png' || file.tipo === 'jpg' || file.tipo === 'jpeg') {
             entity.setAttribute('foto-alta-qualita', `url: ${file.url}`);
           
           } else if (file.tipo === 'mp4') {
-            const vid = document.createElement('video');
-            vid.src = file.url; vid.id = assetId; vid.autoplay = true; vid.loop = true; vid.muted = false;
-            vid.setAttribute('playsinline', ''); vid.crossOrigin = "anonymous";
-            document.querySelector('a-assets').appendChild(vid);
-            entity.setAttribute('geometry', 'primitive: plane; width: 0.8; height: 0.45');
-            // shader: flat applicato anche ai video per mantenerli brillanti!
-            entity.setAttribute('material', `src: #${assetId}; side: double; shader: flat;`);
-            vid.play().catch(e => console.log(e));
+            entity.setAttribute('video-alta-qualita', `url: ${file.url}`);
           }
           
           document.querySelector('a-scene').appendChild(entity);
         }
       });
 
-      // CONTROLLER DESTRO (Manipolazione, Rotazione, Eliminazione)
+      // ==========================================
+      // MANIPOLATORE E COLLISIONI (Controller Destro)
+      // ==========================================
       AFRAME.registerComponent('strumenti-dx', {
         init: function () {
           this.oggettoAfferrato = null;
           this.distanzaGrab = 0;
           this.stickX = 0; 
           this.stickY = 0; 
-          
           this.stickRotVert = 0; 
           this.stickRotRoll = 0; 
 
@@ -321,46 +339,39 @@
 
           this.el.addEventListener('triggerup', () => { this.oggettoAfferrato = null; });
 
+          // Elimina oggetto (Grip)
           this.el.addEventListener('gripdown', () => {
             const hits = this.el.components.raycaster.intersections;
             const hitObj = hits.find(h => h.object && h.object.el && h.object.el.classList.contains('spostabile'));
             if (hitObj) {
               hitObj.object.el.parentNode.removeChild(hitObj.object.el);
-              if (this.oggettoAfferrato === hitObj.object.el) {
-                this.oggettoAfferrato = null;
-              }
+              if (this.oggettoAfferrato === hitObj.object.el) this.oggettoAfferrato = null;
             }
           });
 
-          this.el.addEventListener('thumbstickmoved', (e) => {
-            this.stickX = e.detail.x; 
-            this.stickY = e.detail.y; 
-          });
-
+          // Input Leve
+          this.el.addEventListener('thumbstickmoved', (e) => { this.stickX = e.detail.x; this.stickY = e.detail.y; });
           const controllerSx = document.querySelector('#controller-sx');
-          controllerSx.addEventListener('thumbstickmoved', (e) => {
-            this.stickRotVert = e.detail.y; 
-            this.stickRotRoll = e.detail.x; 
-          });
+          controllerSx.addEventListener('thumbstickmoved', (e) => { this.stickRotVert = e.detail.y; this.stickRotRoll = e.detail.x; });
 
-          this.el.addEventListener('abuttondown', () => {
-            if (this.oggettoAfferrato) this.oggettoAfferrato.object3D.scale.multiplyScalar(1.2); 
-          });
-          this.el.addEventListener('bbuttondown', () => {
-            if (this.oggettoAfferrato) this.oggettoAfferrato.object3D.scale.multiplyScalar(0.8); 
-          });
+          // Scala (A e B)
+          this.el.addEventListener('abuttondown', () => { if (this.oggettoAfferrato) this.oggettoAfferrato.object3D.scale.multiplyScalar(1.2); });
+          this.el.addEventListener('bbuttondown', () => { if (this.oggettoAfferrato) this.oggettoAfferrato.object3D.scale.multiplyScalar(0.8); });
         },
         tick: function () {
           if (this.oggettoAfferrato) {
+            // Distanza
             if (Math.abs(this.stickY) > 0.1) {
               this.distanzaGrab += this.stickY * -0.05; 
               this.distanzaGrab = Math.max(0.1, this.distanzaGrab);
             }
 
+            // Rotazione
             if (Math.abs(this.stickX) > 0.1) this.oggettoAfferrato.object3D.rotation.y -= this.stickX * 0.05; 
             if (Math.abs(this.stickRotVert) > 0.1) this.oggettoAfferrato.object3D.rotation.x -= this.stickRotVert * 0.05; 
             if (Math.abs(this.stickRotRoll) > 0.1) this.oggettoAfferrato.object3D.rotation.z -= this.stickRotRoll * 0.05; 
             
+            // Collisione Muro
             let distanzaIdeale = this.distanzaGrab;
             const hits = this.el.components.raycaster.intersections;
             const hitMuro = hits.find(h => h.object && h.object.el && h.object.el.classList.contains('muro'));
@@ -392,7 +403,7 @@
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
     </div>
 
-    <!-- framebufferScaleFactor 2.0 assicura la massima risoluzione del display del visore -->
+    <!-- framebufferScaleFactor a 2.0 obbliga il browser a renderizzare ai massimi pixel del display nativo -->
     <a-scene antialias="true" renderer="colorManagement: true; highRefreshRate: true;" webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection; framebufferScaleFactor: 2.0;" gestore-spazio-occulto>
       
       <a-light type="ambient" color="#ffffff" intensity="0.8"></a-light>
