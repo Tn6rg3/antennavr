@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>PC Sender - Alta Qualità</title>
+  <title>PC Sender - 1080p 60fps SBLOCCATO</title>
   <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
   <style>
     body { font-family: sans-serif; text-align: center; padding: 50px; background: #222; color: white; }
@@ -11,7 +11,7 @@
   </style>
 </head>
 <body>
-  <h1>Trasmetti al Meta Quest (HD 1080p 60fps)</h1>
+  <h1>Trasmetti al Meta Quest (Banda Sbloccata)</h1>
   <button id="start">Condividi Schermo al Quest</button>
   <h3 id="status" style="color: #aaa;">In attesa...</h3>
   <video id="mioSchermo" autoplay muted></video>
@@ -19,21 +19,41 @@
   <script>
     document.getElementById('start').addEventListener('click', async () => {
       try {
-        // FORZATURA ALTA QUALITÀ VIDEO
+        // FORZATURA RISOLUZIONE ESATTA
         const streamSchermo = await navigator.mediaDevices.getDisplayMedia({ 
-          video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } }, 
+          video: { 
+            width: { ideal: 1920, max: 1920 }, 
+            height: { ideal: 1080, max: 1080 }, 
+            frameRate: { ideal: 60 } 
+          }, 
           audio: false 
         });
+        
         document.getElementById('mioSchermo').srcObject = streamSchermo;
         document.getElementById('status').innerText = "Elaborazione in corso...";
         
         const peerPC = new Peer();
         peerPC.on('open', () => {
-          const call = peerPC.call('quest-italia-pro-847291', streamSchermo);
-          document.getElementById('status').innerText = "✅ In trasmissione Alta Qualità! Guarda nel visore.";
+          // L'HACK PER LA QUALITÀ: sdpTransform
+          // Modifica i protocolli di rete al volo per rimuovere i colli di bottiglia
+          // e forzare il browser a trasmettere fino a 50 Mbps di qualità video
+          const options = {
+            sdpTransform: function(sdp) {
+              let sdpMod = sdp.replace(/b=AS:.*\r\n/g, ""); 
+              sdpMod = sdpMod.replace(/a=mid:video\r\n/g, "a=mid:video\r\nb=AS:50000\r\n");
+              return sdpMod;
+            }
+          };
+
+          const call = peerPC.call('quest-italia-pro-847291', streamSchermo, options);
+          
+          document.getElementById('status').innerText = "✅ In trasmissione MAX Qualità! Guarda nel visore.";
           document.getElementById('status').style.color = "#00FF00";
         });
-      } catch (err) { alert("Errore. Riprova."); }
+      } catch (err) { 
+        alert("Errore nell'acquisizione dello schermo. Riprova."); 
+        console.error(err);
+      }
     });
   </script>
 </body>
