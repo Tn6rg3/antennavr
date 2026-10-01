@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Media, Taglio & PC Stream</title>
+    <title>AR Studio Pro - Taglio Preciso Fix</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -121,15 +121,11 @@
         }
       });
 
-      // ==========================================
-      // INIZIALIZZAZIONE E RICEZIONE STREAMING PC
-      // ==========================================
       document.addEventListener('DOMContentLoaded', () => {
         const sceneEl = document.querySelector('a-scene');
         sceneEl.addEventListener('enter-vr', () => { document.getElementById('ui-2d').style.display = 'none'; });
         sceneEl.addEventListener('exit-vr', () => { document.getElementById('ui-2d').style.display = 'block'; });
 
-        // Upload File Locali
         document.getElementById('file-assets').addEventListener('change', function(e) {
           const files = e.target.files;
           for(let i=0; i<files.length; i++) {
@@ -142,31 +138,20 @@
           window.dispatchEvent(new Event('file-aggiornati'));
         });
 
-        // Inizializzazione PeerJS per ricevere il PC
         const peerQuest = new Peer('quest-italia-pro-847291');
-        
-        peerQuest.on('open', (id) => {
-          document.getElementById('status-pc').innerText = "📡 In attesa del PC...";
-        });
-
+        peerQuest.on('open', (id) => { document.getElementById('status-pc').innerText = "📡 In attesa del PC..."; });
         peerQuest.on('call', call => {
-          call.answer(); // Risponde automaticamente
+          call.answer();
           call.on('stream', stream => {
             document.getElementById('status-pc').innerText = "💻 PC Connesso! (Apri Menu Tasto Y)";
             document.getElementById('status-pc').style.color = "#00FFCC";
-            
-            // Crea l'elemento video nascosto per lo stream
             let vid = document.getElementById('video-stream-pc');
             if (!vid) {
-              vid = document.createElement('video');
-              vid.id = 'video-stream-pc';
+              vid = document.createElement('video'); vid.id = 'video-stream-pc';
               vid.autoplay = true; vid.muted = true; vid.playsInline = true;
               document.querySelector('a-assets').appendChild(vid);
             }
-            vid.srcObject = stream;
-            vid.play().catch(e => console.error(e));
-
-            // Aggiunge lo Schermo PC come "File" spawnabile nel menu!
+            vid.srcObject = stream; vid.play().catch(e => console.error(e));
             const esisteGia = window.fileCaricati.find(f => f.tipo === 'stream-pc');
             if (!esisteGia) {
               window.fileCaricati.unshift({ nome: "💻 Schermo PC", tipo: 'stream-pc', idElem: 'video-stream-pc' });
@@ -314,7 +299,7 @@
             const assetId = el.getAttribute('data-asset-id');
             if (assetId) {
               const videoEl = document.getElementById(assetId);
-              if (videoEl && videoEl.tagName === 'VIDEO' && el.fileDatiOriginali.tipo !== 'stream-pc') { 
+              if (videoEl && videoEl.tagName === 'VIDEO' && el.fileDatiOriginali?.tipo !== 'stream-pc') { 
                 videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.parentNode.removeChild(videoEl); 
               }
             }
@@ -325,7 +310,7 @@
             else if (item.tipo === 'buco') {
               const entity = document.createElement('a-entity');
               entity.classList.add('buco'); 
-              const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 2.0), window.matTaglioFinale);
+              const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 10.0), window.matTaglioFinale);
               mesh.renderOrder = -10; entity.setObject3D('mesh', mesh);
               entity.object3D.position.copy(item.pos); entity.object3D.rotation.copy(item.rot); entity.object3D.scale.copy(item.scale);
               document.querySelector('a-scene').appendChild(entity);
@@ -338,14 +323,13 @@
           });
           if (window.statoApp.modalita === 'taglia') {
             const txt = document.createElement('a-text');
-            txt.setAttribute('value', 'Punta il laser sui muri\ne trascina il grilletto.');
+            txt.setAttribute('value', 'Punta su muri o oggetti\ne trascina il grilletto.');
             txt.setAttribute('scale', '0.06 0.06 0.06'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0.03 0');
             txt.classList.add('menu-info'); this.menuContainer.appendChild(txt); return;
           }
           window.fileCaricati.forEach((file, index) => {
             const btn = document.createElement('a-plane');
             btn.setAttribute('width', '0.22'); btn.setAttribute('height', '0.04');
-            // Se è lo schermo PC, evidenzialo in blu
             btn.setAttribute('color', file.tipo === 'stream-pc' ? '#007ACC' : '#333333'); 
             btn.setAttribute('position', `0 ${0.03 - (index * 0.045)} 0`);
             btn.classList.add('menu-btn', 'menu-file');
@@ -372,11 +356,9 @@
           else if (file.tipo === 'stl') entity.setAttribute('stl-model', `src: ${file.url}`);
           else if (file.tipo === 'png' || file.tipo === 'jpg' || file.tipo === 'jpeg') entity.setAttribute('foto-alta-qualita', `url: ${file.url}`);
           else if (file.tipo === 'mp4') entity.setAttribute('video-alta-qualita', `url: ${file.url}`);
-          
-          // GENERAZIONE SCHERMO PC (Nuovo formato speciale)
           else if (file.tipo === 'stream-pc') {
             const vid = document.getElementById(file.idElem);
-            const width = 1.6; const height = 0.9; // Base 16:9 
+            const width = 1.6; const height = 0.9; 
             const geometry = new THREE.PlaneGeometry(width, height);
             const texture = new THREE.VideoTexture(vid);
             texture.minFilter = THREE.LinearFilter; texture.magFilter = THREE.LinearFilter;
@@ -385,7 +367,6 @@
             const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
             entity.setObject3D('mesh', new THREE.Mesh(geometry, material));
           }
-          
           document.querySelector('a-scene').appendChild(entity);
         }
       });
@@ -414,7 +395,7 @@
               const hit = hits.find(h => h.object.el.classList.contains('spostabile') || h.object.el.classList.contains('muro'));
               if (hit) {
                 this.statoTaglio.attivo = true; 
-                this.statoTaglio.startPt = hit.point.clone();
+                this.statoTaglio.startPt = hit.point.clone(); // Punto esatto sulla mesh
                 
                 let normale = new THREE.Vector3(0, 0, 1);
                 if (hit.face && hit.face.normal) {
@@ -433,14 +414,18 @@
 
                 const entity = document.createElement('a-entity');
                 entity.classList.add('buco'); 
+                
                 const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.matTaglioBozza);
                 mesh.renderOrder = 9999; 
                 const rotMat = new THREE.Matrix4().makeBasis(this.statoTaglio.asseX, this.statoTaglio.asseY, normale);
                 mesh.quaternion.setFromRotationMatrix(rotMat);
                 
-                const posOffset = hit.point.clone().add(normale.clone().multiplyScalar(0.01));
-                entity.setObject3D('mesh', mesh); entity.setAttribute('position', posOffset);
-                this.el.sceneEl.appendChild(entity); this.statoTaglio.entity = entity;
+                // Imposta solo l'Entity e non sfasa più la mesh
+                entity.setObject3D('mesh', mesh); 
+                entity.setAttribute('position', hit.point.clone().add(normale.clone().multiplyScalar(0.01)));
+                
+                this.el.sceneEl.appendChild(entity); 
+                this.statoTaglio.entity = entity;
               }
               return;
             }
@@ -455,11 +440,15 @@
               this.statoTaglio.attivo = false;
               if (this.statoTaglio.entity) {
                 const mesh = this.statoTaglio.entity.getObject3D('mesh');
-                mesh.geometry.dispose(); mesh.geometry = new THREE.BoxGeometry(1, 1, 2.0); 
-                mesh.material = window.matTaglioFinale; mesh.renderOrder = -10; 
                 
-                const meshPos = this.statoTaglio.entity.object3D.position;
-                meshPos.sub(this.statoTaglio.normale.clone().multiplyScalar(0.01));
+                // Genera un buco profondo 10 METRI per tagliare assolutamente qualsiasi cosa
+                mesh.geometry.dispose(); 
+                mesh.geometry = new THREE.BoxGeometry(1, 1, 10.0); 
+                mesh.material = window.matTaglioFinale; 
+                mesh.renderOrder = -10; 
+                
+                // Rimuove l'offset millimetrico per penetrare perfettamente il muro
+                this.statoTaglio.entity.object3D.position.sub(this.statoTaglio.normale.clone().multiplyScalar(0.01));
                 this.statoTaglio.entity = null;
               }
             }
@@ -472,7 +461,6 @@
               const assetId = hitObj.object.el.getAttribute('data-asset-id');
               if (assetId) {
                 const videoEl = document.getElementById(assetId);
-                // Non distruggiamo l'elemento stream PC, altrimenti va ricaricata la pagina
                 if (videoEl && videoEl.tagName === 'VIDEO' && hitObj.object.el.fileDatiOriginali?.tipo !== 'stream-pc') { 
                   videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.parentNode.removeChild(videoEl); 
                 }
@@ -491,21 +479,32 @@
         
         tick: function () {
           const hits = this.el.components.raycaster.intersections;
+
           if (window.statoApp.modalita === 'taglia' && !this.statoTaglio.attivo && hits.length > 0) {
             const hitForMirino = hits.find(h => h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile'));
             if (hitForMirino) { this.mirino.setAttribute('visible', 'true'); this.mirino.object3D.position.copy(hitForMirino.point); } 
             else { this.mirino.setAttribute('visible', 'false'); }
           } else { this.mirino.setAttribute('visible', 'false'); }
 
+          // DISEGNO DEL RIQUADRO CORRETTO (Non usa coordinate doppie)
           if (this.statoTaglio.attivo && this.statoTaglio.entity) {
             if (hits.length > 0) {
               const ptCorrente = hits[0].point.clone();
               const diff = new THREE.Vector3().subVectors(ptCorrente, this.statoTaglio.startPt);
-              const larghezza = diff.dot(this.statoTaglio.asseX); const altezza = diff.dot(this.statoTaglio.asseY);
-              const center = this.statoTaglio.startPt.clone().add(this.statoTaglio.asseX.clone().multiplyScalar(larghezza / 2)).add(this.statoTaglio.asseY.clone().multiplyScalar(altezza / 2)).add(this.statoTaglio.normale.clone().multiplyScalar(0.01)); 
+              
+              const larghezza = diff.dot(this.statoTaglio.asseX); 
+              const altezza = diff.dot(this.statoTaglio.asseY);
+              
+              // Sposta solo l'entità (Entity) tenendo conto del centro del rettangolo
+              const center = this.statoTaglio.startPt.clone()
+                  .add(this.statoTaglio.asseX.clone().multiplyScalar(larghezza / 2))
+                  .add(this.statoTaglio.asseY.clone().multiplyScalar(altezza / 2))
+                  .add(this.statoTaglio.normale.clone().multiplyScalar(0.01)); 
+                  
+              this.statoTaglio.entity.object3D.position.copy(center);
+              
               const mesh = this.statoTaglio.entity.getObject3D('mesh');
               mesh.scale.set(Math.max(Math.abs(larghezza), 0.02), Math.max(Math.abs(altezza), 0.02), 1.0);
-              mesh.position.copy(center);
             }
             return;
           }
@@ -542,11 +541,11 @@
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
       <p style="font-size: 12px; color: #555;">
-        <b>Novità: Condivisione Schermo PC!</b> Avvia il file del Sender dal tuo PC. Appena connesso, troverai l'opzione nel menu sul visore.
+        <b>Disegno Preciso Fix:</b> Il punto d'inizio del taglierino resta incollato dove spari il laser!
       </p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
-      <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore...</div>
+      <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
     </div>
 
     <a-scene antialias="true" renderer="colorManagement: true; highRefreshRate: true;" webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
