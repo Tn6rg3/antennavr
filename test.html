@@ -2,8 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Save & Realign System</title>
-    <!-- A-Frame e dipendenze -->
+    <title>AR Studio Pro - Mirino Taglio e Fix Mesh</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -17,19 +16,11 @@
       .btn-ui { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; }
     </style>
     <script>
-      // ==========================================
-      // STATO GLOBALE E SALVATAGGIO
-      // ==========================================
       window.fileCaricati = [];
-      window.scenaSalvata = []; // Memoria per salvare le posizioni
+      window.scenaSalvata = []; 
       window.statoApp = { modalita: 'inserisci' };
-      
-      // Materiale globale per i buchi invisibili
       window.matTaglioFinale = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); 
 
-      // ==========================================
-      // OCCLUSIONE MANI (Il corpo taglia il 3D!)
-      // ==========================================
       AFRAME.registerComponent('occlusione-mani', {
         init: function () {
           this.el.addEventListener('model-loaded', () => {
@@ -46,9 +37,6 @@
         }
       });
 
-      // ==========================================
-      // FOTO ALTA QUALITÀ
-      // ==========================================
       AFRAME.registerComponent('foto-alta-qualita', {
         schema: {url: {type: 'string'}},
         init: function () {
@@ -71,9 +59,6 @@
         }
       });
 
-      // ==========================================
-      // VIDEO ALTA QUALITÀ
-      // ==========================================
       AFRAME.registerComponent('video-alta-qualita', {
         schema: {url: {type: 'string'}},
         init: function () {
@@ -101,9 +86,6 @@
         }
       });
 
-      // ==========================================
-      // MODELLI 3D (STL e GLB)
-      // ==========================================
       AFRAME.registerComponent('stl-model', {
         schema: {src: {type: 'string'}},
         init: function () {
@@ -139,7 +121,6 @@
         }
       });
 
-      // UI INIZIALE
       document.addEventListener('DOMContentLoaded', () => {
         const sceneEl = document.querySelector('a-scene');
         sceneEl.addEventListener('enter-vr', () => { document.getElementById('ui-2d').style.display = 'none'; });
@@ -158,7 +139,6 @@
         });
       });
 
-      // OCCLUSIONE MURI REALI
       AFRAME.registerComponent('gestore-spazio-occulto', {
         init: function () {
           this.planes = new Map(); this.meshes = new Map();
@@ -215,19 +195,18 @@
             shape.moveTo(plane.polygon[0].x, plane.polygon[0].z);
             for (let i = 1; i < plane.polygon.length; i++) shape.lineTo(plane.polygon[i].x, plane.polygon[i].z);
           }
-          const geom = new THREE.ShapeGeometry(shape); geom.rotateX(Math.PI / 2); return geom;
+          const geom = new THREE.ShapeGeometry(shape); geom.rotateX(Math.PI / 2); geom.computeVertexNormals(); return geom;
         },
         createMeshGeometry: function(xrMesh) {
           const geom = new THREE.BufferGeometry();
           geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(xrMesh.vertices), 3));
           geom.setIndex(new THREE.BufferAttribute(new Uint32Array(xrMesh.indices), 1));
+          // CORREZIONE CRITICA: Aggiunge le normali per far funzionare il taglio sulle mesh 3D
+          geom.computeVertexNormals(); 
           return geom;
         }
       });
 
-      // ==========================================
-      // MENU SPAWNER E GESTIONE SALVATAGGI
-      // ==========================================
       AFRAME.registerComponent('pannello-sx', {
         init: function() {
           this.menuVisibile = false;
@@ -237,7 +216,6 @@
           this.menuContainer.setAttribute('visible', 'false');
           this.el.appendChild(this.menuContainer);
 
-          // TASTO MODALITÀ
           this.btnMod = document.createElement('a-plane');
           this.btnMod.setAttribute('width', '0.22'); this.btnMod.setAttribute('height', '0.04');
           this.btnMod.setAttribute('color', '#FF9800'); this.btnMod.setAttribute('position', '0 0.18 0');
@@ -254,7 +232,6 @@
           });
           this.menuContainer.appendChild(this.btnMod);
 
-          // TASTO SALVA SCENA
           const btnSalva = document.createElement('a-plane');
           btnSalva.setAttribute('width', '0.22'); btnSalva.setAttribute('height', '0.035');
           btnSalva.setAttribute('color', '#4CAF50'); btnSalva.setAttribute('position', '0 0.13 0');
@@ -266,7 +243,6 @@
           btnSalva.addEventListener('click', () => this.salvaScena(txtSalva));
           this.menuContainer.appendChild(btnSalva);
 
-          // TASTO RIPRISTINA / RIALLINEA
           const btnLoad = document.createElement('a-plane');
           btnLoad.setAttribute('width', '0.22'); btnLoad.setAttribute('height', '0.035');
           btnLoad.setAttribute('color', '#2196F3'); btnLoad.setAttribute('position', '0 0.09 0');
@@ -284,144 +260,96 @@
           });
           window.addEventListener('file-aggiornati', () => this.aggiornaListaMenu());
         },
-
         salvaScena: function(textEl) {
           window.scenaSalvata = [];
-          
-          // Salva Oggetti Media/3D
           document.querySelectorAll('.spostabile').forEach(el => {
             if (el.fileDatiOriginali) {
-              window.scenaSalvata.push({
-                tipo: 'oggetto',
-                file: el.fileDatiOriginali,
-                pos: el.object3D.position.clone(),
-                rot: el.object3D.rotation.clone(),
-                scale: el.object3D.scale.clone()
-              });
+              window.scenaSalvata.push({ tipo: 'oggetto', file: el.fileDatiOriginali, pos: el.object3D.position.clone(), rot: el.object3D.rotation.clone(), scale: el.object3D.scale.clone() });
             }
           });
-
-          // Salva Buchi
           document.querySelectorAll('.buco').forEach(el => {
-            window.scenaSalvata.push({
-              tipo: 'buco',
-              pos: el.object3D.position.clone(),
-              rot: el.object3D.rotation.clone(),
-              scale: el.object3D.scale.clone()
-            });
+            window.scenaSalvata.push({ tipo: 'buco', pos: el.object3D.position.clone(), rot: el.object3D.rotation.clone(), scale: el.object3D.scale.clone() });
           });
-
-          // Feedback visivo
-          textEl.setAttribute('value', 'SALVATO!');
-          setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2000);
+          textEl.setAttribute('value', 'SALVATO!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2000);
         },
-
         ripristinaScena: function() {
           if (window.scenaSalvata.length === 0) return;
-
-          // 1. Pulisce la scena attuale
           document.querySelectorAll('.spostabile, .buco').forEach(el => {
             const assetId = el.getAttribute('data-asset-id');
             if (assetId) {
               const videoEl = document.getElementById(assetId);
-              if (videoEl && videoEl.tagName === 'VIDEO') {
-                videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.parentNode.removeChild(videoEl);
-              }
+              if (videoEl && videoEl.tagName === 'VIDEO') { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.parentNode.removeChild(videoEl); }
             }
             el.parentNode.removeChild(el);
           });
-
-          // 2. Ricrea tutto dalle coordinate salvate
           window.scenaSalvata.forEach(item => {
-            if (item.tipo === 'oggetto') {
-              this.spawnaOggetto(item.file, item.pos, item.rot, item.scale);
-            } else if (item.tipo === 'buco') {
+            if (item.tipo === 'oggetto') this.spawnaOggetto(item.file, item.pos, item.rot, item.scale);
+            else if (item.tipo === 'buco') {
               const entity = document.createElement('a-entity');
               entity.classList.add('buco'); 
               const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 2.0), window.matTaglioFinale);
-              mesh.renderOrder = -10; 
-              entity.setObject3D('mesh', mesh);
-              entity.object3D.position.copy(item.pos);
-              entity.object3D.rotation.copy(item.rot);
-              entity.object3D.scale.copy(item.scale);
+              mesh.renderOrder = -10; entity.setObject3D('mesh', mesh);
+              entity.object3D.position.copy(item.pos); entity.object3D.rotation.copy(item.rot); entity.object3D.scale.copy(item.scale);
               document.querySelector('a-scene').appendChild(entity);
             }
           });
         },
-
         aggiornaListaMenu: function() {
           Array.from(this.menuContainer.children).forEach(child => {
-            if (child.classList.contains('menu-file') || child.classList.contains('menu-info')) {
-              this.menuContainer.removeChild(child);
-            }
+            if (child.classList.contains('menu-file') || child.classList.contains('menu-info')) this.menuContainer.removeChild(child);
           });
-
           if (window.statoApp.modalita === 'taglia') {
             const txt = document.createElement('a-text');
-            txt.setAttribute('value', 'Trascina il grilletto\nper creare portali.');
+            txt.setAttribute('value', 'Punta il laser sui muri\ne trascina il grilletto.');
             txt.setAttribute('scale', '0.06 0.06 0.06'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0.03 0');
-            txt.classList.add('menu-info');
-            this.menuContainer.appendChild(txt);
-            return;
+            txt.classList.add('menu-info'); this.menuContainer.appendChild(txt); return;
           }
-
           window.fileCaricati.forEach((file, index) => {
             const btn = document.createElement('a-plane');
             btn.setAttribute('width', '0.22'); btn.setAttribute('height', '0.04');
-            btn.setAttribute('color', '#333333');
-            btn.setAttribute('position', `0 ${0.03 - (index * 0.045)} 0`);
+            btn.setAttribute('color', '#333333'); btn.setAttribute('position', `0 ${0.03 - (index * 0.045)} 0`);
             btn.classList.add('menu-btn', 'menu-file');
-            
             const txt = document.createElement('a-text');
             txt.setAttribute('value', file.nome.length > 18 ? file.nome.substring(0,18)+'...' : file.nome);
             txt.setAttribute('scale', '0.07 0.07 0.07'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0 0.01');
             btn.appendChild(txt);
-
             btn.addEventListener('raycaster-intersected', () => btn.setAttribute('color', '#555555'));
             btn.addEventListener('raycaster-intersected-cleared', () => btn.setAttribute('color', '#333333'));
             btn.addEventListener('click', () => this.spawnaOggetto(file));
             this.menuContainer.appendChild(btn);
           });
         },
-
         spawnaOggetto: function(file, savePos, saveRot, saveScale) {
           const entity = document.createElement('a-entity');
-          entity.classList.add('spostabile'); 
-          entity.fileDatiOriginali = file; // Memorizza i dati per il salvataggio
-          
-          if (savePos) {
-            entity.object3D.position.copy(savePos);
-            entity.object3D.rotation.copy(saveRot);
-            entity.object3D.scale.copy(saveScale);
-          } else {
-            // Spawn normale sul controller
-            const pos = new THREE.Vector3(); this.el.object3D.getWorldPosition(pos);
-            entity.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
-            entity.setAttribute('scale', '1 1 1'); 
-          }
-
-          const assetId = 'asset_' + Date.now() + Math.floor(Math.random() * 1000);
-          entity.setAttribute('data-asset-id', assetId);
+          entity.classList.add('spostabile'); entity.fileDatiOriginali = file; 
+          if (savePos) { entity.object3D.position.copy(savePos); entity.object3D.rotation.copy(saveRot); entity.object3D.scale.copy(saveScale); }
+          else { const pos = new THREE.Vector3(); this.el.object3D.getWorldPosition(pos); entity.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`); entity.setAttribute('scale', '1 1 1'); }
+          const assetId = 'asset_' + Date.now() + Math.floor(Math.random() * 1000); entity.setAttribute('data-asset-id', assetId);
 
           if (file.tipo === 'glb' || file.tipo === 'gltf') entity.setAttribute('gltf-colorato', `url: ${file.url}`);
           else if (file.tipo === 'obj') { entity.setAttribute('obj-model', `obj: url(${file.url})`); entity.setAttribute('material', 'color: #cccccc'); }
           else if (file.tipo === 'stl') entity.setAttribute('stl-model', `src: ${file.url}`);
           else if (file.tipo === 'png' || file.tipo === 'jpg' || file.tipo === 'jpeg') entity.setAttribute('foto-alta-qualita', `url: ${file.url}`);
           else if (file.tipo === 'mp4') entity.setAttribute('video-alta-qualita', `url: ${file.url}`);
-          
           document.querySelector('a-scene').appendChild(entity);
         }
       });
 
-      // ==========================================
-      // MANIPOLATORE E TAGLIERINO (Controller Destro)
-      // ==========================================
       AFRAME.registerComponent('strumenti-dx', {
         init: function () {
           this.oggettoAfferrato = null; this.distanzaGrab = 0;
           this.stickX = 0; this.stickY = 0; this.stickRotVert = 0; this.stickRotRoll = 0; 
           this.statoTaglio = { attivo: false, startPt: null, asseX: null, asseY: null, entity: null };
-          this.matTaglioBozza = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+          
+          // MODIFICATO: depthTest: false rende il riquadro rosso visibile anche se disegni "attraverso" una foto appesa!
+          this.matTaglioBozza = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthTest: false });
+
+          // PUNTATORE VISIVO (Mirino)
+          this.mirino = document.createElement('a-entity');
+          this.mirino.setAttribute('geometry', 'primitive: sphere; radius: 0.015');
+          this.mirino.setAttribute('material', 'color: #ff0000; shader: flat; depthTest: false');
+          this.mirino.setAttribute('visible', 'false');
+          this.el.sceneEl.appendChild(this.mirino);
 
           this.el.addEventListener('triggerdown', () => {
             const hits = this.el.components.raycaster.intersections;
@@ -433,11 +361,17 @@
               const hit = hits.find(h => h.object.el.classList.contains('spostabile') || h.object.el.classList.contains('muro'));
               if (hit) {
                 this.statoTaglio.attivo = true; this.statoTaglio.startPt = hit.point.clone();
-                const normale = hit.face.normal.clone();
-                if (hit.object && hit.object.matrixWorld) {
-                   const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
-                   normale.applyMatrix3(normalMatrix).normalize();
+                
+                // Calcolo sicuro delle normali
+                let normale = new THREE.Vector3(0, 0, 1);
+                if (hit.face && hit.face.normal) {
+                  normale.copy(hit.face.normal);
+                  if (hit.object && hit.object.matrixWorld) {
+                     const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+                     normale.applyMatrix3(normalMatrix).normalize();
+                  }
                 }
+                
                 let up = new THREE.Vector3(0, 1, 0);
                 if (Math.abs(normale.y) > 0.9) up.set(0, 0, -1);
                 this.statoTaglio.asseX = new THREE.Vector3().crossVectors(up, normale).normalize();
@@ -446,6 +380,7 @@
                 const entity = document.createElement('a-entity');
                 entity.classList.add('buco'); 
                 const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 2.0), this.matTaglioBozza);
+                mesh.renderOrder = 9999; // Disegna sempre sopra a tutto durante la bozza
                 const rotMat = new THREE.Matrix4().makeBasis(this.statoTaglio.asseX, this.statoTaglio.asseY, normale);
                 mesh.quaternion.setFromRotationMatrix(rotMat);
                 
@@ -465,7 +400,7 @@
               this.statoTaglio.attivo = false;
               if (this.statoTaglio.entity) {
                 const mesh = this.statoTaglio.entity.getObject3D('mesh');
-                mesh.material = window.matTaglioFinale; // Applica invisibilità per perforare
+                mesh.material = window.matTaglioFinale; 
                 mesh.renderOrder = -10; 
                 this.statoTaglio.entity = null;
               }
@@ -479,9 +414,7 @@
               const assetId = hitObj.object.el.getAttribute('data-asset-id');
               if (assetId) {
                 const videoEl = document.getElementById(assetId);
-                if (videoEl && videoEl.tagName === 'VIDEO') {
-                  videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.parentNode.removeChild(videoEl);
-                }
+                if (videoEl && videoEl.tagName === 'VIDEO') { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.parentNode.removeChild(videoEl); }
               }
               hitObj.object.el.parentNode.removeChild(hitObj.object.el);
               if (this.oggettoAfferrato === hitObj.object.el) this.oggettoAfferrato = null;
@@ -496,8 +429,23 @@
         },
         
         tick: function () {
+          const hits = this.el.components.raycaster.intersections;
+
+          // Gestione visibilità del Mirino
+          if (window.statoApp.modalita === 'taglia' && !this.statoTaglio.attivo && hits.length > 0) {
+            const hitForMirino = hits.find(h => h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile'));
+            if (hitForMirino) {
+              this.mirino.setAttribute('visible', 'true');
+              this.mirino.object3D.position.copy(hitForMirino.point);
+            } else {
+              this.mirino.setAttribute('visible', 'false');
+            }
+          } else {
+            this.mirino.setAttribute('visible', 'false');
+          }
+
+          // Aggiornamento Taglio in tempo reale
           if (this.statoTaglio.attivo && this.statoTaglio.entity) {
-            const hits = this.el.components.raycaster.intersections;
             if (hits.length > 0) {
               const ptCorrente = hits[0].point.clone();
               const diff = new THREE.Vector3().subVectors(ptCorrente, this.statoTaglio.startPt);
@@ -515,12 +463,7 @@
               this.distanzaGrab += this.stickY * -0.05; 
               this.distanzaGrab = Math.max(0.1, this.distanzaGrab);
             }
-
-            let distanzaIdeale = this.distanzaGrab;
-            let allineaAlMuro = false;
-            let normaleMuro = new THREE.Vector3();
-
-            const hits = this.el.components.raycaster.intersections;
+            let distanzaIdeale = this.distanzaGrab; let allineaAlMuro = false; let normaleMuro = new THREE.Vector3();
             const hitMuro = hits.find(h => h.object && h.object.el && h.object.el.classList.contains('muro'));
             
             if (hitMuro) {
@@ -531,7 +474,6 @@
                 normaleMuro.copy(hitMuro.face.normal).applyMatrix3(normalMatrix).normalize();
               }
             }
-
             const ray = this.el.components.raycaster.raycaster.ray;
             const targetPos = ray.direction.clone().multiplyScalar(distanzaIdeale).add(ray.origin);
             this.oggettoAfferrato.object3D.position.copy(targetPos);
@@ -552,7 +494,7 @@
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
       <p style="font-size: 12px; color: #555;">
-        <b>Riallineamento:</b> Se esci dall'AR e gli oggetti si spostano, rimettiti in piedi nello stesso punto in cui eri quando hai salvato e premi "RIPRISTINA".
+        <b>Aggiornamento Taglio:</b> Ora vedi un mirino rosso dove punti. Seleziona TAGLIO dal menu Y, clicca e trascina. Il quadrato rosso buca la parete ed è visibile anche attraverso le foto!
       </p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
