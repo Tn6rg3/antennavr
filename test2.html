@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Gestione Tagli e Rimozione</title>
+    <title>AR Studio Pro - Memoria DB & Master Anchor</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -12,21 +12,38 @@
       .btn-ui { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; }
     </style>
     <script>
-      window.fileCaricati = []; window.scenaSalvata = []; window.statoApp = { modalita: 'inserisci' };
-      
-      // MATERIALE TAGLIO INVISIBILE (Quando sei in modalità Inserisci)
-      window.matTaglioFinale = new THREE.MeshBasicMaterial({ 
-        colorWrite: false, 
-        depthWrite: true 
-      }); 
+      window.fileCaricati = []; window.statoApp = { modalita: 'inserisci' };
+      window.matTaglioFinale = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); 
+      window.matTaglioVisibile = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.5, depthWrite: true });
 
-      // NUOVO MATERIALE VISIBILE (Quando sei in modalità Taglio per poterli cancellare)
-      window.matTaglioVisibile = new THREE.MeshBasicMaterial({ 
-        color: 0xffaa00, // Arancione
-        transparent: true, 
-        opacity: 0.5,
-        depthWrite: true 
+      // ==============================================
+      // DATABASE INTERNO (Salva File e Scena per sempre)
+      // ==============================================
+      window.dbPromise = new Promise((resolve, reject) => {
+        const req = indexedDB.open('AR_Studio_DB', 1);
+        req.onupgradeneeded = e => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('files')) db.createObjectStore('files', { keyPath: 'nome' });
+          if (!db.objectStoreNames.contains('scene')) db.createObjectStore('scene', { keyPath: 'id' });
+        };
+        req.onsuccess = e => resolve(e.target.result);
+        req.onerror = e => reject(e);
       });
+
+      window.caricaFilesInDB = async function() {
+        const db = await window.dbPromise;
+        const tx = db.transaction('files', 'readonly');
+        const req = tx.objectStore('files').getAll();
+        req.onsuccess = e => {
+          const files = e.target.result;
+          files.forEach(f => {
+            const url = URL.createObjectURL(f.data);
+            window.fileCaricati.push({ nome: f.nome, url: url, tipo: f.tipo, rawData: f.data });
+          });
+          window.dispatchEvent(new Event('file-aggiornati'));
+          if (files.length > 0) document.getElementById('status-assets').innerText = `✅ ${files.length} file recuperati dalla memoria!`;
+        };
+      };
 
       AFRAME.registerComponent('occlusione-mani', {
         init: function () {
@@ -40,29 +57,13 @@
       AFRAME.registerComponent('auto-centratore', {
         init: function() {
           this.el.addEventListener('model-loaded', () => {
-            const mesh = this.el.getObject3D('mesh');
-            if(!mesh) return;
-            
-            const box = new THREE.Box3().setFromObject(mesh);
-            const center = new THREE.Vector3(); box.getCenter(center);
-            const size = new THREE.Vector3(); box.getSize(size);
-            
-            mesh.position.x = -center.x;
-            mesh.position.y = -center.y;
-            mesh.position.z = -center.z;
-            
-            const maxDim = Math.max(size.x, size.y, size.z);
-            if(maxDim > 0) {
-              const scale = 0.5 / maxDim;
-              this.el.object3D.scale.set(scale, scale, scale);
-            }
-
+            const mesh = this.el.getObject3D('mesh'); if(!mesh) return;
+            const box = new THREE.Box3().setFromObject(mesh); const center = new THREE.Vector3(); box.getCenter(center); const size = new THREE.Vector3(); box.getSize(size);
+            mesh.position.set(-center.x, -center.y, -center.z);
+            const maxDim = Math.max(size.x, size.y, size.z); if(maxDim > 0) { const scale = 0.5 / maxDim; this.el.object3D.scale.set(scale, scale, scale); }
             mesh.traverse((node) => {
               if (node.isMesh && node.material) {
-                if (node.material.metalness !== undefined) {
-                  node.material.metalness = Math.min(node.material.metalness, 0.1); 
-                  node.material.roughness = Math.max(node.material.roughness, 0.6); 
-                }
+                if (node.material.metalness !== undefined) { node.material.metalness = Math.min(node.material.metalness, 0.1); node.material.roughness = Math.max(node.material.roughness, 0.6); }
                 node.material.needsUpdate = true;
               }
             });
@@ -73,11 +74,9 @@
       AFRAME.registerComponent('video-layer-hd', {
         schema: { idElem: { type: 'string' } },
         init: function () {
-          this.video = document.getElementById(this.data.idElem);
-          this.layer = null; 
-          const geometry = new THREE.PlaneGeometry(1.6, 0.9);
+          this.video = document.getElementById(this.data.idElem); this.layer = null; 
           const texture = new THREE.VideoTexture(this.video); texture.minFilter = THREE.LinearFilter;
-          this.mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide }));
+          this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.9), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide }));
           this.el.setObject3D('mesh', this.mesh);
           this.el.sceneEl.addEventListener('enter-vr', () => this.onEnterVR());
         },
@@ -85,13 +84,11 @@
           const renderer = this.el.sceneEl.renderer; const session = renderer.xr.getSession();
           if (!session || !window.XRMediaBinding) return;
           try {
-            const mediaBinding = new XRMediaBinding(session);
-            const refSpace = renderer.xr.getReferenceSpace();
+            const mediaBinding = new XRMediaBinding(session); const refSpace = renderer.xr.getReferenceSpace();
             this.layer = mediaBinding.createQuadLayer(this.video, { space: refSpace, layout: 'mono', width: 1.6, height: 0.9 });
-            const baseLayer = session.renderState.baseLayer;
-            session.updateRenderState({ layers: [baseLayer, this.layer] });
+            session.updateRenderState({ layers: [session.renderState.baseLayer, this.layer] });
             this.mesh.visible = false;
-          } catch (e) { console.error("Layer non supportato:", e); }
+          } catch (e) { console.error(e); }
         },
         tick: function () {
           if (this.layer && this.el.object3D) {
@@ -141,15 +138,25 @@
       });
 
       document.addEventListener('DOMContentLoaded', () => {
+        window.caricaFilesInDB(); // Carica i file dalla memoria al volo!
+
         const sceneEl = document.querySelector('a-scene');
         sceneEl.addEventListener('enter-vr', () => { document.getElementById('ui-2d').style.display = 'none'; });
         sceneEl.addEventListener('exit-vr', () => { document.getElementById('ui-2d').style.display = 'block'; });
 
-        document.getElementById('file-assets').addEventListener('change', function(e) {
+        document.getElementById('file-assets').addEventListener('change', async function(e) {
+          const db = await window.dbPromise;
           for(let i=0; i<e.target.files.length; i++) {
-            const file = e.target.files[i]; window.fileCaricati.push({ nome: file.name, url: URL.createObjectURL(file), tipo: file.name.split('.').pop().toLowerCase() });
+            const file = e.target.files[i]; 
+            const tipo = file.name.split('.').pop().toLowerCase();
+            
+            // Salva fisicamente il file nel Database del visore
+            const tx = db.transaction('files', 'readwrite');
+            tx.objectStore('files').put({ nome: file.name, data: file, tipo: tipo });
+
+            window.fileCaricati.push({ nome: file.name, url: URL.createObjectURL(file), tipo: tipo });
           }
-          document.getElementById('status-assets').innerText = `✅ ${window.fileCaricati.length} file pronti!`;
+          document.getElementById('status-assets').innerText = `✅ ${window.fileCaricati.length} file pronti e SALVATI IN MEMORIA!`;
           window.dispatchEvent(new Event('file-aggiornati'));
         });
 
@@ -211,22 +218,24 @@
           this.btnMod = document.createElement('a-plane'); this.btnMod.setAttribute('width', '0.22'); this.btnMod.setAttribute('height', '0.04'); this.btnMod.setAttribute('color', '#FF9800'); this.btnMod.setAttribute('position', '0 0.18 0'); this.btnMod.classList.add('menu-btn');
           this.txtMod = document.createElement('a-text'); this.txtMod.setAttribute('value', 'MOD: INSERISCI'); this.txtMod.setAttribute('scale', '0.07 0.07 0.07'); this.txtMod.setAttribute('align', 'center'); this.txtMod.setAttribute('position', '0 0 0.01'); this.btnMod.appendChild(this.txtMod);
           
+          const modalitaLista = ['inserisci', 'taglia', 'ancora'];
+          let modIdx = 0;
+
           this.btnMod.addEventListener('click', () => {
-            window.statoApp.modalita = window.statoApp.modalita === 'inserisci' ? 'taglia' : 'inserisci';
-            this.txtMod.setAttribute('value', window.statoApp.modalita === 'inserisci' ? 'MOD: INSERISCI' : 'MOD: TAGLIO');
-            this.btnMod.setAttribute('color', window.statoApp.modalita === 'inserisci' ? '#FF9800' : '#E91E63'); 
+            modIdx = (modIdx + 1) % modalitaLista.length;
+            window.statoApp.modalita = modalitaLista[modIdx];
+            
+            this.txtMod.setAttribute('value', 'MOD: ' + window.statoApp.modalita.toUpperCase());
+            if (modIdx === 0) this.btnMod.setAttribute('color', '#FF9800'); // Arancione
+            else if (modIdx === 1) this.btnMod.setAttribute('color', '#E91E63'); // Rosa
+            else this.btnMod.setAttribute('color', '#9C27B0'); // Viola per l'ancora
+            
             this.aggiornaListaMenu();
 
-            // ==========================================
-            // LOGICA DI VISIBILITA' DEI BUCHI
-            // Se entriamo in modalità TAGLIO, rendiamo arancioni tutti i buchi creati.
-            // Se torniamo in INSERISCI, tornano invisibili (perforanti).
-            // ==========================================
+            // Rende i buchi visibili in modalità taglio
             document.querySelectorAll('.buco').forEach(buco => {
               const mesh = buco.getObject3D('mesh');
-              if (mesh) {
-                mesh.material = window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale;
-              }
+              if (mesh) mesh.material = window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale;
             });
           });
           this.menuContainer.appendChild(this.btnMod);
@@ -237,65 +246,115 @@
             btn.addEventListener('click', () => cb(txt)); this.menuContainer.appendChild(btn);
           };
           createBtn(0.13, 'SALVA SCENA', '#4CAF50', (t) => this.salvaScena(t));
-          createBtn(0.09, 'RIPRISTINA', '#2196F3', () => this.ripristinaScena());
+          createBtn(0.09, 'RIPRISTINA', '#2196F3', (t) => this.ripristinaScena(t));
 
           this.el.addEventListener('ybuttondown', () => { this.menuVisibile = !this.menuVisibile; this.menuContainer.setAttribute('visible', this.menuVisibile); });
           window.addEventListener('file-aggiornati', () => this.aggiornaListaMenu());
         },
-        salvaScena: function(textEl) {
-          window.scenaSalvata = [];
-          document.querySelectorAll('.spostabile').forEach(el => { if (el.fileDatiOriginali) window.scenaSalvata.push({ tipo: 'oggetto', file: el.fileDatiOriginali, pos: el.object3D.position.clone(), rot: el.object3D.rotation.clone(), scale: el.object3D.scale.clone() }); });
-          document.querySelectorAll('.buco').forEach(el => window.scenaSalvata.push({ tipo: 'buco', pos: el.object3D.position.clone(), rot: el.object3D.rotation.clone(), scale: el.object3D.scale.clone() }));
-          textEl.setAttribute('value', 'SALVATO!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2000);
+        
+        salvaScena: async function(textEl) {
+          const ancora = document.getElementById('ancora-spaziale');
+          if (!ancora) {
+            textEl.setAttribute('value', 'PIAZZA ANCORA PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2000); return;
+          }
+          
+          ancora.object3D.updateMatrixWorld();
+          const invAnchorMat = new THREE.Matrix4().copy(ancora.object3D.matrixWorld).invert();
+
+          const saveDati = [];
+          document.querySelectorAll('.spostabile').forEach(el => { 
+            if (el.fileDatiOriginali) {
+              el.object3D.updateMatrixWorld();
+              const relMat = new THREE.Matrix4().multiplyMatrices(invAnchorMat, el.object3D.matrixWorld);
+              saveDati.push({ tipo: 'oggetto', fileNome: el.fileDatiOriginali.nome, matrix: relMat.toArray() });
+            }
+          });
+          document.querySelectorAll('.buco').forEach(el => {
+            el.object3D.updateMatrixWorld();
+            const relMat = new THREE.Matrix4().multiplyMatrices(invAnchorMat, el.object3D.matrixWorld);
+            saveDati.push({ tipo: 'buco', matrix: relMat.toArray() });
+          });
+
+          const db = await window.dbPromise;
+          const tx = db.transaction('scene', 'readwrite');
+          tx.objectStore('scene').put({ id: 'scena_1', dati: saveDati });
+
+          textEl.setAttribute('value', 'SALVATO NEL VISORE!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2000);
         },
-        ripristinaScena: function() {
-          if (window.scenaSalvata.length === 0) return;
-          document.querySelectorAll('.spostabile, .buco').forEach(el => {
-            const assetId = el.getAttribute('data-asset-id');
-            if (assetId) {
-              const videoEl = document.getElementById(assetId);
-              if (videoEl && videoEl.tagName === 'VIDEO' && el.fileDatiOriginali?.tipo !== 'stream-pc') { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.parentNode.removeChild(videoEl); }
+
+        ripristinaScena: async function(textEl) {
+          const ancora = document.getElementById('ancora-spaziale');
+          if (!ancora) {
+            textEl.setAttribute('value', 'PIAZZA ANCORA PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000); return;
+          }
+
+          const db = await window.dbPromise;
+          const tx = db.transaction('scene', 'readonly');
+          const req = tx.objectStore('scene').get('scena_1');
+          req.onsuccess = e => {
+            const result = e.target.result;
+            if (!result) {
+              textEl.setAttribute('value', 'NESSUN SALVATAGGIO'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000); return;
             }
-            el.parentNode.removeChild(el);
-          });
-          window.scenaSalvata.forEach(item => {
-            if (item.tipo === 'oggetto') this.spawnaOggetto(item.file, item.pos, item.rot, item.scale);
-            else if (item.tipo === 'buco') {
-              const entity = document.createElement('a-entity'); entity.classList.add('buco'); 
-              // Usa il materiale giusto in base alla modalità attiva durante il ripristino
-              const materialeAttivo = window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale;
-              const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1.0), materialeAttivo); 
-              mesh.renderOrder = -10; entity.setObject3D('mesh', mesh);
-              entity.object3D.position.copy(item.pos); entity.object3D.rotation.copy(item.rot); entity.object3D.scale.copy(item.scale);
-              document.querySelector('a-scene').appendChild(entity);
-            }
-          });
+            
+            // Pulisce la scena attuale
+            document.querySelectorAll('.spostabile, .buco').forEach(el => {
+              const assetId = el.getAttribute('data-asset-id');
+              if (assetId) {
+                const videoEl = document.getElementById(assetId);
+                if (videoEl && videoEl.tagName === 'VIDEO' && el.fileDatiOriginali?.tipo !== 'stream-pc') { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.parentNode.removeChild(videoEl); }
+              }
+              el.parentNode.removeChild(el);
+            });
+
+            ancora.object3D.updateMatrixWorld();
+            const anchorMat = ancora.object3D.matrixWorld;
+
+            result.dati.forEach(item => {
+              const relMat = new THREE.Matrix4().fromArray(item.matrix);
+              const worldMat = new THREE.Matrix4().multiplyMatrices(anchorMat, relMat);
+              const pos = new THREE.Vector3(); const quat = new THREE.Quaternion(); const scale = new THREE.Vector3();
+              worldMat.decompose(pos, quat, scale);
+
+              if (item.tipo === 'oggetto') {
+                let fileObj = window.fileCaricati.find(f => f.nome === item.fileNome);
+                if (!fileObj && item.fileNome === '💻 PC Schermo') { fileObj = { nome: "💻 PC Schermo", tipo: 'stream-pc', idElem: 'video-stream-pc' }; window.fileCaricati.unshift(fileObj); }
+                if (fileObj) this.spawnaOggetto(fileObj, pos, quat, scale);
+              } 
+              else if (item.tipo === 'buco') {
+                const entity = document.createElement('a-entity'); entity.classList.add('buco'); 
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1.0), window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale); 
+                mesh.renderOrder = -10; entity.setObject3D('mesh', mesh);
+                entity.object3D.position.copy(pos); entity.object3D.quaternion.copy(quat); entity.object3D.scale.copy(scale);
+                document.querySelector('a-scene').appendChild(entity);
+              }
+            });
+            textEl.setAttribute('value', 'ALLINEAMENTO FATTO!'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000);
+          };
         },
         aggiornaListaMenu: function() {
           Array.from(this.menuContainer.children).forEach(child => { if (child.classList.contains('menu-file') || child.classList.contains('menu-info')) this.menuContainer.removeChild(child); });
+          
           if (window.statoApp.modalita === 'taglia') {
-            const txt = document.createElement('a-text');
-            txt.setAttribute('value', 'Punta sui muri\ne trascina il grilletto.');
-            txt.setAttribute('scale', '0.06 0.06 0.06'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0.03 0');
-            txt.classList.add('menu-info'); this.menuContainer.appendChild(txt); return;
+            const txt = document.createElement('a-text'); txt.setAttribute('value', 'Punta sui muri e\ntrascina il grilletto.'); txt.setAttribute('scale', '0.06 0.06 0.06'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0.03 0'); txt.classList.add('menu-info'); this.menuContainer.appendChild(txt); return;
+          } else if (window.statoApp.modalita === 'ancora') {
+            const txt = document.createElement('a-text'); txt.setAttribute('value', 'Punta lo spigolo di un tavolo\ne premi il grilletto per\npiazzare l\'ANCORA MASTER.'); txt.setAttribute('scale', '0.06 0.06 0.06'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0.03 0'); txt.classList.add('menu-info'); this.menuContainer.appendChild(txt); return;
           }
+
           window.fileCaricati.forEach((file, index) => {
             const btn = document.createElement('a-plane'); btn.setAttribute('width', '0.22'); btn.setAttribute('height', '0.04'); btn.setAttribute('color', file.tipo === 'stream-pc' ? '#007ACC' : '#333333'); btn.setAttribute('position', `0 ${0.03 - (index * 0.045)} 0`); btn.classList.add('menu-btn', 'menu-file');
             const txt = document.createElement('a-text'); txt.setAttribute('value', file.nome.length > 18 ? file.nome.substring(0,18)+'...' : file.nome); txt.setAttribute('scale', '0.07 0.07 0.07'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0 0.01'); btn.appendChild(txt);
             btn.addEventListener('click', () => this.spawnaOggetto(file)); this.menuContainer.appendChild(btn);
           });
         },
-        spawnaOggetto: function(file, savePos, saveRot, saveScale) {
+        spawnaOggetto: function(file, savePos, saveQuat, saveScale) {
           const entity = document.createElement('a-entity'); entity.classList.add('spostabile'); entity.fileDatiOriginali = file; 
           
-          if (savePos) { entity.object3D.position.copy(savePos); entity.object3D.rotation.copy(saveRot); entity.object3D.scale.copy(saveScale); }
+          if (savePos) { entity.object3D.position.copy(savePos); entity.object3D.quaternion.copy(saveQuat); entity.object3D.scale.copy(saveScale); }
           else { const pos = new THREE.Vector3(); this.el.object3D.getWorldPosition(pos); entity.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`); entity.setAttribute('scale', '1 1 1'); }
           const assetId = 'asset_' + Date.now() + Math.floor(Math.random() * 1000); entity.setAttribute('data-asset-id', assetId);
 
-          if (file.tipo === 'glb' || file.tipo === 'gltf') {
-            entity.setAttribute('gltf-model', `url(${file.url})`);
-            entity.setAttribute('auto-centratore', '');
-          }
+          if (file.tipo === 'glb' || file.tipo === 'gltf') { entity.setAttribute('gltf-model', `url(${file.url})`); entity.setAttribute('auto-centratore', ''); }
           else if (file.tipo === 'obj') { entity.setAttribute('obj-model', `obj: url(${file.url})`); entity.setAttribute('material', 'color: #cccccc'); }
           else if (file.tipo === 'stl') entity.setAttribute('stl-model', `src: ${file.url}`);
           else if (file.tipo === 'png' || file.tipo === 'jpg' || file.tipo === 'jpeg') entity.setAttribute('foto-alta-qualita', `url: ${file.url}`);
@@ -316,6 +375,29 @@
           this.el.addEventListener('triggerdown', () => {
             const hits = this.el.components.raycaster.intersections; if (hits.length === 0) return;
             const hitMenu = hits.find(h => h.object.el.classList.contains('menu-btn')); if (hitMenu) { hitMenu.object.el.emit('click'); return; }
+
+            // =====================================
+            // LOGICA PIAZZAMENTO ANCORA MASTER
+            // =====================================
+            if (window.statoApp.modalita === 'ancora') {
+              const hit = hits.find(h => h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile'));
+              if (hit) {
+                let entity = document.getElementById('ancora-spaziale');
+                if (!entity) {
+                  entity = document.createElement('a-entity'); entity.id = 'ancora-spaziale';
+                  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 32), new THREE.MeshBasicMaterial({ color: 0x00FF00, depthTest: false }));
+                  mesh.renderOrder = 9999; entity.setObject3D('mesh', mesh); this.el.sceneEl.appendChild(entity);
+                }
+                let normale = new THREE.Vector3(0, 0, 1);
+                if (hit.face && hit.face.normal) { normale.copy(hit.face.normal); if (hit.object && hit.object.matrixWorld) { normale.applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize(); } }
+                let up = new THREE.Vector3(0, 1, 0); if (Math.abs(normale.y) > 0.9) up.set(0, 0, -1);
+                let asseX = new THREE.Vector3().crossVectors(up, normale).normalize(); let asseY = new THREE.Vector3().crossVectors(normale, asseX).normalize();
+                
+                entity.object3D.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(asseX, normale, asseY));
+                entity.object3D.position.copy(hit.point.clone().add(normale.clone().multiplyScalar(0.01)));
+              }
+              return;
+            }
 
             if (window.statoApp.modalita === 'taglia') {
               const hit = hits.find(h => h.object.el.classList.contains('spostabile') || h.object.el.classList.contains('muro'));
@@ -344,12 +426,8 @@
             this.oggettoAfferrato = null;
             if (this.statoTaglio.attivo && this.statoTaglio.entity) {
               const mesh = this.statoTaglio.entity.getObject3D('mesh');
-              
               const profondita = 1.0; 
-              mesh.geometry.dispose(); 
-              mesh.geometry = new THREE.BoxGeometry(1, 1, profondita); 
-              
-              // Applica il materiale arancione visibile dato che siamo in modalità taglia
+              mesh.geometry.dispose(); mesh.geometry = new THREE.BoxGeometry(1, 1, profondita); 
               mesh.material = window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale; 
               mesh.renderOrder = -10; 
               
@@ -366,7 +444,6 @@
 
           this.el.addEventListener('gripdown', () => {
             const hits = this.el.components.raycaster.intersections;
-            // Rileva sia gli oggetti normali che i buchi (ora colorati e facili da mirare)
             const hitObj = hits.find(h => h.object && h.object.el && (h.object.el.classList.contains('spostabile') || h.object.el.classList.contains('buco')));
             if (hitObj) {
               const assetId = hitObj.object.el.getAttribute('data-asset-id');
@@ -387,8 +464,8 @@
         
         tick: function () {
           const hits = this.el.components.raycaster.intersections;
-          if (window.statoApp.modalita === 'taglia' && !this.statoTaglio.attivo && hits.length > 0) {
-            const hitForMirino = hits.find(h => h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile') || h.object.el.classList.contains('buco'));
+          if ((window.statoApp.modalita === 'taglia' || window.statoApp.modalita === 'ancora') && !this.statoTaglio.attivo && hits.length > 0) {
+            const hitForMirino = hits.find(h => h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile'));
             if (hitForMirino) { this.mirino.setAttribute('visible', 'true'); this.mirino.object3D.position.copy(hitForMirino.point); } else { this.mirino.setAttribute('visible', 'false'); }
           } else { this.mirino.setAttribute('visible', 'false'); }
 
@@ -430,7 +507,7 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;"><b>Fix Eliminazione Buchi:</b> In Modalità Taglio i buchi sono arancioni. Puntali e premi il tasto Grip (Laterale) per cancellarli!</p>
+      <p style="font-size: 12px; color: #555;"><b>Fix Ancoraggio:</b> Usa "MOD: ANCORA" per piazzare il disco verde su uno spigolo fisico. Usa quello spigolo per allineare tutto se ricarichi la pagina!</p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
       <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
