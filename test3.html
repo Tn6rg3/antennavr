@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Allineamento Diamanti & Memoria Scene</title>
+    <title>AR Studio Pro - Allineamento Perfetto Diamanti</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -17,13 +17,27 @@
       window.matTaglioFinale = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); 
       window.matTaglioVisibile = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.5, depthWrite: true });
 
-      // Variabili globali per la calibrazione e il ripristino in sospeso
-      window.calibLocal1 = null;
-      window.calibLocal2 = null;
+      // Coordinate assolute dei due diamanti di riferimento
+      window.d1_pos = null;
+      window.d2_pos = null;
       window.inAttesaDiRipristino = false;
 
+      // MOTORE MATEMATICO: Crea un sistema di riferimento locale basato sui 2 diamanti
+      window.getAnchorMatrix = function(p1, p2) {
+        let forward = new THREE.Vector3().subVectors(p2, p1);
+        forward.y = 0; // Vincola l'allineamento al piano orizzontale
+        if(forward.lengthSq() < 0.0001) forward.set(0, 0, -1);
+        forward.normalize();
+        let up = new THREE.Vector3(0, 1, 0);
+        let right = new THREE.Vector3().crossVectors(up, forward).normalize();
+        
+        let mat = new THREE.Matrix4().makeBasis(right, up, forward);
+        mat.setPosition(p1); // Il diamante 1 è l'origine
+        return mat;
+      };
+
       window.dbPromise = new Promise((resolve, reject) => {
-        const req = indexedDB.open('AR_Studio_DB', 3);
+        const req = indexedDB.open('AR_Studio_DB', 4);
         req.onupgradeneeded = e => {
           const db = e.target.result;
           if (!db.objectStoreNames.contains('files')) db.createObjectStore('files', { keyPath: 'nome' });
@@ -74,35 +88,22 @@
         }
       });
 
-      window.statoMani = {
-        sx: { attiva: false, obj: null },
-        dx: { attiva: false, obj: null },
-        distanzaIniziale: 0,
-        scalaIniziale: new THREE.Vector3()
-      };
+      window.statoMani = { sx: { attiva: false, obj: null }, dx: { attiva: false, obj: null }, distanzaIniziale: 0, scalaIniziale: new THREE.Vector3() };
 
-      // MANI FISICHE (CONTATTO)
       AFRAME.registerComponent('mano-interattiva', {
         init: function() {
-          this.isLeft = this.el.id === 'mano-sx';
-          this.mioStato = this.isLeft ? window.statoMani.sx : window.statoMani.dx;
-          this.altroStato = this.isLeft ? window.statoMani.dx : window.statoMani.sx;
-          this.offsetPos = new THREE.Vector3();
-          this.offsetQuat = new THREE.Quaternion();
+          this.isLeft = this.el.id === 'mano-sx'; this.mioStato = this.isLeft ? window.statoMani.sx : window.statoMani.dx; this.altroStato = this.isLeft ? window.statoMani.dx : window.statoMani.sx;
+          this.offsetPos = new THREE.Vector3(); this.offsetQuat = new THREE.Quaternion();
 
           const onGrabStart = (e) => {
             this.altraMano = document.querySelector(this.isLeft ? '#mano-dx' : '#mano-sx');
             let handPos = new THREE.Vector3(); this.el.object3D.getWorldPosition(handPos);
-            const dir = new THREE.Vector3(0, 0, -0.05).applyQuaternion(this.el.object3D.quaternion); 
-            handPos.add(dir);
+            const dir = new THREE.Vector3(0, 0, -0.05).applyQuaternion(this.el.object3D.quaternion); handPos.add(dir);
             let touchedObj = null;
 
             document.querySelectorAll('.spostabile, .buco').forEach(obj => {
               const mesh = obj.getObject3D('mesh');
-              if (mesh) {
-                const box = new THREE.Box3().setFromObject(mesh); box.expandByScalar(0.03); 
-                if (box.containsPoint(handPos)) touchedObj = obj;
-              }
+              if (mesh) { const box = new THREE.Box3().setFromObject(mesh); box.expandByScalar(0.03); if (box.containsPoint(handPos)) touchedObj = obj; }
             });
 
             if(touchedObj) {
@@ -110,8 +111,7 @@
               if (this.altroStato.attiva && this.altroStato.obj === touchedObj) {
                  const p1 = new THREE.Vector3(); this.el.object3D.getWorldPosition(p1);
                  const p2 = new THREE.Vector3(); this.altraMano.object3D.getWorldPosition(p2);
-                 window.statoMani.distanzaIniziale = p1.distanceTo(p2);
-                 window.statoMani.scalaIniziale.copy(touchedObj.object3D.scale);
+                 window.statoMani.distanzaIniziale = p1.distanceTo(p2); window.statoMani.scalaIniziale.copy(touchedObj.object3D.scale);
               } else {
                  const invHandMat = new THREE.Matrix4().copy(this.el.object3D.matrixWorld).invert();
                  const relMat = new THREE.Matrix4().multiplyMatrices(invHandMat, touchedObj.object3D.matrixWorld);
@@ -132,10 +132,8 @@
             this.mioStato.obj = null;
           };
 
-          this.el.addEventListener('pinchstarted', onGrabStart);
-          this.el.addEventListener('squeezestarted', onGrabStart);
-          this.el.addEventListener('pinchended', onGrabEnd);
-          this.el.addEventListener('squeezeended', onGrabEnd);
+          this.el.addEventListener('pinchstarted', onGrabStart); this.el.addEventListener('squeezestarted', onGrabStart);
+          this.el.addEventListener('pinchended', onGrabEnd); this.el.addEventListener('squeezeended', onGrabEnd);
         },
         tick: function() {
           if (!this.mioStato.attiva || !this.mioStato.obj) return;
@@ -157,35 +155,6 @@
              const offsetMat = new THREE.Matrix4().compose(this.offsetPos, this.offsetQuat, obj3D.scale);
              const finalMat = new THREE.Matrix4().multiplyMatrices(handMat, offsetMat);
              finalMat.decompose(obj3D.position, obj3D.quaternion, new THREE.Vector3());
-          }
-        }
-      });
-
-      AFRAME.registerComponent('video-layer-hd', {
-        schema: { idElem: { type: 'string' } },
-        init: function () {
-          this.video = document.getElementById(this.data.idElem); this.layer = null; 
-          const texture = new THREE.VideoTexture(this.video); texture.minFilter = THREE.LinearFilter;
-          this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.9), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide }));
-          this.el.setObject3D('mesh', this.mesh);
-          this.el.sceneEl.addEventListener('enter-vr', () => this.onEnterVR());
-        },
-        onEnterVR: function () {
-          const renderer = this.el.sceneEl.renderer; const session = renderer.xr.getSession();
-          if (!session || !window.XRMediaBinding) return;
-          try {
-            const mediaBinding = new XRMediaBinding(session); const refSpace = renderer.xr.getReferenceSpace();
-            this.layer = mediaBinding.createQuadLayer(this.video, { space: refSpace, layout: 'mono', width: 1.6, height: 0.9 });
-            session.updateRenderState({ layers: [session.renderState.baseLayer, this.layer] });
-            this.mesh.visible = false;
-          } catch (e) { console.error(e); }
-        },
-        tick: function () {
-          if (this.layer && this.el.object3D) {
-            const pos = new THREE.Vector3(); const quat = new THREE.Quaternion(); const scale = new THREE.Vector3();
-            this.el.object3D.matrixWorld.decompose(pos, quat, scale);
-            this.layer.transform = new XRRigidTransform({ x: pos.x, y: pos.y, z: pos.z }, { x: quat.x, y: quat.y, z: quat.z, w: quat.w });
-            this.layer.width = 1.6 * scale.x; this.layer.height = 0.9 * scale.y;
           }
         }
       });
@@ -338,39 +307,42 @@
         },
 
         salvaScena: async function(textEl) {
-          const contentGroup = document.getElementById('world-content');
-          const pivot = document.getElementById('world-pivot');
-          
-          if (!window.calibLocal1 || !window.calibLocal2) {
+          if (!window.d1_pos || !window.d2_pos) {
             textEl.setAttribute('value', 'METTI I 2 DIAMANTI PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2500); return;
           }
 
+          const anchorMat = window.getAnchorMatrix(window.d1_pos, window.d2_pos);
+          const invAnchorMat = anchorMat.clone().invert();
           const saveDati = [];
           
-          contentGroup.querySelectorAll('.spostabile').forEach(el => { 
+          // Salva posizione relativa di tutti gli oggetti spostabili
+          document.querySelectorAll('.spostabile').forEach(el => { 
             if (el.fileDatiOriginali) {
-              const p = el.object3D.position; const q = el.object3D.quaternion; const s = el.object3D.scale;
-              saveDati.push({ tipo: 'oggetto', assetId: el.getAttribute('data-asset-id'), fileNome: el.fileDatiOriginali.nome, pos: [p.x, p.y, p.z], rot: [q.x, q.y, q.z, q.w], scale: [s.x, s.y, s.z] });
+              el.object3D.updateMatrixWorld();
+              const localMat = new THREE.Matrix4().multiplyMatrices(invAnchorMat, el.object3D.matrixWorld);
+              const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+              localMat.decompose(p, q, s);
+              saveDati.push({ 
+                tipo: 'oggetto', assetId: el.getAttribute('data-asset-id'), fileNome: el.fileDatiOriginali.nome, 
+                pos: [p.x, p.y, p.z], rot: [q.x, q.y, q.z, q.w], scale: [s.x, s.y, s.z] 
+              });
             }
           });
 
-          contentGroup.querySelectorAll('.buco').forEach(el => {
+          // Salva posizione relativa dei buchi
+          document.querySelectorAll('.buco').forEach(el => {
             let bucoId = el.getAttribute('data-buco-id');
             if(!bucoId) { bucoId = 'buco_' + Date.now(); el.setAttribute('data-buco-id', bucoId); }
-            const p = el.object3D.position; const q = el.object3D.quaternion; const s = el.object3D.scale;
+            el.object3D.updateMatrixWorld();
+            const localMat = new THREE.Matrix4().multiplyMatrices(invAnchorMat, el.object3D.matrixWorld);
+            const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+            localMat.decompose(p, q, s);
             saveDati.push({ tipo: 'buco', bucoId: bucoId, pos: [p.x, p.y, p.z], rot: [q.x, q.y, q.z, q.w], scale: [s.x, s.y, s.z] });
           });
 
           const db = await window.dbPromise;
           const tx = db.transaction('scene', 'readwrite');
-          tx.objectStore('scene').put({ 
-            id: 'scena_1', 
-            dati: saveDati,
-            pivotPos: [pivot.object3D.position.x, pivot.object3D.position.y, pivot.object3D.position.z],
-            pivotRot: [pivot.object3D.quaternion.x, pivot.object3D.quaternion.y, pivot.object3D.quaternion.z, pivot.object3D.quaternion.w],
-            calib1: window.calibLocal1,
-            calib2: window.calibLocal2
-          });
+          tx.objectStore('scene').put({ id: 'scena_1', dati: saveDati });
 
           textEl.setAttribute('value', 'SCENA SALVATA NEL DB!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2000);
         },
@@ -384,14 +356,12 @@
             const result = e.target.result;
             if (!result) { textEl.setAttribute('value', 'NESSUN SALVATAGGIO'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000); return; }
 
-            // Attiva la modalità di ripristino guidato tramite diamanti
+            // Avvia la richiesta di calibrazione tramite i diamanti
             window.inAttesaDiRipristino = true;
             window.statoApp.modalita = 'ancora';
             window.statoApp.faseAncora = 1;
             
-            // Aggiorna visivamente il testo nel menu VR
-            const txtModEl = document.querySelector('#controller-sx [text]');
-            if(txtModEl) txtModEl.setAttribute('value', 'MOD: ANCORA');
+            if(this.txtMod) this.txtMod.setAttribute('value', 'MOD: ANCORA');
 
             textEl.setAttribute('value', 'METTI 2 DIAMANTI REALI'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 3000);
           };
@@ -406,40 +376,42 @@
             const result = e.target.result;
             if (!result) return;
 
-            // Ripristina la posizione del pivot nello spazio se salvata
-            if (result.pivotPos) {
-              const pivot = document.getElementById('world-pivot');
-              pivot.object3D.position.fromArray(result.pivotPos);
-              pivot.object3D.quaternion.fromArray(result.pivotRot);
-            }
-
-            const contentGroup = document.getElementById('world-content');
+            // Calcola la nuova matrice del mondo reale basata sui 2 diamanti appena posizionati
+            const newAnchorMat = window.getAnchorMatrix(window.d1_pos, window.d2_pos);
+            const aScene = document.querySelector('a-scene');
 
             result.dati.forEach(item => {
-              const pos = new THREE.Vector3().fromArray(item.pos);
-              const quat = new THREE.Quaternion().fromArray(item.rot);
-              const scale = new THREE.Vector3().fromArray(item.scale);
+              // Ricostruisce la matrice locale salvata
+              const localMat = new THREE.Matrix4().compose(
+                new THREE.Vector3().fromArray(item.pos),
+                new THREE.Quaternion().fromArray(item.rot),
+                new THREE.Vector3().fromArray(item.scale)
+              );
+              // Proietta la matrice locale nel nuovo mondo reale
+              const worldMat = new THREE.Matrix4().multiplyMatrices(newAnchorMat, localMat);
+              const wp = new THREE.Vector3(), wq = new THREE.Quaternion(), ws = new THREE.Vector3();
+              worldMat.decompose(wp, wq, ws);
 
               if (item.tipo === 'oggetto') {
-                const existingEl = contentGroup.querySelector(`[data-asset-id="${item.assetId}"]`);
+                const existingEl = document.querySelector(`[data-asset-id="${item.assetId}"]`);
                 if (existingEl) {
-                  existingEl.object3D.position.copy(pos); existingEl.object3D.quaternion.copy(quat); existingEl.object3D.scale.copy(scale);
+                  existingEl.object3D.position.copy(wp); existingEl.object3D.quaternion.copy(wq); existingEl.object3D.scale.copy(ws);
                 } else {
                   let fileObj = window.fileCaricati.find(f => f.nome === item.fileNome);
                   if (!fileObj && item.fileNome === '💻 PC Schermo') { fileObj = { nome: "💻 PC Schermo", tipo: 'stream-pc', idElem: 'video-stream-pc' }; window.fileCaricati.unshift(fileObj); }
-                  if (fileObj) this.spawnaOggetto(fileObj, pos, quat, scale, item.assetId);
+                  if (fileObj) this.spawnaOggetto(fileObj, wp, wq, ws, item.assetId);
                 }
               } 
               else if (item.tipo === 'buco') {
-                const existingBuco = contentGroup.querySelector(`[data-buco-id="${item.bucoId}"]`);
+                const existingBuco = document.querySelector(`[data-buco-id="${item.bucoId}"]`);
                 if (existingBuco) {
-                  existingBuco.object3D.position.copy(pos); existingBuco.object3D.quaternion.copy(quat); existingBuco.object3D.scale.copy(scale);
+                  existingBuco.object3D.position.copy(wp); existingBuco.object3D.quaternion.copy(wq); existingBuco.object3D.scale.copy(ws);
                 } else {
                   const entity = document.createElement('a-entity'); entity.classList.add('buco'); entity.setAttribute('data-buco-id', item.bucoId);
                   const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1.0), window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale); 
                   mesh.renderOrder = -10; entity.setObject3D('mesh', mesh);
-                  entity.object3D.position.copy(pos); entity.object3D.quaternion.copy(quat); entity.object3D.scale.copy(scale);
-                  contentGroup.appendChild(entity);
+                  entity.object3D.position.copy(wp); entity.object3D.quaternion.copy(wq); entity.object3D.scale.copy(ws);
+                  aScene.appendChild(entity);
                 }
               }
             });
@@ -470,8 +442,6 @@
           else { 
             const controller = document.getElementById('controller-dx');
             const pos = new THREE.Vector3(); controller.object3D.getWorldPosition(pos);
-            const contentGroup = document.getElementById('world-content');
-            contentGroup.object3D.worldToLocal(pos);
             entity.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`); 
             entity.setAttribute('scale', '1 1 1'); 
           }
@@ -486,7 +456,7 @@
           else if (file.tipo === 'mp4') entity.setAttribute('video-base', `url: ${file.url}`);
           else if (file.tipo === 'stream-pc') entity.setAttribute('video-layer-hd', `idElem: ${file.idElem}`);
           
-          document.getElementById('world-content').appendChild(entity);
+          document.querySelector('a-scene').appendChild(entity);
         }
       });
 
@@ -507,39 +477,42 @@
             if (window.statoApp.modalita === 'ancora') {
               const hit = hits.find(h => h.object && h.object.el && (h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile')));
               if (hit) {
-                const worldContent = document.getElementById('world-content').object3D;
-                const localPoint = worldContent.worldToLocal(hit.point.clone());
+                const worldPoint = hit.point.clone();
 
                 if (window.statoApp.faseAncora === 1) {
-                  window.calibLocal1 = localPoint;
+                  window.d1_pos = worldPoint;
                   let d1 = document.getElementById('diamante-1');
                   if (!d1) {
                     d1 = document.createElement('a-entity'); d1.id = 'diamante-1';
                     const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.06), new THREE.MeshBasicMaterial({ color: 0x00BFFF, wireframe: true }));
-                    d1.setObject3D('mesh', mesh); document.getElementById('world-content').appendChild(d1);
+                    d1.setObject3D('mesh', mesh); document.querySelector('a-scene').appendChild(d1);
                   }
-                  d1.object3D.position.copy(localPoint);
+                  d1.object3D.position.copy(worldPoint);
                   d1.setAttribute('visible', 'true');
+                  d1.object3D.visible = true; // Forza visibilità ThreeJS
                   window.statoApp.faseAncora = 2; // Passa al secondo diamante
                 } else {
-                  window.calibLocal2 = localPoint;
+                  window.d2_pos = worldPoint;
                   let d2 = document.getElementById('diamante-2');
                   if (!d2) {
                     d2 = document.createElement('a-entity'); d2.id = 'diamante-2';
                     const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.06), new THREE.MeshBasicMaterial({ color: 0xFF00FF, wireframe: true }));
-                    d2.setObject3D('mesh', mesh); document.getElementById('world-content').appendChild(d2);
+                    d2.setObject3D('mesh', mesh); document.querySelector('a-scene').appendChild(d2);
                   }
-                  d2.object3D.position.copy(localPoint);
+                  d2.object3D.position.copy(worldPoint);
                   d2.setAttribute('visible', 'true');
+                  d2.object3D.visible = true; // Forza visibilità ThreeJS
                   window.statoApp.faseAncora = 1; // Resetta la fase
 
-                  // COMPLETATO: Spegne/scompare i diamanti dopo 1 secondo e conferma il salvataggio/ripristino
+                  // Nascondi i diamanti dopo 1 secondo in modo infallibile
                   setTimeout(() => {
-                    if (d1) d1.setAttribute('visible', 'false');
-                    if (d2) d2.setAttribute('visible', 'false');
+                    const dm1 = document.getElementById('diamante-1');
+                    const dm2 = document.getElementById('diamante-2');
+                    if (dm1) { dm1.setAttribute('visible', 'false'); dm1.object3D.visible = false; }
+                    if (dm2) { dm2.setAttribute('visible', 'false'); dm2.object3D.visible = false; }
                   }, 1000);
 
-                  // Se eravamo in fase di ripristino, ricarica la scena ora che i diamanti sono posizionati
+                  // Se stavamo aspettando i diamanti per ripristinare la scena, lo facciamo ora
                   if (window.inAttesaDiRipristino) {
                     const pannelloSx = document.querySelector('[pannello-sx]').components['pannello-sx'];
                     pannelloSx.eseguiRipristinoEffettivo();
@@ -563,7 +536,7 @@
                 const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.matTaglioBozza); mesh.renderOrder = 9999; 
                 mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(this.statoTaglio.asseX, this.statoTaglio.asseY, normale));
                 entity.setObject3D('mesh', mesh); entity.setAttribute('position', hit.point.clone().add(normale.clone().multiplyScalar(0.01)));
-                document.getElementById('world-content').appendChild(entity); this.statoTaglio.entity = entity;
+                document.querySelector('a-scene').appendChild(entity); this.statoTaglio.entity = entity;
               }
               return;
             }
@@ -658,7 +631,7 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;"><b>Calibrazione Diamanti:</b> Imposta "MOD: ANCORA", piazza i 2 diamanti sul pavimento/muro. Appena posizionato il secondo, i diamanti si spengono e salvano il riferimento!</p>
+      <p style="font-size: 12px; color: #555;"><b>Calibrazione Perfetta:</b> Usa "MOD: ANCORA" per piazzare 2 diamanti sui muri o a terra. Premi SALVA. Quando riapri l'app e premi RIPRISTINA, metti i diamanti negli stessi punti reali per riottenere tutta la scena intatta!</p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
       <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
@@ -669,11 +642,6 @@
       <a-light type="directional" color="#ffffff" intensity="1.5" position="-1 2 1"></a-light>
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
       <a-assets></a-assets>
-      
-      <!-- Gruppi di Spazio Locale -->
-      <a-entity id="world-pivot">
-        <a-entity id="world-content"></a-entity>
-      </a-entity>
 
       <a-entity id="controller-sx" laser-controls="hand: left" oculus-touch-controls="hand: left" pannello-sx occlusione-mani></a-entity>
       <a-entity id="controller-dx" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .spostabile, .menu-btn, .muro, .buco; far: 10;" cursor="rayOrigin: controller" strumenti-dx occlusione-mani></a-entity>
