@@ -2,25 +2,41 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>WebXR Local GLB Loader - Meta Quest 3</title>
+    <title>WebXR Local GLB Loader</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script>
-      // Componente per gestire il caricamento del file locale
       AFRAME.registerComponent('local-glb-loader', {
         init: function () {
           const el = this.el;
           const fileInput = document.querySelector('#file-input');
+          const statusText = document.querySelector('#status');
 
           fileInput.addEventListener('change', function (event) {
             const file = event.target.files[0];
             if (file) {
-              // Creiamo un URL temporaneo locale per il file .glb scelto
+              statusText.innerHTML = "Caricamento in corso...";
+              // Crea l'URL locale temporaneo del file .glb
               const blobUrl = URL.createObjectURL(file);
-              console.log("File caricato:", file.name);
               
-              // Assegniamo il file all'attributo gltf-model dell'entità
-              el.setAttribute('gltf-model', blobUrl);
+              // Rimuove eventuali modelli precedenti se presenti
+              el.removeAttribute('gltf-model');
+              
+              // Assegna il nuovo modello GLB
+              setTimeout(() => {
+                el.setAttribute('gltf-model', blobUrl);
+                statusText.innerHTML = "Caricato: " + file.name;
+              }, 100);
             }
+          });
+
+          el.addEventListener('model-loaded', () => {
+            console.log("Modello 3D renderizzato con successo!");
+            statusText.innerHTML = "Modello pronto in scena!";
+          });
+
+          el.addEventListener('model-error', (evt) => {
+            console.error("Errore nel caricamento del GLB:", evt.detail);
+            statusText.innerHTML = "Errore nel caricamento del file!";
           });
         }
       });
@@ -28,10 +44,11 @@
   </head>
   
   <body>
-    <!-- Interfaccia HTML fluttuante per selezionare il file -->
-    <div style="position: absolute; top: 10px; left: 10px; z-index: 999; background: white; padding: 10px; border-radius: 8px;">
-      <label for="file-input" style="color: black; font-family: sans-serif; font-weight: bold;">Scegli il tuo file .glb:</label><br>
-      <input type="file" id="file-input" accept=".glb" style="margin-top: 5px; color: black;">
+    <!-- Interfaccia HTML fluttuante -->
+    <div style="position: absolute; top: 10px; left: 10px; z-index: 999; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+      <label for="file-input" style="color: black; font-family: sans-serif; font-weight: bold; cursor: pointer;">📂 Scegli il tuo file .glb</label><br>
+      <input type="file" id="file-input" accept=".glb" style="margin-top: 8px; color: black;"><br>
+      <div id="status" style="color: #555; font-family: sans-serif; font-size: 12px; margin-top: 6px;">Nessun file selezionato</div>
     </div>
 
     <a-scene>
@@ -45,10 +62,10 @@
         <a-entity id="right-hand" hand-tracking-controls="hand: right"></a-entity>
       </a-entity>
 
-      <!-- Entità che riceverà il modello .glb caricato -->
+      <!-- Entità che riceverà il file locale -->
       <a-entity 
         id="avatar" 
-        position="0 0 -1.5" 
+        position="0 1.2 -1.5" 
         rotation="0 0 0" 
         scale="1 1 1"
         local-glb-loader>
