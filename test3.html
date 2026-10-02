@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Studio Pro - Allineamento Diamanti & Mani Fisiche</title>
+    <title>AR Studio Pro - Allineamento Diamanti & Memoria Scene</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
@@ -17,8 +17,13 @@
       window.matTaglioFinale = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); 
       window.matTaglioVisibile = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.5, depthWrite: true });
 
+      // Variabili globali per la calibrazione e il ripristino in sospeso
+      window.calibLocal1 = null;
+      window.calibLocal2 = null;
+      window.inAttesaDiRipristino = false;
+
       window.dbPromise = new Promise((resolve, reject) => {
-        const req = indexedDB.open('AR_Studio_DB', 2);
+        const req = indexedDB.open('AR_Studio_DB', 3);
         req.onupgradeneeded = e => {
           const db = e.target.result;
           if (!db.objectStoreNames.contains('files')) db.createObjectStore('files', { keyPath: 'nome' });
@@ -326,7 +331,7 @@
             btn.addEventListener('click', () => cb(txt)); this.menuContainer.appendChild(btn);
           };
           createBtn(0.13, 'SALVA SCENA', '#4CAF50', (t) => this.salvaScena(t));
-          createBtn(0.09, 'RIPRISTINA', '#2196F3', (t) => this.ripristinaScena(t));
+          createBtn(0.09, 'RIPRISTINA', '#2196F3', (t) => this.avviaRipristino(t));
 
           this.el.addEventListener('ybuttondown', () => { this.menuVisibile = !this.menuVisibile; this.menuContainer.setAttribute('visible', this.menuVisibile); });
           window.addEventListener('file-aggiornati', () => this.aggiornaListaMenu());
@@ -337,41 +342,23 @@
           const pivot = document.getElementById('world-pivot');
           
           if (!window.calibLocal1 || !window.calibLocal2) {
-            textEl.setAttribute('value', 'IMPOSTA I 2 DIAMANTI PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2500); return;
+            textEl.setAttribute('value', 'METTI I 2 DIAMANTI PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2500); return;
           }
 
           const saveDati = [];
           
-          // Salva gli oggetti figli di world-content in coordinate locali
           contentGroup.querySelectorAll('.spostabile').forEach(el => { 
             if (el.fileDatiOriginali) {
-              const localPos = el.object3D.position;
-              const localRot = el.object3D.quaternion;
-              const localScale = el.object3D.scale;
-              saveDati.push({ 
-                tipo: 'oggetto', 
-                assetId: el.getAttribute('data-asset-id'),
-                fileNome: el.fileDatiOriginali.nome, 
-                pos: [localPos.x, localPos.y, localPos.z],
-                rot: [localRot.x, localRot.y, localRot.z, localRot.w],
-                scale: [localScale.x, localScale.y, localScale.z]
-              });
+              const p = el.object3D.position; const q = el.object3D.quaternion; const s = el.object3D.scale;
+              saveDati.push({ tipo: 'oggetto', assetId: el.getAttribute('data-asset-id'), fileNome: el.fileDatiOriginali.nome, pos: [p.x, p.y, p.z], rot: [q.x, q.y, q.z, q.w], scale: [s.x, s.y, s.z] });
             }
           });
 
           contentGroup.querySelectorAll('.buco').forEach(el => {
             let bucoId = el.getAttribute('data-buco-id');
             if(!bucoId) { bucoId = 'buco_' + Date.now(); el.setAttribute('data-buco-id', bucoId); }
-            const localPos = el.object3D.position;
-            const localRot = el.object3D.quaternion;
-            const localScale = el.object3D.scale;
-            saveDati.push({ 
-              tipo: 'buco', 
-              bucoId: bucoId, 
-              pos: [localPos.x, localPos.y, localPos.z],
-              rot: [localRot.x, localRot.y, localRot.z, localRot.w],
-              scale: [localScale.x, localScale.y, localScale.z]
-            });
+            const p = el.object3D.position; const q = el.object3D.quaternion; const s = el.object3D.scale;
+            saveDati.push({ tipo: 'buco', bucoId: bucoId, pos: [p.x, p.y, p.z], rot: [q.x, q.y, q.z, q.w], scale: [s.x, s.y, s.z] });
           });
 
           const db = await window.dbPromise;
@@ -385,21 +372,41 @@
             calib2: window.calibLocal2
           });
 
-          textEl.setAttribute('value', 'SALVATO NEL VISORE!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2000);
+          textEl.setAttribute('value', 'SCENA SALVATA NEL DB!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2000);
         },
 
-        ripristinaScena: async function(textEl) {
+        avviaRipristino: async function(textEl) {
           const db = await window.dbPromise;
           const tx = db.transaction('scene', 'readonly');
           const req = tx.objectStore('scene').get('scena_1');
           
           req.onsuccess = e => {
             const result = e.target.result;
-            if (!result) { textEl.setAttribute('value', 'NESSUN SALVATAGGIO TROVATO'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000); return; }
+            if (!result) { textEl.setAttribute('value', 'NESSUN SALVATAGGIO'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000); return; }
 
-            window.calibLocal1 = result.calib1;
-            window.calibLocal2 = result.calib2;
+            // Attiva la modalità di ripristino guidato tramite diamanti
+            window.inAttesaDiRipristino = true;
+            window.statoApp.modalita = 'ancora';
+            window.statoApp.faseAncora = 1;
+            
+            // Aggiorna visivamente il testo nel menu VR
+            const txtModEl = document.querySelector('#controller-sx [text]');
+            if(txtModEl) txtModEl.setAttribute('value', 'MOD: ANCORA');
 
+            textEl.setAttribute('value', 'METTI 2 DIAMANTI REALI'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 3000);
+          };
+        },
+
+        eseguiRipristinoEffettivo: async function() {
+          const db = await window.dbPromise;
+          const tx = db.transaction('scene', 'readonly');
+          const req = tx.objectStore('scene').get('scena_1');
+          
+          req.onsuccess = e => {
+            const result = e.target.result;
+            if (!result) return;
+
+            // Ripristina la posizione del pivot nello spazio se salvata
             if (result.pivotPos) {
               const pivot = document.getElementById('world-pivot');
               pivot.object3D.position.fromArray(result.pivotPos);
@@ -436,7 +443,7 @@
                 }
               }
             });
-            textEl.setAttribute('value', 'RIPRISTINO COMPLETATO!'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000);
+            window.inAttesaDiRipristino = false;
           };
         },
 
@@ -446,7 +453,7 @@
           if (window.statoApp.modalita === 'taglia') {
             const txt = document.createElement('a-text'); txt.setAttribute('value', 'Punta sui muri e\ntrascina il grilletto.'); txt.setAttribute('scale', '0.06 0.06 0.06'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0.03 0'); txt.classList.add('menu-info'); this.menuContainer.appendChild(txt); return;
           } else if (window.statoApp.modalita === 'ancora') {
-            const txt = document.createElement('a-text'); txt.setAttribute('value', 'MOD: DIAMANTI CALIB\nPunta a terra e premi\nil grilletto per posizionare.'); txt.setAttribute('scale', '0.05 0.05 0.05'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0.03 0'); txt.classList.add('menu-info'); this.menuContainer.appendChild(txt); return;
+            const txt = document.createElement('a-text'); txt.setAttribute('value', 'MOD: DIAMANTI\nPiazza i 2 diamanti\nper calibrare lo spazio.'); txt.setAttribute('scale', '0.05 0.05 0.05'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0.03 0'); txt.classList.add('menu-info'); this.menuContainer.appendChild(txt); return;
           }
 
           window.fileCaricati.forEach((file, index) => {
@@ -461,7 +468,6 @@
           
           if (savePos) { entity.object3D.position.copy(savePos); entity.object3D.quaternion.copy(saveQuat); entity.object3D.scale.copy(saveScale); }
           else { 
-            // Posiziona di fronte al controller dentro world-content
             const controller = document.getElementById('controller-dx');
             const pos = new THREE.Vector3(); controller.object3D.getWorldPosition(pos);
             const contentGroup = document.getElementById('world-content');
@@ -491,16 +497,12 @@
           this.matTaglioBozza = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthTest: false });
           this.mirino = document.createElement('a-entity'); this.mirino.setAttribute('geometry', 'primitive: sphere; radius: 0.015'); this.mirino.setAttribute('material', 'color: #ff0000; shader: flat; depthTest: false'); this.mirino.setAttribute('visible', 'false'); this.el.sceneEl.appendChild(this.mirino);
 
-          // Inizializza i diamanti di riferimento globali
-          window.calibLocal1 = null;
-          window.calibLocal2 = null;
-
           this.el.addEventListener('triggerdown', () => {
             const hits = this.el.components.raycaster.intersections; if (hits.length === 0) return;
             const hitMenu = hits.find(h => h.object && h.object.el && h.object.el.classList.contains('menu-btn')); if (hitMenu) { hitMenu.object.el.emit('click'); return; }
 
             // ==========================================
-            // LOGICA DEI DIAMANTI DI CALIBRAZIONE
+            // GESTIONE DEI 2 DIAMANTI DI CALIBRAZIONE
             // ==========================================
             if (window.statoApp.modalita === 'ancora') {
               const hit = hits.find(h => h.object && h.object.el && (h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile')));
@@ -518,7 +520,7 @@
                   }
                   d1.object3D.position.copy(localPoint);
                   d1.setAttribute('visible', 'true');
-                  window.statoApp.faseAncora = 2;
+                  window.statoApp.faseAncora = 2; // Passa al secondo diamante
                 } else {
                   window.calibLocal2 = localPoint;
                   let d2 = document.getElementById('diamante-2');
@@ -529,7 +531,19 @@
                   }
                   d2.object3D.position.copy(localPoint);
                   d2.setAttribute('visible', 'true');
-                  window.statoApp.faseAncora = 1;
+                  window.statoApp.faseAncora = 1; // Resetta la fase
+
+                  // COMPLETATO: Spegne/scompare i diamanti dopo 1 secondo e conferma il salvataggio/ripristino
+                  setTimeout(() => {
+                    if (d1) d1.setAttribute('visible', 'false');
+                    if (d2) d2.setAttribute('visible', 'false');
+                  }, 1000);
+
+                  // Se eravamo in fase di ripristino, ricarica la scena ora che i diamanti sono posizionati
+                  if (window.inAttesaDiRipristino) {
+                    const pannelloSx = document.querySelector('[pannello-sx]').components['pannello-sx'];
+                    pannelloSx.eseguiRipristinoEffettivo();
+                  }
                 }
               }
               return;
@@ -644,7 +658,7 @@
   <body>
     <div id="ui-2d">
       <h3 style="margin-top:0;">Libreria Asset AR</h3>
-      <p style="font-size: 12px; color: #555;"><b>Calibrazione Diamanti:</b> Imposta la modalità "ANCORA", piazza 2 diamanti nello spazio reale per salvare/ripristinare correttamente la scena.</p>
+      <p style="font-size: 12px; color: #555;"><b>Calibrazione Diamanti:</b> Imposta "MOD: ANCORA", piazza i 2 diamanti sul pavimento/muro. Appena posizionato il secondo, i diamanti si spengono e salvano il riferimento!</p>
       <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
       <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
       <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
@@ -656,7 +670,7 @@
       <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
       <a-assets></a-assets>
       
-      <!-- Struttura Pivot e Contenuto Globale (Sistema del primo file) -->
+      <!-- Gruppi di Spazio Locale -->
       <a-entity id="world-pivot">
         <a-entity id="world-content"></a-entity>
       </a-entity>
