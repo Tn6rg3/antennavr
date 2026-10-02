@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>WebXR Avatar Mirror - Meta Quest 3</title>
+    <!-- Carichiamo A-Frame -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    
+    <script>
+      // Componente personalizzato per legare la testa e le mani del visore al modello 3D
+      AFRAME.registerComponent('avatar-tracker', {
+        init: function () {
+          this.cameraEl = document.querySelector('#head-camera');
+          this.leftHandEl = document.querySelector('#left-hand');
+          this.rightHandEl = document.querySelector('#right-hand');
+          
+          // Riferimenti alle parti del modello (o nodi interni se mappati)
+          this.modelLoaded = false;
+          
+          this.el.addEventListener('model-loaded', (e) => {
+            console.log("Modello 3D caricato con successo!");
+            this.modelLoaded = true;
+            this.mesh = this.el.getObject3D('mesh');
+          });
+        },
+        
+        tick: function () {
+          if (!this.modelLoaded) return;
+
+          // Esempio base: la posizione globale del modello segue la testa, 
+          // oppure puoi mappare la testa del modello direttamente alle coordinate della camera.
+          const camPos = this.cameraEl.getAttribute('position');
+          const camRot = this.cameraEl.getAttribute('rotation');
+
+          // Qui puoi aggiornare la posizione radice o la rotazione del busto dell'avatar
+          // In modalità specchio, l'avatar ripete i movimenti principali
+        }
+      });
+    </script>
+  </head>
+  
+  <body>
+    <a-scene>
+      <!-- Asset del tuo file GLB esportato da Blender -->
+      <a-assets>
+        <a-asset-item id="avatar" src="tuo-modello.glb"></a-asset-item>
+      </a-assets>
+
+      <!-- Luce ambientale per vedere correttamente il modello -->
+      <a-light type="ambient" color="#FFF" intensity="0.8"></a-light>
+      <a-light type="directional" position="-1 2 1" intensity="0.5"></a-light>
+
+      <!-- Rig del giocatore (Visore + Controller / Mani) -->
+      <a-entity id="player-rig" position="0 0 0">
+        <!-- Testa / Visore -->
+        <a-camera id="head-camera" position="0 1.6 0" look-controls wasd-controls></a-camera>
+        
+        <!-- Controller o Hand Tracking per le mani -->
+        <a-entity id="left-hand" laser-controls="hand: left" hand-tracking-controls="hand: left"></a-entity>
+        <a-entity id="right-hand" laser-controls="hand: right" hand-tracking-controls="hand: right"></a-entity>
+      </a-entity>
+
+      <!-- Il tuo Avatar 3D importato da Blender con il componente di tracciamento -->
+      <a-entity 
+        gltf-model="#avatar" 
+        position="0 0 -1.5" 
+        rotation="0 0 0" 
+        scale="1 1 1"
+        avatar-tracker>
+      </a-entity>
+
+      <!-- Pavimento di supporto -->
+      <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="#7BC8A4"></a-plane>
+      <a-sky color="#ECECEC"></a-sky>
+    </a-scene>
+  </body>
+</html>
