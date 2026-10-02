@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>AR Studio Pro - Allineamento Diamanti & Mani Fisiche</title>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
+    <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/GLTFLoader.js"></script>
+    <style>
+      #ui-2d { position: absolute; top: 20px; left: 20px; z-index: 999; background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 10px; font-family: sans-serif; width: 340px; }
+      .btn-ui { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; }
+    </style>
+    <script>
+      window.fileCaricati = []; 
+      window.statoApp = { modalita: 'inserisci', faseAncora: 1 };
+      window.matTaglioFinale = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); 
+      window.matTaglioVisibile = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.5, depthWrite: true });
+
+      window.dbPromise = new Promise((resolve, reject) => {
+        const req = indexedDB.open('AR_Studio_DB', 2);
+        req.onupgradeneeded = e => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('files')) db.createObjectStore('files', { keyPath: 'nome' });
+          if (!db.objectStoreNames.contains('scene')) db.createObjectStore('scene', { keyPath: 'id' });
+        };
+        req.onsuccess = e => resolve(e.target.result);
+        req.onerror = e => reject(e);
+      });
+
+      window.caricaFilesInDB = async function() {
+        const db = await window.dbPromise;
+        const tx = db.transaction('files', 'readonly');
+        const req = tx.objectStore('files').getAll();
+        req.onsuccess = e => {
+          const files = e.target.result;
+          files.forEach(f => {
+            const url = URL.createObjectURL(f.data);
+            window.fileCaricati.push({ nome: f.nome, url: url, tipo: f.tipo, rawData: f.data });
+          });
+          window.dispatchEvent(new Event('file-aggiornati'));
+          if (files.length > 0) document.getElementById('status-assets').innerText = `✅ ${files.length} file recuperati dalla memoria!`;
+        };
+      };
+
+      AFRAME.registerComponent('occlusione-mani', {
+        init: function () {
+          this.el.addEventListener('model-loaded', () => {
+            const mesh = this.el.getObject3D('mesh');
+            if (mesh) mesh.traverse((node) => { if (node.isMesh) { node.material = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); node.renderOrder = -1; } });
+          });
+        }
+      });
+
+      AFRAME.registerComponent('auto-centratore', {
+        init: function() {
+          this.el.addEventListener('model-loaded', () => {
+            const mesh = this.el.getObject3D('mesh'); if(!mesh) return;
+            const box = new THREE.Box3().setFromObject(mesh); const center = new THREE.Vector3(); box.getCenter(center); const size = new THREE.Vector3(); box.getSize(size);
+            mesh.position.set(-center.x, -center.y, -center.z);
+            const maxDim = Math.max(size.x, size.y, size.z); if(maxDim > 0) { const scale = 0.5 / maxDim; this.el.object3D.scale.set(scale, scale, scale); }
+            mesh.traverse((node) => {
+              if (node.isMesh && node.material) {
+                if (node.material.metalness !== undefined) { node.material.metalness = Math.min(node.material.metalness, 0.1); node.material.roughness = Math.max(node.material.roughness, 0.6); }
+                node.material.needsUpdate = true;
+              }
+            });
+          });
+        }
+      });
+
+      window.statoMani = {
+        sx: { attiva: false, obj: null },
+        dx: { attiva: false, obj: null },
+        distanzaIniziale: 0,
+        scalaIniziale: new THREE.Vector3()
+      };
+
+      // MANI FISICHE (CONTATTO)
+      AFRAME.registerComponent('mano-interattiva', {
+        init: function() {
+          this.isLeft = this.el.id === 'mano-sx';
+          this.mioStato = this.isLeft ? window.statoMani.sx : window.statoMani.dx;
+          this.altroStato = this.isLeft ? window.statoMani.dx : window.statoMani.sx;
+          this.offsetPos = new THREE.Vector3();
+          this.offsetQuat = new THREE.Quaternion();
+
+          const onGrabStart = (e) => {
+            this.altraMano = document.querySelector(this.isLeft ? '#mano-dx' : '#mano-sx');
+            let handPos = new THREE.Vector3(); this.el.object3D.getWorldPosition(handPos);
+            const dir = new THREE.Vector3(0, 0, -0.05).applyQuaternion(this.el.object3D.quaternion); 
+            handPos.add(dir);
+            let touchedObj = null;
+
+            document.querySelectorAll('.spostabile, .buco').forEach(obj => {
+              const mesh = obj.getObject3D('mesh');
+              if (mesh) {
+                const box = new THREE.Box3().setFromObject(mesh); box.expandByScalar(0.03); 
+                if (box.containsPoint(handPos)) touchedObj = obj;
+              }
+            });
+
+            if(touchedObj) {
+              this.mioStato.attiva = true; this.mioStato.obj = touchedObj;
+              if (this.altroStato.attiva && this.altroStato.obj === touchedObj) {
+                 const p1 = new THREE.Vector3(); this.el.object3D.getWorldPosition(p1);
+                 const p2 = new THREE.Vector3(); this.altraMano.object3D.getWorldPosition(p2);
+                 window.statoMani.distanzaIniziale = p1.distanceTo(p2);
+                 window.statoMani.scalaIniziale.copy(touchedObj.object3D.scale);
+              } else {
+                 const invHandMat = new THREE.Matrix4().copy(this.el.object3D.matrixWorld).invert();
+                 const relMat = new THREE.Matrix4().multiplyMatrices(invHandMat, touchedObj.object3D.matrixWorld);
+                 relMat.decompose(this.offsetPos, this.offsetQuat, new THREE.Vector3());
+              }
+            }
+          };
+
+          const onGrabEnd = () => {
+            this.mioStato.attiva = false;
+            if (this.altroStato.attiva && this.altroStato.obj === this.mioStato.obj) {
+               const obj3D = this.altroStato.obj.object3D; const hand3D = this.altraMano.object3D;
+               const invHandMat = new THREE.Matrix4().copy(hand3D.matrixWorld).invert();
+               const relMat = new THREE.Matrix4().multiplyMatrices(invHandMat, obj3D.matrixWorld);
+               const compAltra = this.altraMano.components['mano-interattiva'];
+               relMat.decompose(compAltra.offsetPos, compAltra.offsetQuat, new THREE.Vector3());
+            }
+            this.mioStato.obj = null;
+          };
+
+          this.el.addEventListener('pinchstarted', onGrabStart);
+          this.el.addEventListener('squeezestarted', onGrabStart);
+          this.el.addEventListener('pinchended', onGrabEnd);
+          this.el.addEventListener('squeezeended', onGrabEnd);
+        },
+        tick: function() {
+          if (!this.mioStato.attiva || !this.mioStato.obj) return;
+          if (this.altroStato.attiva && this.altroStato.obj === this.mioStato.obj) {
+             if (this.isLeft) { 
+               const p1 = new THREE.Vector3(); this.el.object3D.getWorldPosition(p1);
+               const p2 = new THREE.Vector3(); this.altraMano.object3D.getWorldPosition(p2);
+               const currentDist = p1.distanceTo(p2);
+               if (window.statoMani.distanzaIniziale > 0) {
+                 const ratio = currentDist / window.statoMani.distanzaIniziale;
+                 this.mioStato.obj.object3D.scale.copy(window.statoMani.scalaIniziale).multiplyScalar(ratio);
+               }
+               const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+               this.mioStato.obj.object3D.position.copy(mid);
+             }
+          } else {
+             const obj3D = this.mioStato.obj.object3D; const hand3D = this.el.object3D;
+             const handMat = new THREE.Matrix4().copy(hand3D.matrixWorld);
+             const offsetMat = new THREE.Matrix4().compose(this.offsetPos, this.offsetQuat, obj3D.scale);
+             const finalMat = new THREE.Matrix4().multiplyMatrices(handMat, offsetMat);
+             finalMat.decompose(obj3D.position, obj3D.quaternion, new THREE.Vector3());
+          }
+        }
+      });
+
+      AFRAME.registerComponent('video-layer-hd', {
+        schema: { idElem: { type: 'string' } },
+        init: function () {
+          this.video = document.getElementById(this.data.idElem); this.layer = null; 
+          const texture = new THREE.VideoTexture(this.video); texture.minFilter = THREE.LinearFilter;
+          this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.9), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide }));
+          this.el.setObject3D('mesh', this.mesh);
+          this.el.sceneEl.addEventListener('enter-vr', () => this.onEnterVR());
+        },
+        onEnterVR: function () {
+          const renderer = this.el.sceneEl.renderer; const session = renderer.xr.getSession();
+          if (!session || !window.XRMediaBinding) return;
+          try {
+            const mediaBinding = new XRMediaBinding(session); const refSpace = renderer.xr.getReferenceSpace();
+            this.layer = mediaBinding.createQuadLayer(this.video, { space: refSpace, layout: 'mono', width: 1.6, height: 0.9 });
+            session.updateRenderState({ layers: [session.renderState.baseLayer, this.layer] });
+            this.mesh.visible = false;
+          } catch (e) { console.error(e); }
+        },
+        tick: function () {
+          if (this.layer && this.el.object3D) {
+            const pos = new THREE.Vector3(); const quat = new THREE.Quaternion(); const scale = new THREE.Vector3();
+            this.el.object3D.matrixWorld.decompose(pos, quat, scale);
+            this.layer.transform = new XRRigidTransform({ x: pos.x, y: pos.y, z: pos.z }, { x: quat.x, y: quat.y, z: quat.z, w: quat.w });
+            this.layer.width = 1.6 * scale.x; this.layer.height = 0.9 * scale.y;
+          }
+        }
+      });
+
+      AFRAME.registerComponent('foto-alta-qualita', {
+        schema: {url: {type: 'string'}},
+        init: function () {
+          new THREE.TextureLoader().load(this.data.url, (texture) => {
+            texture.generateMipmaps = false; texture.minFilter = THREE.LinearFilter; texture.magFilter = THREE.LinearFilter; texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy(); texture.encoding = THREE.sRGBEncoding;
+            const ratio = texture.image.width / texture.image.height; let width = 0.8; let height = 0.8; if (ratio > 1) height = width / ratio; else width = height * ratio;
+            this.el.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, toneMapped: false })));
+          });
+        }
+      });
+
+      AFRAME.registerComponent('video-base', {
+        schema: {url: {type: 'string'}},
+        init: function () {
+          const vid = document.createElement('video'); vid.src = this.data.url; vid.id = this.el.getAttribute('data-asset-id'); vid.crossOrigin = 'anonymous'; vid.autoplay = true; vid.loop = true; vid.muted = false; vid.playsInline = true; document.querySelector('a-assets').appendChild(vid);
+          vid.addEventListener('loadedmetadata', () => {
+            const ratio = vid.videoWidth / vid.videoHeight; const texture = new THREE.VideoTexture(vid);
+            texture.generateMipmaps = false; texture.minFilter = THREE.LinearFilter; texture.magFilter = THREE.LinearFilter; texture.anisotropy = this.el.sceneEl.renderer.capabilities.getMaxAnisotropy(); texture.encoding = THREE.sRGBEncoding;
+            this.el.setObject3D('mesh', new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2 / ratio), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, toneMapped: false })));
+            vid.play().catch(e => console.log(e));
+          });
+        }
+      });
+
+      AFRAME.registerComponent('stl-model', {
+        schema: {src: {type: 'string'}},
+        init: function () {
+          new THREE.STLLoader().load(this.data.src, (geometry) => {
+            geometry.computeBoundingBox(); geometry.translate(-geometry.boundingBox.getCenter(new THREE.Vector3()).x, -geometry.boundingBox.getCenter(new THREE.Vector3()).y, -geometry.boundingBox.getCenter(new THREE.Vector3()).z);
+            const maxDim = Math.max(geometry.boundingBox.getSize(new THREE.Vector3()).x, geometry.boundingBox.getSize(new THREE.Vector3()).y, geometry.boundingBox.getSize(new THREE.Vector3()).z);
+            if (maxDim > 0) geometry.scale(0.5 / maxDim, 0.5 / maxDim, 0.5 / maxDim);
+            geometry.computeVertexNormals();
+            this.el.setObject3D('mesh', new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x00FFCC, metalness: 0.1, roughness: 0.8, side: THREE.DoubleSide })));
+          });
+        }
+      });
+
+      document.addEventListener('DOMContentLoaded', () => {
+        window.caricaFilesInDB();
+        const sceneEl = document.querySelector('a-scene');
+        sceneEl.addEventListener('enter-vr', () => { document.getElementById('ui-2d').style.display = 'none'; });
+        sceneEl.addEventListener('exit-vr', () => { document.getElementById('ui-2d').style.display = 'block'; });
+
+        document.getElementById('file-assets').addEventListener('change', async function(e) {
+          const db = await window.dbPromise;
+          for(let i=0; i<e.target.files.length; i++) {
+            const file = e.target.files[i]; 
+            const tipo = file.name.split('.').pop().toLowerCase();
+            const tx = db.transaction('files', 'readwrite');
+            tx.objectStore('files').put({ nome: file.name, data: file, tipo: tipo });
+            window.fileCaricati.push({ nome: file.name, url: URL.createObjectURL(file), tipo: tipo });
+          }
+          document.getElementById('status-assets').innerText = `✅ ${window.fileCaricati.length} file pronti!`;
+          window.dispatchEvent(new Event('file-aggiornati'));
+        });
+
+        const peerQuest = new Peer('quest-italia-pro-847291');
+        peerQuest.on('open', () => document.getElementById('status-pc').innerText = "📡 In attesa del PC...");
+        peerQuest.on('call', call => {
+          call.answer();
+          call.on('stream', stream => {
+            document.getElementById('status-pc').innerText = "💻 PC Connesso!"; document.getElementById('status-pc').style.color = "#00FFCC";
+            let vid = document.getElementById('video-stream-pc');
+            if (!vid) { vid = document.createElement('video'); vid.id = 'video-stream-pc'; vid.autoplay = true; vid.muted = true; vid.playsInline = true; document.querySelector('a-assets').appendChild(vid); }
+            vid.srcObject = stream; vid.play().catch(e => console.error(e));
+            if (!window.fileCaricati.find(f => f.tipo === 'stream-pc')) { window.fileCaricati.unshift({ nome: "💻 PC Schermo", tipo: 'stream-pc', idElem: 'video-stream-pc' }); window.dispatchEvent(new Event('file-aggiornati')); }
+          });
+        });
+      });
+
+      AFRAME.registerComponent('gestore-spazio-occulto', {
+        init: function () { 
+          this.planes = new Map(); this.meshes = new Map(); 
+          this.matOcclusione = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }); 
+        },
+        tick: function () {
+          const renderer = this.el.sceneEl.renderer; const frame = this.el.sceneEl.frame; const refSpace = renderer?.xr?.getReferenceSpace();
+          if (!renderer.xr.isPresenting || !frame || !refSpace) return;
+          
+          if (frame.detectedPlanes) frame.detectedPlanes.forEach(plane => {
+            let pData = this.planes.get(plane);
+            if (!pData) { pData = { entity: this.creaEntita(this.createPlaneGeometry(plane)), lastTime: plane.lastChangedTime }; this.planes.set(plane, pData); } 
+            else if (plane.lastChangedTime > pData.lastTime + 500) { pData.entity.getObject3D('mesh').geometry.dispose(); pData.entity.getObject3D('mesh').geometry = this.createPlaneGeometry(plane); pData.lastTime = plane.lastChangedTime; }
+            const pose = frame.getPose(plane.planeSpace, refSpace); if (pose) pData.entity.object3D.matrix.fromArray(pose.transform.matrix);
+          });
+
+          if (frame.detectedMeshes) frame.detectedMeshes.forEach(xrMesh => {
+            let mData = this.meshes.get(xrMesh);
+            if (!mData) { mData = { entity: this.creaEntita(this.createMeshGeometry(xrMesh)), lastTime: xrMesh.lastChangedTime }; this.meshes.set(xrMesh, mData); } 
+            else if (xrMesh.lastChangedTime > mData.lastTime + 500) { mData.entity.getObject3D('mesh').geometry.dispose(); mData.entity.getObject3D('mesh').geometry = this.createMeshGeometry(xrMesh); mData.lastTime = xrMesh.lastChangedTime; }
+            const pose = frame.getPose(xrMesh.meshSpace, refSpace); if (pose) mData.entity.object3D.matrix.fromArray(pose.transform.matrix);
+          });
+        },
+        creaEntita: function(geom) {
+          const entity = document.createElement('a-entity'); entity.classList.add('muro'); 
+          const mesh = new THREE.Mesh(geom, this.matOcclusione); mesh.renderOrder = -1; entity.setObject3D('mesh', mesh); entity.object3D.matrixAutoUpdate = false;
+          this.el.sceneEl.appendChild(entity); return entity;
+        },
+        createPlaneGeometry: function(plane) {
+          const shape = new THREE.Shape(); if (plane.polygon.length > 0) { shape.moveTo(plane.polygon[0].x, plane.polygon[0].z); for (let i = 1; i < plane.polygon.length; i++) shape.lineTo(plane.polygon[i].x, plane.polygon[i].z); }
+          const geom = new THREE.ShapeGeometry(shape); geom.rotateX(Math.PI / 2); geom.computeVertexNormals(); return geom;
+        },
+        createMeshGeometry: function(xrMesh) {
+          const geom = new THREE.BufferGeometry(); geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(xrMesh.vertices), 3)); geom.setIndex(new THREE.BufferAttribute(new Uint32Array(xrMesh.indices), 1)); geom.computeVertexNormals(); return geom;
+        }
+      });
+
+      AFRAME.registerComponent('pannello-sx', {
+        init: function() {
+          this.menuVisibile = false;
+          this.menuContainer = document.createElement('a-entity'); this.menuContainer.setAttribute('position', '0.1 0.1 -0.1'); this.menuContainer.setAttribute('rotation', '-45 0 0'); this.menuContainer.setAttribute('visible', 'false'); this.el.appendChild(this.menuContainer);
+          this.btnMod = document.createElement('a-plane'); this.btnMod.setAttribute('width', '0.22'); this.btnMod.setAttribute('height', '0.04'); this.btnMod.setAttribute('color', '#FF9800'); this.btnMod.setAttribute('position', '0 0.18 0'); this.btnMod.classList.add('menu-btn');
+          this.txtMod = document.createElement('a-text'); this.txtMod.setAttribute('value', 'MOD: INSERISCI'); this.txtMod.setAttribute('scale', '0.07 0.07 0.07'); this.txtMod.setAttribute('align', 'center'); this.txtMod.setAttribute('position', '0 0 0.01'); this.btnMod.appendChild(this.txtMod);
+          
+          const modalitaLista = ['inserisci', 'taglia', 'ancora'];
+          let modIdx = 0;
+
+          this.btnMod.addEventListener('click', () => {
+            modIdx = (modIdx + 1) % modalitaLista.length;
+            window.statoApp.modalita = modalitaLista[modIdx];
+            
+            this.txtMod.setAttribute('value', 'MOD: ' + window.statoApp.modalita.toUpperCase());
+            if (modIdx === 0) this.btnMod.setAttribute('color', '#FF9800'); 
+            else if (modIdx === 1) this.btnMod.setAttribute('color', '#E91E63'); 
+            else this.btnMod.setAttribute('color', '#9C27B0'); 
+            
+            this.aggiornaListaMenu();
+
+            document.querySelectorAll('.buco').forEach(buco => {
+              const mesh = buco.getObject3D('mesh');
+              if (mesh) mesh.material = window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale;
+            });
+          });
+          this.menuContainer.appendChild(this.btnMod);
+
+          const createBtn = (y, text, color, cb) => {
+            const btn = document.createElement('a-plane'); btn.setAttribute('width', '0.22'); btn.setAttribute('height', '0.035'); btn.setAttribute('color', color); btn.setAttribute('position', `0 ${y} 0`); btn.classList.add('menu-btn');
+            const txt = document.createElement('a-text'); txt.setAttribute('value', text); txt.setAttribute('scale', '0.06 0.06 0.06'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0 0.01'); btn.appendChild(txt);
+            btn.addEventListener('click', () => cb(txt)); this.menuContainer.appendChild(btn);
+          };
+          createBtn(0.13, 'SALVA SCENA', '#4CAF50', (t) => this.salvaScena(t));
+          createBtn(0.09, 'RIPRISTINA', '#2196F3', (t) => this.ripristinaScena(t));
+
+          this.el.addEventListener('ybuttondown', () => { this.menuVisibile = !this.menuVisibile; this.menuContainer.setAttribute('visible', this.menuVisibile); });
+          window.addEventListener('file-aggiornati', () => this.aggiornaListaMenu());
+        },
+
+        salvaScena: async function(textEl) {
+          const contentGroup = document.getElementById('world-content');
+          const pivot = document.getElementById('world-pivot');
+          
+          if (!window.calibLocal1 || !window.calibLocal2) {
+            textEl.setAttribute('value', 'IMPOSTA I 2 DIAMANTI PRIMA!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2500); return;
+          }
+
+          const saveDati = [];
+          
+          // Salva gli oggetti figli di world-content in coordinate locali
+          contentGroup.querySelectorAll('.spostabile').forEach(el => { 
+            if (el.fileDatiOriginali) {
+              const localPos = el.object3D.position;
+              const localRot = el.object3D.quaternion;
+              const localScale = el.object3D.scale;
+              saveDati.push({ 
+                tipo: 'oggetto', 
+                assetId: el.getAttribute('data-asset-id'),
+                fileNome: el.fileDatiOriginali.nome, 
+                pos: [localPos.x, localPos.y, localPos.z],
+                rot: [localRot.x, localRot.y, localRot.z, localRot.w],
+                scale: [localScale.x, localScale.y, localScale.z]
+              });
+            }
+          });
+
+          contentGroup.querySelectorAll('.buco').forEach(el => {
+            let bucoId = el.getAttribute('data-buco-id');
+            if(!bucoId) { bucoId = 'buco_' + Date.now(); el.setAttribute('data-buco-id', bucoId); }
+            const localPos = el.object3D.position;
+            const localRot = el.object3D.quaternion;
+            const localScale = el.object3D.scale;
+            saveDati.push({ 
+              tipo: 'buco', 
+              bucoId: bucoId, 
+              pos: [localPos.x, localPos.y, localPos.z],
+              rot: [localRot.x, localRot.y, localRot.z, localRot.w],
+              scale: [localScale.x, localScale.y, localScale.z]
+            });
+          });
+
+          const db = await window.dbPromise;
+          const tx = db.transaction('scene', 'readwrite');
+          tx.objectStore('scene').put({ 
+            id: 'scena_1', 
+            dati: saveDati,
+            pivotPos: [pivot.object3D.position.x, pivot.object3D.position.y, pivot.object3D.position.z],
+            pivotRot: [pivot.object3D.quaternion.x, pivot.object3D.quaternion.y, pivot.object3D.quaternion.z, pivot.object3D.quaternion.w],
+            calib1: window.calibLocal1,
+            calib2: window.calibLocal2
+          });
+
+          textEl.setAttribute('value', 'SALVATO NEL VISORE!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2000);
+        },
+
+        ripristinaScena: async function(textEl) {
+          const db = await window.dbPromise;
+          const tx = db.transaction('scene', 'readonly');
+          const req = tx.objectStore('scene').get('scena_1');
+          
+          req.onsuccess = e => {
+            const result = e.target.result;
+            if (!result) { textEl.setAttribute('value', 'NESSUN SALVATAGGIO TROVATO'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000); return; }
+
+            window.calibLocal1 = result.calib1;
+            window.calibLocal2 = result.calib2;
+
+            if (result.pivotPos) {
+              const pivot = document.getElementById('world-pivot');
+              pivot.object3D.position.fromArray(result.pivotPos);
+              pivot.object3D.quaternion.fromArray(result.pivotRot);
+            }
+
+            const contentGroup = document.getElementById('world-content');
+
+            result.dati.forEach(item => {
+              const pos = new THREE.Vector3().fromArray(item.pos);
+              const quat = new THREE.Quaternion().fromArray(item.rot);
+              const scale = new THREE.Vector3().fromArray(item.scale);
+
+              if (item.tipo === 'oggetto') {
+                const existingEl = contentGroup.querySelector(`[data-asset-id="${item.assetId}"]`);
+                if (existingEl) {
+                  existingEl.object3D.position.copy(pos); existingEl.object3D.quaternion.copy(quat); existingEl.object3D.scale.copy(scale);
+                } else {
+                  let fileObj = window.fileCaricati.find(f => f.nome === item.fileNome);
+                  if (!fileObj && item.fileNome === '💻 PC Schermo') { fileObj = { nome: "💻 PC Schermo", tipo: 'stream-pc', idElem: 'video-stream-pc' }; window.fileCaricati.unshift(fileObj); }
+                  if (fileObj) this.spawnaOggetto(fileObj, pos, quat, scale, item.assetId);
+                }
+              } 
+              else if (item.tipo === 'buco') {
+                const existingBuco = contentGroup.querySelector(`[data-buco-id="${item.bucoId}"]`);
+                if (existingBuco) {
+                  existingBuco.object3D.position.copy(pos); existingBuco.object3D.quaternion.copy(quat); existingBuco.object3D.scale.copy(scale);
+                } else {
+                  const entity = document.createElement('a-entity'); entity.classList.add('buco'); entity.setAttribute('data-buco-id', item.bucoId);
+                  const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1.0), window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale); 
+                  mesh.renderOrder = -10; entity.setObject3D('mesh', mesh);
+                  entity.object3D.position.copy(pos); entity.object3D.quaternion.copy(quat); entity.object3D.scale.copy(scale);
+                  contentGroup.appendChild(entity);
+                }
+              }
+            });
+            textEl.setAttribute('value', 'RIPRISTINO COMPLETATO!'); setTimeout(() => textEl.setAttribute('value', 'RIPRISTINA'), 2000);
+          };
+        },
+
+        aggiornaListaMenu: function() {
+          Array.from(this.menuContainer.children).forEach(child => { if (child.classList.contains('menu-file') || child.classList.contains('menu-info')) this.menuContainer.removeChild(child); });
+          
+          if (window.statoApp.modalita === 'taglia') {
+            const txt = document.createElement('a-text'); txt.setAttribute('value', 'Punta sui muri e\ntrascina il grilletto.'); txt.setAttribute('scale', '0.06 0.06 0.06'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0.03 0'); txt.classList.add('menu-info'); this.menuContainer.appendChild(txt); return;
+          } else if (window.statoApp.modalita === 'ancora') {
+            const txt = document.createElement('a-text'); txt.setAttribute('value', 'MOD: DIAMANTI CALIB\nPunta a terra e premi\nil grilletto per posizionare.'); txt.setAttribute('scale', '0.05 0.05 0.05'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0.03 0'); txt.classList.add('menu-info'); this.menuContainer.appendChild(txt); return;
+          }
+
+          window.fileCaricati.forEach((file, index) => {
+            const btn = document.createElement('a-plane'); btn.setAttribute('width', '0.22'); btn.setAttribute('height', '0.04'); btn.setAttribute('color', file.tipo === 'stream-pc' ? '#007ACC' : '#333333'); btn.setAttribute('position', `0 ${0.03 - (index * 0.045)} 0`); btn.classList.add('menu-btn', 'menu-file');
+            const txt = document.createElement('a-text'); txt.setAttribute('value', file.nome.length > 18 ? file.nome.substring(0,18)+'...' : file.nome); txt.setAttribute('scale', '0.07 0.07 0.07'); txt.setAttribute('align', 'center'); txt.setAttribute('position', '0 0 0.01'); btn.appendChild(txt);
+            btn.addEventListener('click', () => this.spawnaOggetto(file)); this.menuContainer.appendChild(btn);
+          });
+        },
+
+        spawnaOggetto: function(file, savePos, saveQuat, saveScale, assignedId) {
+          const entity = document.createElement('a-entity'); entity.classList.add('spostabile'); entity.fileDatiOriginali = file; 
+          
+          if (savePos) { entity.object3D.position.copy(savePos); entity.object3D.quaternion.copy(saveQuat); entity.object3D.scale.copy(saveScale); }
+          else { 
+            // Posiziona di fronte al controller dentro world-content
+            const controller = document.getElementById('controller-dx');
+            const pos = new THREE.Vector3(); controller.object3D.getWorldPosition(pos);
+            const contentGroup = document.getElementById('world-content');
+            contentGroup.object3D.worldToLocal(pos);
+            entity.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`); 
+            entity.setAttribute('scale', '1 1 1'); 
+          }
+          
+          const assetId = assignedId || ('asset_' + Date.now() + Math.floor(Math.random() * 1000));
+          entity.setAttribute('data-asset-id', assetId);
+
+          if (file.tipo === 'glb' || file.tipo === 'gltf') { entity.setAttribute('gltf-model', `url(${file.url})`); entity.setAttribute('auto-centratore', ''); }
+          else if (file.tipo === 'obj') { entity.setAttribute('obj-model', `obj: url(${file.url})`); entity.setAttribute('material', 'color: #cccccc'); }
+          else if (file.tipo === 'stl') entity.setAttribute('stl-model', `src: ${file.url}`);
+          else if (file.tipo === 'png' || file.tipo === 'jpg' || file.tipo === 'jpeg') entity.setAttribute('foto-alta-qualita', `url: ${file.url}`);
+          else if (file.tipo === 'mp4') entity.setAttribute('video-base', `url: ${file.url}`);
+          else if (file.tipo === 'stream-pc') entity.setAttribute('video-layer-hd', `idElem: ${file.idElem}`);
+          
+          document.getElementById('world-content').appendChild(entity);
+        }
+      });
+
+      AFRAME.registerComponent('strumenti-dx', {
+        init: function () {
+          this.oggettoAfferrato = null; this.distanzaGrab = 0; this.stickX = 0; this.stickY = 0; this.stickRotVert = 0; this.stickRotRoll = 0; 
+          this.statoTaglio = { attivo: false, startPt: null, asseX: null, asseY: null, normale: null, entity: null };
+          this.matTaglioBozza = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthTest: false });
+          this.mirino = document.createElement('a-entity'); this.mirino.setAttribute('geometry', 'primitive: sphere; radius: 0.015'); this.mirino.setAttribute('material', 'color: #ff0000; shader: flat; depthTest: false'); this.mirino.setAttribute('visible', 'false'); this.el.sceneEl.appendChild(this.mirino);
+
+          // Inizializza i diamanti di riferimento globali
+          window.calibLocal1 = null;
+          window.calibLocal2 = null;
+
+          this.el.addEventListener('triggerdown', () => {
+            const hits = this.el.components.raycaster.intersections; if (hits.length === 0) return;
+            const hitMenu = hits.find(h => h.object && h.object.el && h.object.el.classList.contains('menu-btn')); if (hitMenu) { hitMenu.object.el.emit('click'); return; }
+
+            // ==========================================
+            // LOGICA DEI DIAMANTI DI CALIBRAZIONE
+            // ==========================================
+            if (window.statoApp.modalita === 'ancora') {
+              const hit = hits.find(h => h.object && h.object.el && (h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile')));
+              if (hit) {
+                const worldContent = document.getElementById('world-content').object3D;
+                const localPoint = worldContent.worldToLocal(hit.point.clone());
+
+                if (window.statoApp.faseAncora === 1) {
+                  window.calibLocal1 = localPoint;
+                  let d1 = document.getElementById('diamante-1');
+                  if (!d1) {
+                    d1 = document.createElement('a-entity'); d1.id = 'diamante-1';
+                    const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.06), new THREE.MeshBasicMaterial({ color: 0x00BFFF, wireframe: true }));
+                    d1.setObject3D('mesh', mesh); document.getElementById('world-content').appendChild(d1);
+                  }
+                  d1.object3D.position.copy(localPoint);
+                  d1.setAttribute('visible', 'true');
+                  window.statoApp.faseAncora = 2;
+                } else {
+                  window.calibLocal2 = localPoint;
+                  let d2 = document.getElementById('diamante-2');
+                  if (!d2) {
+                    d2 = document.createElement('a-entity'); d2.id = 'diamante-2';
+                    const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.06), new THREE.MeshBasicMaterial({ color: 0xFF00FF, wireframe: true }));
+                    d2.setObject3D('mesh', mesh); document.getElementById('world-content').appendChild(d2);
+                  }
+                  d2.object3D.position.copy(localPoint);
+                  d2.setAttribute('visible', 'true');
+                  window.statoApp.faseAncora = 1;
+                }
+              }
+              return;
+            }
+
+            if (window.statoApp.modalita === 'taglia') {
+              const hit = hits.find(h => h.object && h.object.el && (h.object.el.classList.contains('spostabile') || h.object.el.classList.contains('muro')));
+              if (hit) {
+                this.statoTaglio.attivo = true; this.statoTaglio.startPt = hit.point.clone(); 
+                let normale = new THREE.Vector3(0, 0, 1);
+                if (hit.face && hit.face.normal) { normale.copy(hit.face.normal); if (hit.object && hit.object.matrixWorld) { normale.applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize(); } }
+                this.statoTaglio.normale = normale.clone();
+                let up = new THREE.Vector3(0, 1, 0); if (Math.abs(normale.y) > 0.9) up.set(0, 0, -1);
+                this.statoTaglio.asseX = new THREE.Vector3().crossVectors(up, normale).normalize(); this.statoTaglio.asseY = new THREE.Vector3().crossVectors(normale, this.statoTaglio.asseX).normalize();
+
+                const entity = document.createElement('a-entity'); entity.classList.add('buco'); 
+                const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.matTaglioBozza); mesh.renderOrder = 9999; 
+                mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(this.statoTaglio.asseX, this.statoTaglio.asseY, normale));
+                entity.setObject3D('mesh', mesh); entity.setAttribute('position', hit.point.clone().add(normale.clone().multiplyScalar(0.01)));
+                document.getElementById('world-content').appendChild(entity); this.statoTaglio.entity = entity;
+              }
+              return;
+            }
+
+            const hitObj = hits.find(h => h.object && h.object.el && h.object.el.classList.contains('spostabile'));
+            if (hitObj) { this.oggettoAfferrato = hitObj.object.el; this.distanzaGrab = hitObj.distance; }
+          });
+
+          this.el.addEventListener('triggerup', () => {
+            this.oggettoAfferrato = null;
+            if (this.statoTaglio.attivo && this.statoTaglio.entity) {
+              this.statoTaglio.entity.setAttribute('data-buco-id', 'buco_' + Date.now() + Math.floor(Math.random() * 1000));
+              const mesh = this.statoTaglio.entity.getObject3D('mesh');
+              const profondita = 1.0; 
+              mesh.geometry.dispose(); mesh.geometry = new THREE.BoxGeometry(1, 1, profondita); 
+              mesh.material = window.statoApp.modalita === 'taglia' ? window.matTaglioVisibile : window.matTaglioFinale; 
+              mesh.renderOrder = -10; 
+              
+              const posSullaSuperficie = this.statoTaglio.entity.object3D.position.clone().sub(this.statoTaglio.normale.clone().multiplyScalar(0.01));
+              const sporgenzaVersoUtente = 0.15;
+              const offsetCentramento = (profondita / 2) - sporgenzaVersoUtente; 
+              
+              const centroPerfetto = posSullaSuperficie.sub(this.statoTaglio.normale.clone().multiplyScalar(offsetCentramento));
+              this.statoTaglio.entity.object3D.position.copy(centroPerfetto);
+              
+              this.statoTaglio.attivo = false; this.statoTaglio.entity = null;
+            }
+          });
+
+          this.el.addEventListener('gripdown', () => {
+            const hits = this.el.components.raycaster.intersections;
+            const hitObj = hits.find(h => h.object && h.object.el && (h.object.el.classList.contains('spostabile') || h.object.el.classList.contains('buco')));
+            if (hitObj) {
+              const assetId = hitObj.object.el.getAttribute('data-asset-id');
+              if (assetId) {
+                const videoEl = document.getElementById(assetId);
+                if (videoEl && videoEl.tagName === 'VIDEO' && hitObj.object.el.fileDatiOriginali?.tipo !== 'stream-pc') { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.parentNode.removeChild(videoEl); }
+              }
+              hitObj.object.el.parentNode.removeChild(hitObj.object.el);
+              if (this.oggettoAfferrato === hitObj.object.el) this.oggettoAfferrato = null;
+            }
+          });
+
+          this.el.addEventListener('thumbstickmoved', (e) => { this.stickX = e.detail.x; this.stickY = e.detail.y; });
+          document.querySelector('#controller-sx').addEventListener('thumbstickmoved', (e) => { this.stickRotVert = e.detail.y; this.stickRotRoll = e.detail.x; });
+          this.el.addEventListener('abuttondown', () => { if (this.oggettoAfferrato) this.oggettoAfferrato.object3D.scale.multiplyScalar(1.2); });
+          this.el.addEventListener('bbuttondown', () => { if (this.oggettoAfferrato) this.oggettoAfferrato.object3D.scale.multiplyScalar(0.8); });
+        },
+        
+        tick: function () {
+          const hits = this.el.components.raycaster.intersections;
+          if ((window.statoApp.modalita === 'taglia' || window.statoApp.modalita === 'ancora') && !this.statoTaglio.attivo && hits.length > 0) {
+            const hitForMirino = hits.find(h => h.object && h.object.el && (h.object.el.classList.contains('muro') || h.object.el.classList.contains('spostabile')));
+            if (hitForMirino) { this.mirino.setAttribute('visible', 'true'); this.mirino.object3D.position.copy(hitForMirino.point); } else { this.mirino.setAttribute('visible', 'false'); }
+          } else { this.mirino.setAttribute('visible', 'false'); }
+
+          if (this.statoTaglio.attivo && this.statoTaglio.entity && hits.length > 0) {
+            const diff = new THREE.Vector3().subVectors(hits[0].point.clone(), this.statoTaglio.startPt);
+            const larghezza = diff.dot(this.statoTaglio.asseX); const altezza = diff.dot(this.statoTaglio.asseY);
+            const center = this.statoTaglio.startPt.clone().add(this.statoTaglio.asseX.clone().multiplyScalar(larghezza / 2)).add(this.statoTaglio.asseY.clone().multiplyScalar(altezza / 2)).add(this.statoTaglio.normale.clone().multiplyScalar(0.01)); 
+            this.statoTaglio.entity.object3D.position.copy(center);
+            this.statoTaglio.entity.getObject3D('mesh').scale.set(Math.max(Math.abs(larghezza), 0.02), Math.max(Math.abs(altezza), 0.02), 1.0);
+            return;
+          }
+
+          if (this.oggettoAfferrato) {
+            if (Math.abs(this.stickY) > 0.1) { this.distanzaGrab += this.stickY * -0.05; this.distanzaGrab = Math.max(0.1, this.distanzaGrab); }
+            let distanzaIdeale = this.distanzaGrab; let allineaAlMuro = false; let normaleMuro = new THREE.Vector3();
+            const hitMuro = hits.find(h => h.object && h.object.el && h.object.el.classList.contains('muro'));
+            
+            if (hitMuro) {
+              if (this.distanzaGrab > hitMuro.distance - 0.05) distanzaIdeale = hitMuro.distance - 0.05;
+              if (Math.abs(this.distanzaGrab - hitMuro.distance) < 0.2) {
+                allineaAlMuro = true;
+                normaleMuro.copy(hitMuro.face.normal).applyMatrix3(new THREE.Matrix3().getNormalMatrix(hitMuro.object.matrixWorld)).normalize();
+              }
+            }
+            const targetPos = this.el.components.raycaster.raycaster.ray.direction.clone().multiplyScalar(distanzaIdeale).add(this.el.components.raycaster.raycaster.ray.origin);
+            this.oggettoAfferrato.object3D.position.copy(targetPos);
+
+            if (allineaAlMuro) { this.oggettoAfferrato.object3D.lookAt(targetPos.clone().add(normaleMuro)); } 
+            else {
+              if (Math.abs(this.stickX) > 0.1) this.oggettoAfferrato.object3D.rotation.y -= this.stickX * 0.05; 
+              if (Math.abs(this.stickRotVert) > 0.1) this.oggettoAfferrato.object3D.rotation.x -= this.stickRotVert * 0.05; 
+              if (Math.abs(this.stickRotRoll) > 0.1) this.oggettoAfferrato.object3D.rotation.z -= this.stickRotRoll * 0.05; 
+            }
+          }
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <div id="ui-2d">
+      <h3 style="margin-top:0;">Libreria Asset AR</h3>
+      <p style="font-size: 12px; color: #555;"><b>Calibrazione Diamanti:</b> Imposta la modalità "ANCORA", piazza 2 diamanti nello spazio reale per salvare/ripristinare correttamente la scena.</p>
+      <input type="file" id="file-assets" accept=".obj,.stl,.glb,.gltf,.png,.jpg,.jpeg,.mp4" multiple style="width:100%">
+      <div id="status-assets" style="color: #4CAF50; font-size:12px; margin-top:5px; font-weight: bold;">Nessun file caricato</div>
+      <div id="status-pc" style="color: #FF9800; font-size:12px; margin-top:10px; font-weight: bold;">Inizializzazione Ricevitore PC...</div>
+    </div>
+
+    <a-scene antialias="true" renderer="colorManagement: true; highRefreshRate: true;" webxr="referenceSpaceType: unbounded; optionalFeatures: hit-test, plane-detection, mesh, mesh-detection, layers, unbounded, local-floor, hand-tracking; framebufferScaleFactor: 2.0; foveationLevel: 0;" gestore-spazio-occulto>
+      <a-light type="ambient" color="#ffffff" intensity="1.5"></a-light>
+      <a-light type="directional" color="#ffffff" intensity="1.5" position="-1 2 1"></a-light>
+      <a-entity environment="preset: none; skyType: none; lighting: none;"></a-entity>
+      <a-assets></a-assets>
+      
+      <!-- Struttura Pivot e Contenuto Globale (Sistema del primo file) -->
+      <a-entity id="world-pivot">
+        <a-entity id="world-content"></a-entity>
+      </a-entity>
+
+      <a-entity id="controller-sx" laser-controls="hand: left" oculus-touch-controls="hand: left" pannello-sx occlusione-mani></a-entity>
+      <a-entity id="controller-dx" laser-controls="hand: right" oculus-touch-controls="hand: right" raycaster="objects: .spostabile, .menu-btn, .muro, .buco; far: 10;" cursor="rayOrigin: controller" strumenti-dx occlusione-mani></a-entity>
+      
+      <a-entity id="mano-sx" hand-tracking-controls="hand: left" mano-interattiva></a-entity>
+      <a-entity id="mano-dx" hand-tracking-controls="hand: right" mano-interattiva></a-entity>
+
+    </a-scene>
+  </body>
+</html>
