@@ -26,7 +26,7 @@
       // MOTORE MATEMATICO: Crea un sistema di riferimento locale basato sui 2 diamanti
       window.getAnchorMatrix = function(p1, p2) {
         let forward = new THREE.Vector3().subVectors(p2, p1);
-        forward.y = 0; // Vincola l'allineamento al piano orizzontale per evitare inclinazioni sballate
+        forward.y = 0; // Vincola l'allineamento al piano orizzontale
         if(forward.lengthSq() < 0.0001) forward.set(0, 0, -1);
         forward.normalize();
         let up = new THREE.Vector3(0, 1, 0);
@@ -38,7 +38,7 @@
       };
 
       window.dbPromise = new Promise((resolve, reject) => {
-        const req = indexedDB.open('AR_Studio_DB', 5);
+        const req = indexedDB.open('AR_Studio_DB', 6);
         req.onupgradeneeded = e => {
           const db = e.target.result;
           if (!db.objectStoreNames.contains('files')) db.createObjectStore('files', { keyPath: 'nome' });
@@ -48,7 +48,6 @@
         req.onerror = e => reject(e);
       });
 
-      // Carica i file 3D e video salvati
       window.caricaFilesInDB = async function() {
         const db = await window.dbPromise;
         const tx = db.transaction('files', 'readonly');
@@ -90,13 +89,22 @@
         }
       });
 
+      // FIX: Impedisce che l'auto-centratore sovrascriva la scala quando si carica una scena ripristinata
       AFRAME.registerComponent('auto-centratore', {
         init: function() {
           this.el.addEventListener('model-loaded', () => {
             const mesh = this.el.getObject3D('mesh'); if(!mesh) return;
             const box = new THREE.Box3().setFromObject(mesh); const center = new THREE.Vector3(); box.getCenter(center); const size = new THREE.Vector3(); box.getSize(size);
             mesh.position.set(-center.x, -center.y, -center.z);
-            const maxDim = Math.max(size.x, size.y, size.z); if(maxDim > 0) { const scale = 0.5 / maxDim; this.el.object3D.scale.set(scale, scale, scale); }
+            
+            // Applica la scala di default SOLO se l'oggetto è nuovo (non ripristinato)
+            if (!this.el.hasAttribute('data-restored')) {
+                const maxDim = Math.max(size.x, size.y, size.z); 
+                if(maxDim > 0) { 
+                    const scale = 0.5 / maxDim; 
+                    this.el.setAttribute('scale', `${scale} ${scale} ${scale}`); 
+                }
+            }
             mesh.traverse((node) => {
               if (node.isMesh && node.material) {
                 if (node.material.metalness !== undefined) { node.material.metalness = Math.min(node.material.metalness, 0.1); node.material.roughness = Math.max(node.material.roughness, 0.6); }
@@ -217,26 +225,23 @@
 
       document.addEventListener('DOMContentLoaded', () => {
         window.caricaFilesInDB();
-        window.controllaScenaSalvata(); // Controllo all'avvio
+        window.controllaScenaSalvata();
 
         const sceneEl = document.querySelector('a-scene');
         sceneEl.addEventListener('enter-vr', () => { 
           document.getElementById('ui-2d').style.display = 'none'; 
           
-          // Se c'è una scena salvata, innesca automaticamente la procedura di posizionamento diamanti
           if (window.scenaSalvataDisponibile) {
               setTimeout(() => {
                   const pannelloSx = document.querySelector('[pannello-sx]')?.components['pannello-sx'];
-                  if (pannelloSx) {
-                      pannelloSx.avviaRipristino(null, true);
-                  }
-              }, 1000); // Ritardo per dare tempo ai controller di spawnare
+                  if (pannelloSx) { pannelloSx.avviaRipristino(null, true); }
+              }, 1000);
           }
         });
         
         sceneEl.addEventListener('exit-vr', () => { 
           document.getElementById('ui-2d').style.display = 'block'; 
-          window.controllaScenaSalvata(); // Aggiorna stato pannello browser
+          window.controllaScenaSalvata(); 
         });
 
         document.getElementById('file-assets').addEventListener('change', async function(e) {
@@ -314,7 +319,7 @@
           let modIdx = 0;
 
           this.btnMod.addEventListener('click', () => {
-            if (window.inAttesaDiRipristino) return; // Blocca cambio modalità se sto guidando il ripristino
+            if (window.inAttesaDiRipristino) return; 
             
             modIdx = (modIdx + 1) % modalitaLista.length;
             window.statoApp.modalita = modalitaLista[modIdx];
@@ -384,7 +389,8 @@
 
           textEl.setAttribute('value', 'SCENA SALVATA NEL DB!'); setTimeout(() => textEl.setAttribute('value', 'SALVA SCENA'), 2000);
           window.scenaSalvataDisponibile = true;
-          document.getElementById('status-scene').innerHTML = `💾 Scena <b>"Scena Principale"</b> aggiornata!`;
+          const sceneStatus = document.getElementById('status-scene');
+          if(sceneStatus) sceneStatus.innerHTML = `💾 Scena <b>"Scena Principale"</b> aggiornata!`;
         },
 
         avviaRipristino: async function(textEl, autoLoad = false) {
@@ -402,7 +408,6 @@
               return; 
             }
 
-            // Manda l'app in modalità calibrazione e forza l'apertura del menu per far leggere l'avviso
             window.inAttesaDiRipristino = true;
             window.statoApp.modalita = 'ancora';
             window.statoApp.faseAncora = 1;
@@ -411,7 +416,6 @@
             this.txtMod.setAttribute('color', '#FF1744');
             this.btnMod.setAttribute('color', '#9C27B0');
             
-            // Forza l'apertura del menu in modo che l'utente veda il messaggio all'ingresso in VR
             if (autoLoad) {
                 this.menuVisibile = true;
                 this.menuContainer.setAttribute('visible', 'true');
@@ -431,7 +435,6 @@
             const result = e.target.result;
             if (!result) return;
 
-            // Calcola la nuova matrice del mondo reale
             const newAnchorMat = window.getAnchorMatrix(window.d1_pos, window.d2_pos);
             const aScene = document.querySelector('a-scene');
 
@@ -448,7 +451,9 @@
               if (item.tipo === 'oggetto') {
                 const existingEl = document.querySelector(`[data-asset-id="${item.assetId}"]`);
                 if (existingEl) {
-                  existingEl.object3D.position.copy(wp); existingEl.object3D.quaternion.copy(wq); existingEl.object3D.scale.copy(ws);
+                  existingEl.setAttribute('position', `${wp.x} ${wp.y} ${wp.z}`);
+                  existingEl.setAttribute('scale', `${ws.x} ${ws.y} ${ws.z}`);
+                  setTimeout(() => { if(existingEl.object3D) existingEl.object3D.quaternion.copy(wq); }, 50);
                 } else {
                   let fileObj = window.fileCaricati.find(f => f.nome === item.fileNome);
                   if (!fileObj && item.fileNome === '💻 PC Schermo') { fileObj = { nome: "💻 PC Schermo", tipo: 'stream-pc', idElem: 'video-stream-pc' }; window.fileCaricati.unshift(fileObj); }
@@ -458,18 +463,22 @@
               else if (item.tipo === 'buco') {
                 const existingBuco = document.querySelector(`[data-buco-id="${item.bucoId}"]`);
                 if (existingBuco) {
-                  existingBuco.object3D.position.copy(wp); existingBuco.object3D.quaternion.copy(wq); existingBuco.object3D.scale.copy(ws);
+                  existingBuco.setAttribute('position', `${wp.x} ${wp.y} ${wp.z}`);
+                  existingBuco.setAttribute('scale', `${ws.x} ${ws.y} ${ws.z}`);
+                  setTimeout(() => { if(existingBuco.object3D) existingBuco.object3D.quaternion.copy(wq); }, 50);
                 } else {
                   const entity = document.createElement('a-entity'); entity.classList.add('buco'); entity.setAttribute('data-buco-id', item.bucoId);
                   const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1.0), window.matTaglioFinale); 
                   mesh.renderOrder = -10; entity.setObject3D('mesh', mesh);
-                  entity.object3D.position.copy(wp); entity.object3D.quaternion.copy(wq); entity.object3D.scale.copy(ws);
+                  
+                  entity.setAttribute('position', `${wp.x} ${wp.y} ${wp.z}`);
+                  entity.setAttribute('scale', `${ws.x} ${ws.y} ${ws.z}`);
                   aScene.appendChild(entity);
+                  setTimeout(() => { if(entity.object3D) entity.object3D.quaternion.copy(wq); }, 50);
                 }
               }
             });
             
-            // Ripristino concluso: ritorna a modalità normale
             window.inAttesaDiRipristino = false;
             window.statoApp.modalita = 'inserisci';
             this.txtMod.setAttribute('value', 'MOD: INSERISCI');
@@ -498,7 +507,20 @@
         spawnaOggetto: function(file, savePos, saveQuat, saveScale, assignedId) {
           const entity = document.createElement('a-entity'); entity.classList.add('spostabile'); entity.fileDatiOriginali = file; 
           
-          if (savePos) { entity.object3D.position.copy(savePos); entity.object3D.quaternion.copy(saveQuat); entity.object3D.scale.copy(saveScale); }
+          const assetId = assignedId || ('asset_' + Date.now() + Math.floor(Math.random() * 1000));
+          entity.setAttribute('data-asset-id', assetId);
+
+          // FIX: Forzatura applicazione coordinate assolute A-Frame
+          if (savePos) { 
+            entity.setAttribute('data-restored', 'true');
+            entity.setAttribute('position', `${savePos.x} ${savePos.y} ${savePos.z}`); 
+            entity.setAttribute('scale', `${saveScale.x} ${saveScale.y} ${saveScale.z}`); 
+            
+            // A-Frame gestisce nativamente Euler. Convertiamo il quaternion in modo infallibile
+            const euler = new THREE.Euler().setFromQuaternion(saveQuat, 'YXZ');
+            const radToDeg = THREE.MathUtils ? THREE.MathUtils.radToDeg : THREE.Math.radToDeg;
+            entity.setAttribute('rotation', `${radToDeg(euler.x)} ${radToDeg(euler.y)} ${radToDeg(euler.z)}`);
+          }
           else { 
             const controller = document.getElementById('controller-dx');
             const pos = new THREE.Vector3(); controller.object3D.getWorldPosition(pos);
@@ -506,9 +528,6 @@
             entity.setAttribute('scale', '1 1 1'); 
           }
           
-          const assetId = assignedId || ('asset_' + Date.now() + Math.floor(Math.random() * 1000));
-          entity.setAttribute('data-asset-id', assetId);
-
           if (file.tipo === 'glb' || file.tipo === 'gltf') { entity.setAttribute('gltf-model', `url(${file.url})`); entity.setAttribute('auto-centratore', ''); }
           else if (file.tipo === 'obj') { entity.setAttribute('obj-model', `obj: url(${file.url})`); entity.setAttribute('material', 'color: #cccccc'); }
           else if (file.tipo === 'stl') entity.setAttribute('stl-model', `src: ${file.url}`);
@@ -517,6 +536,11 @@
           else if (file.tipo === 'stream-pc') entity.setAttribute('video-layer-hd', `idElem: ${file.idElem}`);
           
           document.querySelector('a-scene').appendChild(entity);
+
+          // Assicura che la rotazione al quarternion non venga sovrascritta durante il mount di A-Frame
+          if(savePos) {
+              setTimeout(() => { if(entity.object3D) entity.object3D.quaternion.copy(saveQuat); }, 50);
+          }
         }
       });
 
@@ -547,17 +571,13 @@
                     const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.06), new THREE.MeshBasicMaterial({ color: 0x00BFFF, wireframe: true }));
                     d1.setObject3D('mesh', mesh); document.querySelector('a-scene').appendChild(d1);
                   }
-                  d1.object3D.position.copy(worldPoint);
+                  d1.setAttribute('position', `${worldPoint.x} ${worldPoint.y} ${worldPoint.z}`);
                   d1.setAttribute('visible', 'true');
-                  d1.object3D.visible = true; 
                   
                   window.statoApp.faseAncora = 2; // Passa al secondo diamante
 
-                  // Aggiornamento testuale del menu
                   const pannelloSx = document.querySelector('[pannello-sx]')?.components['pannello-sx'];
-                  if(pannelloSx && window.inAttesaDiRipristino) {
-                      pannelloSx.txtMod.setAttribute('value', 'OTTIMO!\nORA PIAZZA IL SECONDO');
-                  }
+                  if(pannelloSx && window.inAttesaDiRipristino) { pannelloSx.txtMod.setAttribute('value', 'OTTIMO!\nORA PIAZZA IL SECONDO'); }
 
                 } else {
                   window.d2_pos = worldPoint;
@@ -567,25 +587,23 @@
                     const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.06), new THREE.MeshBasicMaterial({ color: 0xFF00FF, wireframe: true }));
                     d2.setObject3D('mesh', mesh); document.querySelector('a-scene').appendChild(d2);
                   }
-                  d2.object3D.position.copy(worldPoint);
+                  d2.setAttribute('position', `${worldPoint.x} ${worldPoint.y} ${worldPoint.z}`);
                   d2.setAttribute('visible', 'true');
-                  d2.object3D.visible = true;
                   
-                  window.statoApp.faseAncora = 1;
+                  window.statoApp.faseAncora = 1; 
 
-                  // Se stavamo aspettando i diamanti per ripristinare la scena, esegue il ripristino
                   const pannelloSx = document.querySelector('[pannello-sx]')?.components['pannello-sx'];
                   if (pannelloSx && window.inAttesaDiRipristino) {
                       pannelloSx.txtMod.setAttribute('value', 'CALCOLO IN CORSO...');
                       pannelloSx.eseguiRipristinoEffettivo();
                   }
 
-                  // FA SCOMPARIRE TOTALMENTE I DIAMANTI DOPO 1 SECONDO
+                  // Spegne in modo pulito e affidabile i diamanti A-Frame
                   setTimeout(() => {
                     const dm1 = document.getElementById('diamante-1');
                     const dm2 = document.getElementById('diamante-2');
-                    if (dm1) { dm1.setAttribute('visible', 'false'); dm1.object3D.visible = false; }
-                    if (dm2) { dm2.setAttribute('visible', 'false'); dm2.object3D.visible = false; }
+                    if (dm1) { dm1.setAttribute('visible', 'false'); }
+                    if (dm2) { dm2.setAttribute('visible', 'false'); }
                   }, 1000);
                 }
               }
