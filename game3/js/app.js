@@ -2734,26 +2734,9 @@ if (els.createRoomBtn) {
                 const stats = snap.val() || {};
                 const charStats = stats.charStats || {};
 
-                // --- CALCOLO VELOCITÀ AUTOMATICA (WPM CRITICO) ---
-                let autoWpm = parseInt(els.startWpmInput?.value) || 20;
-                const errorsByWpm = stats.errorsByWpm || {};
-                const wpmEntries = Object.entries(errorsByWpm);
-
-                if (wpmEntries.length > 0) {
-                    // Troviamo il WPM dove l'utente ha fatto più errori
-                    let maxErrors = -1;
-                    wpmEntries.forEach(([wpm, chars]) => {
-                        const totalErrorsForWpm = Object.values(chars).reduce((a, b) => a + b, 0);
-                        if (totalErrorsForWpm > maxErrors) {
-                            maxErrors = totalErrorsForWpm;
-                            autoWpm = parseInt(wpm);
-                        }
-                    });
-                    console.log(`Radar: Automatic WPM detected at ${autoWpm} (Max errors: ${maxErrors})`);
-                }
-
-                window.currentWpm = window.baseWpm = autoWpm;
-                if (els.startWpmInput) els.startWpmInput.value = autoWpm;
+                // Usiamo la velocità WPM impostata dall'utente nel campo input del menu
+                const chosenWpm = parseInt(els.startWpmInput?.value) || 20;
+                window.currentWpm = window.baseWpm = chosenWpm;
 
                 // Salviamo lo stato iniziale per il report finale
                 window.targetTrainingContext = {
