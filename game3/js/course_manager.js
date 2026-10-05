@@ -241,24 +241,12 @@ window.initCourseManager = function() {
 };
 
 window.checkCourseInactivity = function() {
-    if (!window.courseData || window.courseData.active_plan !== true) return;
+    if (!window.courseData) return;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split('T')[0];
-
-    if (window.courseData.progress.last_inactivity_check === todayStr) return;
-
-    const lastSession = window.courseData.progress.last_session_date;
-    if (!lastSession) {
-        window.courseData.progress.last_inactivity_check = todayStr;
-        window.saveCourseState();
-        return;
-    }
-
-    const isExpelled = window.checkStudentAutomaticExpulsion(window.myId, window.courseData);
-    if (isExpelled) {
-        alert("OPERATORE ESPULSO DAL CORSO PER INATTIVITÀ.\n\nNon ti sei collegato dall'ultima lezione (" + lastSession + "). Il tuo piano di studi è stato revocato automaticamente.");
+    // Se l'utente è stato espulso in background (mentre era offline o durante la verifica del tutor)
+    if (window.courseData.active_plan === false && window.courseData.expelled_reason) {
+        const reason = window.courseData.expelled_reason;
+        alert("⛔ SEI STATO ESPULSO DAL CORSO PER INATTIVITÀ.\n\nMotivo: " + reason + "\n\nIl tuo piano di studi è stato revocato.");
         window.updateGlobalEnrollmentRecord(false);
         window.courseData = window.getDefaultCourseData();
         window.saveCourseState();
@@ -266,28 +254,51 @@ window.checkCourseInactivity = function() {
         return;
     }
 
-    window.courseData.progress.last_inactivity_check = todayStr;
-    window.saveCourseState();
+    if (window.courseData.active_plan !== true) return;
+
+    const isExpelled = window.checkStudentAutomaticExpulsion(window.myId, window.courseData);
+    if (isExpelled) {
+        alert("⛔ SEI STATO ESPULSO DAL CORSO PER INATTIVITÀ.\n\nMotivo: Accumulati 3 richiami per lezioni saltate (3/3).\n\nIl tuo piano di studi è stato revocato.");
+        window.updateGlobalEnrollmentRecord(false);
+        window.courseData = window.getDefaultCourseData();
+        window.saveCourseState();
+        if (typeof window.renderCourseTabView === 'function') window.renderCourseTabView();
+    }
 };
 
 window.checkStudentAutomaticExpulsion = function(uid, cData) {
     if (!uid || !cData || cData.active_plan !== true || !db) return false;
-    const lastSession = cData.progress && cData.progress.last_session_date;
-    if (!lastSession) return false;
+
+    // Se l'utente è un Tutor, non viene soggetto ad espulsione come corsista
+    if (cData.role === 'tutor') return false;
+
+    // Data di partenza per il calcolo delle lezioni saltate:
+    // Usa l'ultimo controllo di inattività, altrimenti l'ultima sessione svolta, altrimenti la data di iscrizione
+    const lastCheckStr = cData.progress && cData.progress.last_inactivity_check_date;
+    const lastSessionStr = cData.progress && cData.progress.last_session_date;
+    const enrollStr = cData.enrollment_date;
+
+    const startStr = lastCheckStr || lastSessionStr || enrollStr;
+    if (!startStr) return false;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const lastDate = new Date(lastSession);
-    lastDate.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
+
+    const startDate = new Date(startStr);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Se il controllo è già stato fatto per la giornata odierna, saltiamo
+    if (lastCheckStr === todayStr) return false;
 
     let missedTrainingDays = 0;
-    let tempDate = new Date(lastDate);
+    let tempDate = new Date(startDate);
     tempDate.setDate(tempDate.getDate() + 1);
 
     while (tempDate < today) {
-        const dayIdx = (tempDate.getDay() + 6) % 7;
+        const dayIdx = (tempDate.getDay() + 6) % 7; // Converti Dom=0 a Lun=0
         const dayData = cData.weekly_schedule ? cData.weekly_schedule[dayIdx] : null;
-        if (dayData && dayData.sessions.some(s => s.type !== 'REST')) {
+        if (dayData && dayData.sessions && dayData.sessions.some(s => s.type !== 'REST')) {
             missedTrainingDays++;
         }
         tempDate.setDate(tempDate.getDate() + 1);
@@ -298,22 +309,34 @@ window.checkStudentAutomaticExpulsion = function(uid, cData) {
         const currentReminders = baseReminders + missedTrainingDays;
 
         if (currentReminders >= 3) {
-            console.log("Course: Expelling inactive user " + uid + " due to " + currentReminders + " missed reminders.");
+            console.log("Course: Auto-expelling inactive student " + uid + " (Reminders: " + currentReminders + ")");
             db.ref("users/" + uid + "/course").update({
                 active_plan: false,
                 "progress/reminders_count": 3,
-                expelled_reason: "Inattività - Ricevuto terzo ed ultimo richiamo (3/3)"
+                "progress/last_inactivity_check_date": todayStr,
+                expelled_reason: "Accumulati 3 richiami per inattività e lezioni saltate (3/3)"
             });
             db.ref("courseActiveEnrollments/" + uid).remove();
             return true;
         } else {
-            // Salva i nuovi richiami su Firebase così il tutor li vede immediatamente
+            // Aggiorna i nuovi richiami e registra la data dell'ultimo controllo su Firebase
             db.ref("users/" + uid + "/course/progress").update({
-                reminders_count: currentReminders
+                reminders_count: currentReminders,
+                last_inactivity_check_date: todayStr
             });
-            if (cData.progress) cData.progress.reminders_count = currentReminders;
+            if (cData.progress) {
+                cData.progress.reminders_count = currentReminders;
+                cData.progress.last_inactivity_check_date = todayStr;
+            }
         }
+    } else {
+        // Se nessun giorno lavorativo è stato saltato, registriamo comunque la data di controllo odierna su Firebase
+        db.ref("users/" + uid + "/course/progress").update({
+            last_inactivity_check_date: todayStr
+        });
+        if (cData.progress) cData.progress.last_inactivity_check_date = todayStr;
     }
+
     return false;
 };
 
