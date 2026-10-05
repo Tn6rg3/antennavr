@@ -988,7 +988,10 @@ s            </div>
             <!-- AREA TUTOR (SOLO PER RUOLO TUTOR) -->
             <div id="courseTutorPanel" class="box-panel" style="display:none; background:rgba(103, 58, 183, 0.1); border-color:#673ab7; padding:15px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <h3 style="color:#9575cd; margin:0; font-size:1em;">🎓 Pannello Tutor</h3>
+                    <h3 style="color:#9575cd; margin:0; font-size:1em; display:flex; align-items:center; gap:8px;">
+                        <span>🎓 Pannello Tutor</span>
+                        <span id="tutorParticipantBadge" style="background:#673ab7; color:white; padding:2px 8px; border-radius:10px; font-size:0.75em; font-weight:bold; display:none;">0 Corsisti</span>
+                    </h3>
                     <div style="display:flex; gap:5px; align-items:center;">
                         <button id="btnToggleTutorPanel" class="action-btn-small btn-secondary" style="width:auto; padding:2px 8px;">Nascondi</button>
                         <button id="btnTabExitTutor" class="btn-danger" style="width:auto; margin:0; padding:4px 8px; font-size:0.7em;">ABBANDONA RUOLO</button>
