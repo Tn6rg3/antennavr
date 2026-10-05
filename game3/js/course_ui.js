@@ -38,6 +38,7 @@ window.renderCourseTabView = function() {
             if (typeof window.renderTutorSelectionList === 'function') window.renderTutorSelectionList();
             if (typeof window.initCourseChat === 'function') window.initCourseChat();
             if (typeof window.initTutorCourseChatNotification === 'function') window.initTutorCourseChatNotification();
+            if (typeof window.initTutorStudentNotification === 'function') window.initTutorStudentNotification();
         } else {
             if (initialPrompt) initialPrompt.style.display = 'block';
         }
@@ -113,6 +114,7 @@ window.renderTutorPanel = function() {
         }
 
         let foundAny = false;
+        let assignedCount = 0;
         for (const uid of uids) {
             if (uid === window.myId) continue;
 
@@ -127,6 +129,7 @@ window.renderTutorPanel = function() {
 
             // FILTRO AULA: Mostra solo corsisti assegnati a questo tutor
             if (cData.tutor_id !== window.myId) continue;
+            assignedCount++;
             foundAny = true;
 
             const p = cData.progress || {};
@@ -202,6 +205,12 @@ window.renderTutorPanel = function() {
             row.appendChild(topDiv);
             row.appendChild(gridDiv);
             list.appendChild(row);
+        }
+
+        const tBadge = document.getElementById('tutorParticipantBadge');
+        if (tBadge) {
+            tBadge.textContent = `${assignedCount} ${assignedCount === 1 ? 'Corsista' : 'Corsisti'}`;
+            tBadge.style.display = 'inline-block';
         }
 
         if (!foundAny) {
@@ -1303,6 +1312,55 @@ window.processCourseNotification = function(source) {
         const b = document.getElementById('courseMessageBadge');
         if (b) b.style.display = 'flex';
     }
+};
+
+/**
+ * NOTIFICHE REAL-TIME PER TUTOR QUANDO SI ISCRIVE UN NUOVO CORSISTA
+ */
+window.initTutorStudentNotification = function() {
+    if (!db || !window.myId) return;
+    const isTutor = window.courseData && window.courseData.role === 'tutor';
+    if (!isTutor) return;
+
+    if (window.listeners && window.listeners.tutorStudentNotifRef) {
+        window.listeners.tutorStudentNotifRef.off('child_added', window.listeners.tutorStudentNotifCallback);
+    } else if (!window.listeners) {
+        window.listeners = {};
+    }
+
+    const enrollRef = db.ref('courseActiveEnrollments');
+    let initEnroll = true;
+
+    const enrollCallback = async (snap) => {
+        if (initEnroll) { initEnroll = false; return; }
+        const uid = snap.key;
+        if (!uid || uid === window.myId) return;
+
+        try {
+            const userSnap = await db.ref(`users/${uid}/course`).once('value');
+            const cData = userSnap.val() || {};
+
+            if (cData.tutor_id === window.myId) {
+                const studentName = snap.val()?.name || cData.name || "Un corsista";
+                if (typeof showToast === 'function') {
+                    showToast(`🎓 NUOVO ISCRITTO IN AULA: ${studentName}!`);
+                }
+                if (typeof window.playBeep === 'function') {
+                    window.playBeep(880, 0.1);
+                    setTimeout(() => window.playBeep(1100, 0.15), 100);
+                }
+                if (typeof window.renderTutorPanel === 'function') {
+                    window.renderTutorPanel();
+                }
+            }
+        } catch(e) {
+            console.warn("Tutor Student Notif Error:", e);
+        }
+    };
+
+    enrollRef.limitToLast(1).on('child_added', enrollCallback);
+    window.listeners.tutorStudentNotifRef = enrollRef;
+    window.listeners.tutorStudentNotifCallback = enrollCallback;
 };
 
 window.hideCourseMessageBadge = function() {
