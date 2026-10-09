@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulatore Copertura RF 3D</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- MapLibre GL JS -->
+    <script src="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.css" rel="stylesheet" />
+    
+    <!-- Turf.js per calcoli spaziali vettoriali -->
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    
+    <!-- FontAwesome per le icone -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #0f172a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100vw; height: 100vh; cursor: crosshair; }
+        
+        /* Pannello UI Moderno, Scuro e Glassmorphism */
+        #ui-panel {
+            position: absolute; top: 1rem; left: 1rem; width: 340px; max-height: 95vh;
+            background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px);
+            border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7); color: #f8fafc; z-index: 10;
+            display: flex; flex-direction: column; transition: all 0.3s ease;
+        }
+        
+        #ui-panel.collapsed { width: 50px; height: 50px; overflow: hidden; padding: 0; border-radius: 25px; }
+        #ui-panel.collapsed #ui-content { display: none; }
+        #ui-panel.collapsed #btn-toggle { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: transparent; }
+        
+        #ui-content { padding: 1.25rem; overflow-y: auto; }
+        
+        /* Inputs styling */
+        input[type="number"] {
+            background: rgba(30, 41, 59, 0.8); border: 1px solid #475569;
+            color: #e2e8f0; border-radius: 6px; padding: 6px 10px; width: 100%;
+            transition: border-color 0.2s; font-family: monospace;
+        }
+        input[type="number"]:focus { outline: none; border-color: #38bdf8; }
+        
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        /* Scrollbar custom */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 3px; }
+
+        .loading-spin { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="ui-panel">
+    <!-- Header e Toggle -->
+    <div class="flex justify-between items-center border-b border-slate-700 pb-2 mb-3 px-5 pt-4" id="ui-header">
+        <h2 class="text-sm font-bold text-sky-400 uppercase tracking-wider flex items-center gap-2" id="ui-title">
+            <i class="fa-solid fa-satellite-dish"></i> Simulatore RF 3D
+        </h2>
+        <button id="btn-toggle" onclick="toggleUI()" class="text-slate-300 hover:text-white transition-colors p-1">
+            <i class="fa-solid fa-compress" id="toggle-icon"></i>
+        </button>
+    </div>
+
+    <!-- Contenuto -->
+    <div id="ui-content" class="space-y-4 text-xs pt-0">
+        
+        <div class="bg-amber-900/30 border-l-2 border-amber-500 p-2.5 text-amber-200 rounded shadow-inner mb-2 leading-relaxed">
+            <i class="fa-solid fa-crosshairs mr-1"></i> Clicca sulla mappa per l'Antenna.<br>
+            <i class="fa-solid fa-building mr-1 mt-1"></i> Clicca su un edificio per l'Altezza.
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Alt. Antenna (m)</label>
+                <input type="number" id="inp-h-ant" value="10" min="0" step="1">
+            </div>
+            <div>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Elevazione (°)</label>
+                <input type="number" id="inp-angle" value="5" min="0" max="89" step="1">
+            </div>
+            <div>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Distanza (km)</label>
+                <input type="number" id="inp-dist" value="3" min="0.5" max="20" step="0.5">
+            </div>
+            <div>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Raggio Edifici (m)</label>
+                <input type="number" id="inp-bldg-radius" value="500" min="100" max="3000" step="100">
+            </div>
+        </div>
+        
+        <div class="text-[10px] text-sky-300 font-mono mt-1" id="status-log">
+            In attesa di coordinate...
+        </div>
+
+        <div class="flex flex-col gap-2 mt-3">
+            <button id="btn-load-osm" onclick="estraiEdifici()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded uppercase tracking-wider transition-colors shadow-lg flex items-center justify-center gap-2">
+                <i class="fa-solid fa-city"></i> 1. Estrai Edifici OSM
+            </button>
+
+            <button id="btn-calc-rf" onclick="calcolaCopertura()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded uppercase tracking-wider transition-colors shadow-lg flex items-center justify-center gap-2">
+                <i class="fa-solid fa-wave-square"></i> 2. Calcola Copertura RF
+            </button>
+        </div>
+
+        <!-- Legenda -->
+        <div class="bg-slate-900/80 p-3 rounded border border-slate-700/50 mt-2">
+            <h3 class="font-bold text-slate-300 uppercase mb-2">Legenda</h3>
+            <ul class="space-y-1.5 text-[10px] text-slate-400">
+                <li class="flex items-center gap-2"><div class="w-3 h-3 bg-red-500 opacity-50 border border-red-300"></div> Area in Visibilità (LOS)</li>
+                <li class="flex items-center gap-2"><div class="w-3 h-3 bg-white opacity-70 border border-slate-300"></div> Edifici 3D (Ostacoli)</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+    let isCollapsed = false;
+    function toggleUI() {
+        const panel = document.getElementById('ui-panel');
+        const icon = document.getElementById('toggle-icon');
+        const title = document.getElementById('ui-title');
+        
+        isCollapsed = !isCollapsed;
+        if (isCollapsed) {
+            panel.classList.add('collapsed');
+            icon.className = 'fa-solid fa-expand text-sky-400 text-xl';
+            title.style.display = 'none';
+        } else {
+            panel.classList.remove('collapsed');
+            icon.className = 'fa-solid fa-compress text-slate-300 text-sm';
+            setTimeout(() => title.style.display = 'flex', 200);
+        }
+    }
+
+    let antennaCoords = null; // [lng, lat]
+    let antennaMarker = null;
+    let buildingsGeoJSON = { type: 'FeatureCollection', features: [] };
+    
+    // Lista ottimizzata per i calcoli fisici di Turf.js
+    // { id, poly: turf.polygon, height: number, bbox: [minX, minY, maxX, maxY] }
+    let physicsBuildings = []; 
+
+    const map = new maplibregl.Map({
+        container: 'map',
+        style: {
+            version: 8,
+            sources: {
+                'esri-satellite': {
+                    type: 'raster',
+                    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+                    tileSize: 256
+                }
+            },
+            layers: [{ id: 'sat-layer', type: 'raster', source: 'esri-satellite' }]
+        },
+        center: [11.240, 46.061], // Pergine
+        zoom: 14.5,
+        pitch: 65,
+        bearing: 0
+    });
+
+    map.on('load', () => {
+        
+        // Terreno 3D AWS
+        map.addSource('aws-terrain', {
+            type: 'raster-dem',
+            tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+            encoding: 'terrarium',
+            tileSize: 256
+        });
+        map.setTerrain({ source: 'aws-terrain', exaggeration: 1.2 });
+
+        // Layer Edifici 3D
+        map.addSource('buildings-src', { type: 'geojson', data: buildingsGeoJSON });
+        map.addLayer({
+            'id': '3d-buildings',
+            'type': 'fill-extrusion',
+            'source': 'buildings-src',
+            'paint': {
+                'fill-extrusion-color': '#ffffff', // Bianchi
+                'fill-extrusion-height': ['get', 'height'],
+                'fill-extrusion-opacity': 0.75
+            }
+        });
+
+        // Layer Copertura RF (Poligono)
+        map.addSource('rf-coverage', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({
+            'id': 'rf-layer',
+            'type': 'fill',
+            'source': 'rf-coverage',
+            'paint': {
+                'fill-color': '#ef4444', // Rosso
+                'fill-opacity': 0.45,
+                'fill-outline-color': '#fca5a5'
+            }
+        });
+
+        // Cursor UX per Edifici
+        map.on('mouseenter', '3d-buildings', () => map.getCanvas().style.cursor = 'pointer');
+        map.on('mouseleave', '3d-buildings', () => map.getCanvas().style.cursor = 'crosshair');
+    });
+
+    map.on('click', (e) => {
+        // 1. Controllo se abbiamo cliccato su un edificio esistente
+        const features = map.queryRenderedFeatures(e.point, { layers: ['3d-buildings'] });
+        
+        if (features.length > 0) {
+            gestisciModificaEdificio(features[0]);
+            return; // Ferma l'esecuzione per non spostare l'antenna
+        }
+
+        // 2. Posiziona / Muovi Antenna
+        antennaCoords = [e.lngLat.lng, e.lngLat.lat];
+        
+        if (!antennaMarker) {
+            const el = document.createElement('div');
+            el.className = 'w-4 h-4 bg-sky-500 rounded-full border-2 border-white shadow-[0_0_15px_#38bdf8]';
+            antennaMarker = new maplibregl.Marker({ element: el }).setLngLat(antennaCoords).addTo(map);
+        } else {
+            antennaMarker.setLngLat(antennaCoords);
+        }
+        
+        // Recupera altitudine approssimativa al suolo
+        const elev = map.queryTerrainElevation(antennaCoords) || 0;
+        document.getElementById('status-log').innerText = `Antenna: ${antennaCoords[0].toFixed(4)}, ${antennaCoords[1].toFixed(4)} | Z: ~${elev.toFixed(1)}m`;
+        
+        // Pulisce la copertura precedente
+        map.getSource('rf-coverage').setData({ type: 'FeatureCollection', features: [] });
+    });
+
+    function gestisciModificaEdificio(feature) {
+        const id = feature.properties.id;
+        const currentH = feature.properties.height;
+        
+        const userInput = prompt(`Edificio selezionato.\nAltezza attuale: ${currentH} m.\nInserisci nuova altezza (m):`, currentH);
+        
+        if (userInput !== null && !isNaN(userInput) && userInput.trim() !== '') {
+            const newHeight = parseFloat(userInput);
+            
+            // Aggiorna array GeoJSON
+            const geoF = buildingsGeoJSON.features.find(f => f.properties.id === id);
+            if (geoF) geoF.properties.height = newHeight;
+            
+            // Aggiorna sorgente Mappa
+            map.getSource('buildings-src').setData(buildingsGeoJSON);
+            
+            // Aggiorna array Fisico
+            const physB = physicsBuildings.find(b => b.id === id);
+            if (physB) physB.height = newHeight;
+
+            document.getElementById('status-log').innerText = `Altezza edificio aggiornata a ${newHeight}m.`;
+            
+            // Ricalcola se la copertura era già presente
+            if (antennaCoords) calcolaCopertura();
+        }
+    }
+
+    async function estraiEdifici() {
+        if (!antennaCoords) { alert("Clicca sulla mappa per posizionare l'antenna prima di estrarre."); return; }
+        
+        const btn = document.getElementById('btn-load-osm');
+        const radius = parseFloat(document.getElementById('inp-bldg-radius').value) || 500;
+        const originalText = btn.innerHTML;
+        
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Download...';
+        btn.disabled = true;
+
+        const query = `
+            [out:json][timeout:25];
+            (
+              way["building"](around:${radius}, ${antennaCoords[1]}, ${antennaCoords[0]});
+              relation["building"](around:${radius}, ${antennaCoords[1]}, ${antennaCoords[0]});
+            );
+            out body; >; out skel qt;
+        `;
+
+        try {
+            const response = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
+            if (!response.ok) throw new Error("Overpass API Error");
+            
+            const data = await response.json();
+            
+            let nodes = {};
+            data.elements.forEach(el => { if (el.type === 'node') nodes[el.id] = [el.lon, el.lat]; });
+            
+            buildingsGeoJSON.features = [];
+            physicsBuildings = [];
+            
+            data.elements.forEach((el, index) => {
+                if (el.type === 'way' && el.tags && el.tags.building) {
+                    let coords = el.nodes.map(n => nodes[n]).filter(c => c);
+                    if (coords.length > 2) {
+                        // Chiudi il poligono per Turf.js (primo e ultimo uguali)
+                        if (coords[0][0] !== coords[coords.length-1][0] || coords[0][1] !== coords[coords.length-1][1]) {
+                            coords.push([...coords[0]]);
+                        }
+                        
+                        let height = el.tags.height ? parseFloat(el.tags.height) : (el.tags['building:levels'] ? parseInt(el.tags['building:levels']) * 3.5 : 8);
+                        let uniqueId = Date.now() + index;
+
+                        const turfPoly = turf.polygon([coords]);
+                        const bbox = turf.bbox(turfPoly); // [minX, minY, maxX, maxY]
+
+                        // Inserimento per Rendering
+                        buildingsGeoJSON.features.push({
+                            type: 'Feature',
+                            properties: { id: uniqueId, height: height },
+                            geometry: { type: 'Polygon', coordinates: [coords] }
+                        });
+                        
+                        // Inserimento per Fisica (Turf.js)
+                        physicsBuildings.push({
+                            id: uniqueId,
+                            poly: turfPoly,
+                            height: height,
+                            bbox: bbox
+                        });
+                    }
+                }
+            });
+            
+            map.getSource('buildings-src').setData(buildingsGeoJSON);
+            
+            document.getElementById('status-log').innerText = `Letti ${buildingsGeoJSON.features.length} edifici reali.`;
+            
+        } catch (error) {
+            console.error(error);
+            alert("Errore API OSM. I server potrebbero essere occupati. Riprova tra poco.");
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+
+    function calcolaCopertura() {
+        if (!antennaCoords) { alert("Posiziona l'antenna."); return; }
+
+        const btn = document.getElementById('btn-calc-rf');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-radar loading-spin"></i> Elaborazione in corso...';
+        btn.disabled = true;
+
+        // Piccola pausa per permettere al DOM di renderizzare lo stato "loading"
+        setTimeout(() => {
+            const hAnt = parseFloat(document.getElementById('inp-h-ant').value) || 0;
+            const angoloDeg = parseFloat(document.getElementById('inp-angle').value) || 0;
+            const maxDistKm = parseFloat(document.getElementById('inp-dist').value) || 3;
+            
+            const maxDistM = maxDistKm * 1000;
+            const stepM = 25; // Risoluzione 25 metri per passo
+            const angleRad = angoloDeg * (Math.PI / 180);
+            const tanAngle = Math.tan(angleRad);
+            
+            const originPt = turf.point(antennaCoords);
+            // Quota base terreno
+            const baseElev = map.queryTerrainElevation(antennaCoords) || 0;
+            const zOrigin = baseElev + hAnt;
+
+            let footprintCoords = [];
+
+            // Lanciamo 360 raggi
+            for (let az = 0; az < 360; az++) {
+                let hit = false;
+                let lastValidPtCoords = antennaCoords;
+                
+                for (let d = stepM; d <= maxDistM; d += stepM) {
+                    // Calcolo destinazione con Turf.js
+                    const currPtFeature = turf.destination(originPt, d, az, {units: 'meters'});
+                    const currCoords = currPtFeature.geometry.coordinates; // [lng, lat]
+                    
+                    // Quota Terreno attuale. 
+                    // NOTA: queryTerrainElevation restituisce null se la tile non è renderizzata nello schermo.
+                    // Facciamo un fallback all'altitudine dell'origine per evitare crolli a zero.
+                    let zTerreno = map.queryTerrainElevation(currCoords);
+                    if (zTerreno === null) zTerreno = baseElev; 
+                    
+                    // Quota Raggio
+                    const zRaggio = zOrigin + (tanAngle * d);
+                    
+                    // COLLISIONE 1: Montagna / Terreno
+                    if (zRaggio <= zTerreno) {
+                        hit = true;
+                        footprintCoords.push(currCoords);
+                        break;
+                    }
+
+                    // COLLISIONE 2: Edifici
+                    let hitBuilding = false;
+                    for (let i = 0; i < physicsBuildings.length; i++) {
+                        const b = physicsBuildings[i];
+                        
+                        // 1. Controllo Bounding Box (estremamente più veloce)
+                        if (currCoords[0] >= b.bbox[0] && currCoords[0] <= b.bbox[2] && 
+                            currCoords[1] >= b.bbox[1] && currCoords[1] <= b.bbox[3]) {
+                            
+                            // 2. Controllo Preciso Turf.js Point In Polygon
+                            if (turf.booleanPointInPolygon(currPtFeature, b.poly)) {
+                                // 3. Controllo Z
+                                if (zRaggio <= zTerreno + b.height) {
+                                    hitBuilding = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (hitBuilding) {
+                        hit = true;
+                        footprintCoords.push(currCoords);
+                        break;
+                    }
+                    
+                    // Se non colpisce nulla, aggiorna l'ultimo punto valido
+                    lastValidPtCoords = currCoords;
+                }
+                
+                // Se arriva a fine corsa senza ostacoli
+                if (!hit) {
+                    footprintCoords.push(lastValidPtCoords);
+                }
+            }
+
+            // Chiudi il poligono per GeoJSON
+            footprintCoords.push(footprintCoords[0]);
+
+            // Disegna Copertura
+            map.getSource('rf-coverage').setData({
+                type: 'FeatureCollection',
+                features: [{
+                    type: 'Feature',
+                    geometry: { type: 'Polygon', coordinates: [footprintCoords] },
+                    properties: {}
+                }]
+            });
+
+            // Ripristina UI
+            document.getElementById('status-log').innerText = `Analisi completata (Raggio max: ${maxDistKm}km)`;
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            
+        }, 100);
+    }
+</script>
+
+</body>
+</html>
