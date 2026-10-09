@@ -10,23 +10,46 @@
     <style>
         body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; background: #111; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        
+        /* Stili del pannello */
         #ui-panel {
             position: absolute; top: 10px; left: 10px; width: 320px;
             background: rgba(20, 20, 20, 0.85); color: #fff;
             padding: 15px; border-radius: 8px; backdrop-filter: blur(5px);
             border: 1px solid #444; z-index: 10;
+            transition: all 0.3s ease;
         }
-        h2 { margin-top: 0; font-size: 18px; color: #4CAF50; border-bottom: 1px solid #444; padding-bottom: 10px;}
+        
+        /* Intestazione del pannello */
+        .panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid #444; padding-bottom: 10px;
+        }
+        .panel-header h2 { margin: 0; font-size: 18px; color: #4CAF50; }
+        
+        /* Pulsante Riduci/Espandi */
+        #toggle-btn {
+            background: #333; color: white; border: 1px solid #555;
+            border-radius: 4px; padding: 4px 8px; cursor: pointer;
+            font-size: 12px; margin: 0; width: auto; font-weight: bold;
+        }
+        #toggle-btn:hover { background: #555; }
+        
+        /* Contenuto del pannello (nascondibile) */
+        #panel-content { margin-top: 10px; }
+        
         label { display: block; margin-top: 10px; font-size: 13px; color: #ccc;}
-        select, input, button {
+        select, input, button.azione {
             width: 100%; margin-top: 5px; padding: 8px; box-sizing: border-box;
             background: #333; color: white; border: 1px solid #555; border-radius: 4px;
         }
-        button { background: #4CAF50; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 15px;}
-        button:hover { background: #45a049; }
+        button.azione { background: #4CAF50; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 15px;}
+        button.azione:hover { background: #45a049; }
+        
         .legend { margin-top: 15px; font-size: 12px; }
+        .legend div { margin-bottom: 5px; }
         .legend span { display: inline-block; width: 12px; height: 12px; margin-right: 5px; border-radius: 50%;}
-        .info { font-size: 11px; color: #888; margin-top: 10px; }
+        .info { font-size: 11px; color: #888; margin-top: 15px; line-height: 1.4;}
     </style>
 </head>
 <body>
@@ -34,33 +57,51 @@
 <div id="map"></div>
 
 <div id="ui-panel">
-    <h2>📡 Simulatore RF 3D</h2>
-    
-    <label>Luogo (Longitudine, Latitudine)</label>
-    <input type="text" id="coords" value="11.2366, 46.0655"> <!-- Pergine Valsugana Default -->
-    
-    <label>Antenna / Modalità</label>
-    <select id="antenna">
-        <option value="dipole">Dipolo (Propagazione NVIS / Ionosferica)</option>
-        <option value="vertical">Verticale 1/4λ (Propagazione di Terra / DX)</option>
-    </select>
-    
-    <label>Potenza di Trasmissione (Watt)</label>
-    <input type="number" id="power" value="100" min="1" max="1000">
-
-    <button onclick="avviaSimulazione()">Avvia Trasmissione (CW)</button>
-    <button onclick="caricaEdifici()" style="background:#008CBA;">Carica Edifici 3D (OSM)</button>
-
-    <div class="legend">
-        <div><span style="background: #00ffff;"></span> Onde di Terra (Groundwave)</div>
-        <div><span style="background: #ff5555;"></span> Onde Ionosferiche (Skywave)</div>
-        <div><span style="background: #ffff00; border-radius:0;"></span> Edifici Reali / Ostacoli</div>
+    <div class="panel-header">
+        <h2>📡 Simulatore RF 3D</h2>
+        <button id="toggle-btn" onclick="togglePanel()">➖</button>
     </div>
     
-    <div class="info">Usa il tasto Destro del mouse o CTRL+Click per ruotare e inclinare la vista 3D.</div>
+    <div id="panel-content">
+        <label>Luogo (Longitudine, Latitudine)</label>
+        <input type="text" id="coords" value="11.2366, 46.0655"> <!-- Pergine Valsugana Default -->
+        
+        <label>Antenna / Modalità</label>
+        <select id="antenna">
+            <option value="dipole">Dipolo (Propagazione NVIS / Ionosferica)</option>
+            <option value="vertical">Verticale 1/4λ (Propagazione di Terra / DX)</option>
+        </select>
+        
+        <label>Potenza di Trasmissione (Watt)</label>
+        <input type="number" id="power" value="100" min="1" max="1000">
+
+        <button class="azione" onclick="avviaSimulazione()">Avvia Trasmissione (CW)</button>
+        <button class="azione" onclick="caricaEdifici()" style="background:#008CBA;">Carica Edifici 3D (OSM)</button>
+
+        <div class="legend">
+            <div><span style="background: #00ffff;"></span> Onde di Terra (Groundwave)</div>
+            <div><span style="background: #ff5555;"></span> Onde Ionosferiche (Skywave)</div>
+            <div><span style="background: #ffff00; border-radius:0;"></span> Edifici Reali / Ostacoli</div>
+        </div>
+        
+        <div class="info">Usa il <b>Tasto Destro</b> del mouse (o CTRL+Click) per ruotare e inclinare la vista 3D e vedere le montagne.</div>
+    </div>
 </div>
 
 <script>
+    // Funzione per mostrare/nascondere il pannello
+    function togglePanel() {
+        const content = document.getElementById('panel-content');
+        const btn = document.getElementById('toggle-btn');
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            btn.innerText = '➖';
+        } else {
+            content.style.display = 'none';
+            btn.innerText = '➕';
+        }
+    }
+
     // Inizializza la mappa 3D con stile scuro
     const map = new maplibregl.Map({
         container: 'map',
@@ -81,7 +122,7 @@
             encoding: 'terrarium',
             tileSize: 256
         });
-        map.setTerrain({ source: 'terrain', exaggeration: 1.5 }); // Esagera un po' l'altezza
+        map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
 
         // Layer per gli edifici
         map.addSource('buildings', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
@@ -125,7 +166,6 @@
             const response = await fetch(url);
             const data = await response.json();
             
-            // Conversione base in GeoJSON (molto semplificata per uso didattico)
             let features = [];
             let nodes = {};
             data.elements.forEach(el => { if (el.type === 'node') nodes[el.id] = [el.lon, el.lat]; });
@@ -166,19 +206,16 @@
 
         let waves = [];
         let time = 0;
-        const numRays = 36; // Un raggio ogni 10 gradi
+        const numRays = 36; 
 
-        // Crea le definizioni dei raggi
         for (let i = 0; i < numRays; i++) {
             const angle = (i * 10) * (Math.PI / 180);
             
-            // Raggi Ionosferici (Skywave)
             if (antenna === 'dipole' || i % 3 === 0) {
                 waves.push({
                     type: 'skywave', angle: angle, length: power * 0.5, speed: 0.1, color: '#ff5555'
                 });
             }
-            // Raggi di Terra (Groundwave)
             if (antenna === 'vertical' || i % 2 === 0) {
                 waves.push({
                     type: 'groundwave', angle: angle, length: power * 0.1, speed: 0.05, color: '#00ffff'
@@ -194,9 +231,8 @@
                 let currentLen = (time * wave.speed) % wave.length;
                 let coords = [];
                 
-                // Disegna il segmento del raggio
                 for (let j = 0; j < 20; j++) {
-                    let d = currentLen - (j * 0.02); // Distanza in gradi approssimativi
+                    let d = currentLen - (j * 0.02); 
                     if (d < 0) continue;
                     
                     let lon = origin[0] + Math.cos(wave.angle) * d;
