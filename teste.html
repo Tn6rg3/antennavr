@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulatore 3D Propagazione RF HF</title>
+    <!-- MapLibre GL JS -->
+    <script src="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; background: #111; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        #ui-panel {
+            position: absolute; top: 10px; left: 10px; width: 320px;
+            background: rgba(20, 20, 20, 0.85); color: #fff;
+            padding: 15px; border-radius: 8px; backdrop-filter: blur(5px);
+            border: 1px solid #444; z-index: 10;
+        }
+        h2 { margin-top: 0; font-size: 18px; color: #4CAF50; border-bottom: 1px solid #444; padding-bottom: 10px;}
+        label { display: block; margin-top: 10px; font-size: 13px; color: #ccc;}
+        select, input, button {
+            width: 100%; margin-top: 5px; padding: 8px; box-sizing: border-box;
+            background: #333; color: white; border: 1px solid #555; border-radius: 4px;
+        }
+        button { background: #4CAF50; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 15px;}
+        button:hover { background: #45a049; }
+        .legend { margin-top: 15px; font-size: 12px; }
+        .legend span { display: inline-block; width: 12px; height: 12px; margin-right: 5px; border-radius: 50%;}
+        .info { font-size: 11px; color: #888; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="ui-panel">
+    <h2>📡 Simulatore RF 3D</h2>
+    
+    <label>Luogo (Longitudine, Latitudine)</label>
+    <input type="text" id="coords" value="11.2366, 46.0655"> <!-- Pergine Valsugana Default -->
+    
+    <label>Antenna / Modalità</label>
+    <select id="antenna">
+        <option value="dipole">Dipolo (Propagazione NVIS / Ionosferica)</option>
+        <option value="vertical">Verticale 1/4λ (Propagazione di Terra / DX)</option>
+    </select>
+    
+    <label>Potenza di Trasmissione (Watt)</label>
+    <input type="number" id="power" value="100" min="1" max="1000">
+
+    <button onclick="avviaSimulazione()">Avvia Trasmissione (CW)</button>
+    <button onclick="caricaEdifici()" style="background:#008CBA;">Carica Edifici 3D (OSM)</button>
+
+    <div class="legend">
+        <div><span style="background: #00ffff;"></span> Onde di Terra (Groundwave)</div>
+        <div><span style="background: #ff5555;"></span> Onde Ionosferiche (Skywave)</div>
+        <div><span style="background: #ffff00; border-radius:0;"></span> Edifici Reali / Ostacoli</div>
+    </div>
+    
+    <div class="info">Usa il tasto Destro del mouse o CTRL+Click per ruotare e inclinare la vista 3D.</div>
+</div>
+
+<script>
+    // Inizializza la mappa 3D con stile scuro
+    const map = new maplibregl.Map({
+        container: 'map',
+        style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+        center: [11.2366, 46.0655], // Pergine
+        zoom: 14,
+        pitch: 65, // Inclinazione per vedere il 3D
+        bearing: -20
+    });
+
+    let animationId = null;
+
+    map.on('load', () => {
+        // Aggiungi Terreno 3D (Montagne) tramite tile AWS
+        map.addSource('terrain', {
+            type: 'raster-dem',
+            tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+            encoding: 'terrarium',
+            tileSize: 256
+        });
+        map.setTerrain({ source: 'terrain', exaggeration: 1.5 }); // Esagera un po' l'altezza
+
+        // Layer per gli edifici
+        map.addSource('buildings', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({
+            'id': '3d-buildings',
+            'source': 'buildings',
+            'type': 'fill-extrusion',
+            'paint': {
+                'fill-extrusion-color': '#555522',
+                'fill-extrusion-height': ['get', 'height'],
+                'fill-extrusion-opacity': 0.8
+            }
+        });
+
+        // Layer per le onde radio
+        map.addSource('radio-waves', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({
+            'id': 'waves-layer',
+            'type': 'line',
+            'source': 'radio-waves',
+            'paint': {
+                'line-color': ['get', 'color'],
+                'line-width': ['get', 'width'],
+                'line-opacity': 0.7
+            }
+        });
+    });
+
+    // Funzione per scaricare edifici veri da OpenStreetMap (Overpass API)
+    async function caricaEdifici() {
+        const bounds = map.getBounds();
+        const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+        const query = `
+            [out:json];
+            (way["building"](${bbox}); relation["building"](${bbox}););
+            out body; >; out skel qt;
+        `;
+        const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+        
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            // Conversione base in GeoJSON (molto semplificata per uso didattico)
+            let features = [];
+            let nodes = {};
+            data.elements.forEach(el => { if (el.type === 'node') nodes[el.id] = [el.lon, el.lat]; });
+            
+            data.elements.forEach(el => {
+                if (el.type === 'way' && el.tags && el.tags.building) {
+                    let coords = el.nodes.map(n => nodes[n]).filter(c => c);
+                    if (coords.length > 2) {
+                        if (coords[0] !== coords[coords.length-1]) coords.push(coords[0]); // chiudi il poligono
+                        let height = el.tags.height ? parseFloat(el.tags.height) : (el.tags['building:levels'] ? parseInt(el.tags['building:levels']) * 3 : 8);
+                        features.push({
+                            type: 'Feature',
+                            properties: { height: height },
+                            geometry: { type: 'Polygon', coordinates: [coords] }
+                        });
+                    }
+                }
+            });
+            
+            map.getSource('buildings').setData({ type: 'FeatureCollection', features: features });
+            alert(`Caricati ${features.length} edifici 3D attorno alla tua posizione.`);
+        } catch (e) {
+            console.error(e);
+            alert("Errore nel caricamento degli edifici. Riprova o spostati di poco.");
+        }
+    }
+
+    // Simulazione propagazione RF
+    function avviaSimulazione() {
+        if (animationId) cancelAnimationFrame(animationId);
+
+        const coordsStr = document.getElementById('coords').value.split(',');
+        const origin = [parseFloat(coordsStr[0]), parseFloat(coordsStr[1])];
+        const antenna = document.getElementById('antenna').value;
+        const power = parseInt(document.getElementById('power').value);
+
+        map.flyTo({ center: origin, zoom: 11, pitch: 70 });
+
+        let waves = [];
+        let time = 0;
+        const numRays = 36; // Un raggio ogni 10 gradi
+
+        // Crea le definizioni dei raggi
+        for (let i = 0; i < numRays; i++) {
+            const angle = (i * 10) * (Math.PI / 180);
+            
+            // Raggi Ionosferici (Skywave)
+            if (antenna === 'dipole' || i % 3 === 0) {
+                waves.push({
+                    type: 'skywave', angle: angle, length: power * 0.5, speed: 0.1, color: '#ff5555'
+                });
+            }
+            // Raggi di Terra (Groundwave)
+            if (antenna === 'vertical' || i % 2 === 0) {
+                waves.push({
+                    type: 'groundwave', angle: angle, length: power * 0.1, speed: 0.05, color: '#00ffff'
+                });
+            }
+        }
+
+        function animazione() {
+            time += 1;
+            let features = [];
+
+            waves.forEach(wave => {
+                let currentLen = (time * wave.speed) % wave.length;
+                let coords = [];
+                
+                // Disegna il segmento del raggio
+                for (let j = 0; j < 20; j++) {
+                    let d = currentLen - (j * 0.02); // Distanza in gradi approssimativi
+                    if (d < 0) continue;
+                    
+                    let lon = origin[0] + Math.cos(wave.angle) * d;
+                    let lat = origin[1] + Math.sin(wave.angle) * d;
+                    coords.push([lon, lat]);
+                }
+
+                if (coords.length > 1) {
+                    features.push({
+                        type: 'Feature',
+                        properties: { color: wave.color, width: wave.type === 'skywave' ? 3 : 2 },
+                        geometry: { type: 'LineString', coordinates: coords }
+                    });
+                }
+            });
+
+            map.getSource('radio-waves').setData({ type: 'FeatureCollection', features: features });
+            animationId = requestAnimationFrame(animazione);
+        }
+        
+        animazione();
+    }
+</script>
+
+</body>
+</html>
