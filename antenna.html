@@ -3,16 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulatore Propagazione RF 3D - Intersezione Geometrica</title>
+    <title>Simulatore Propagazione RF 3D - Intersezione Analitica</title>
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- MapLibre GL JS -->
     <script src="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.css" rel="stylesheet" />
-    
-    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
@@ -20,7 +15,7 @@
         #map { position: absolute; top: 0; bottom: 0; width: 100vw; height: 100vh; cursor: crosshair; }
         
         #ui-panel {
-            position: absolute; top: 1rem; left: 1rem; width: 340px; max-height: 95vh; overflow-y: auto;
+            position: absolute; top: 1rem; left: 1rem; width: 350px; max-height: 95vh; overflow-y: auto;
             background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(12px);
             border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.7); color: #f8fafc; z-index: 10;
@@ -29,7 +24,7 @@
         input[type="number"], select {
             background: rgba(30, 41, 59, 0.8); border: 1px solid #475569;
             color: #e2e8f0; border-radius: 6px; padding: 8px; width: 100%;
-            transition: border-color 0.2s; font-family: monospace;
+            transition: border-color 0.2s; font-family: monospace; font-size: 13px;
         }
         input[type="number"]:focus, select:focus { outline: none; border-color: #38bdf8; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -62,15 +57,15 @@
         </div>
         <div>
             <label class="block text-slate-400 font-bold uppercase mb-1">Elevazione (°)</label>
-            <input type="number" id="inp-angle" value="5" min="0" max="89" step="1" title="Angolo di take-off">
+            <input type="number" id="inp-angle" value="5" min="0" max="89" step="1">
         </div>
-        <div>
-            <label class="block text-slate-400 font-bold uppercase mb-1">Distanza (m)</label>
-            <input type="number" id="inp-dist" value="3000" min="100" max="10000" step="100">
+        <div class="col-span-2">
+            <label class="block text-sky-400 font-bold uppercase mb-1">Distanza max di copertura (m)</label>
+            <input type="number" id="inp-dist" value="3000" min="500" max="10000" step="100" title="Raggio massimo per il calcolo della copertura rossa">
         </div>
-        <div>
-            <label class="block text-slate-400 font-bold uppercase mb-1">Raggio OSM (m)</label>
-            <input type="number" id="inp-osm-rad" value="500" min="100" max="3000" step="100">
+        <div class="col-span-2">
+            <label class="block text-indigo-400 font-bold uppercase mb-1">Raggio estrazione edifici (m)</label>
+            <input type="number" id="inp-osm-rad" value="500" min="100" max="3000" step="100" title="Raggio usato per interrogare i server OSM">
         </div>
     </div>
     
@@ -84,7 +79,7 @@
         </button>
 
         <button id="btn-calc" onclick="calcolaCopertura()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded uppercase tracking-wider text-xs transition-colors shadow-lg flex items-center justify-center gap-2">
-            <i class="fa-solid fa-radar"></i> 2. Calcola Copertura Geometria
+            <i class="fa-solid fa-radar"></i> 2. Calcola Copertura
         </button>
     </div>
 </div>
@@ -92,7 +87,7 @@
 <script>
     let antennaPos = null; // [lng, lat]
     let buildingsGeoJSON = { type: 'FeatureCollection', features: [] };
-    let physicsBuildings = []; // Array per motore fisico: { id, coords: [[]], height }
+    let physicsBuildings = []; // Array per motore fisico: { id, coords: [[]], height, base_z }
     const EARTH_RADIUS = 6378137;
 
     const map = new maplibregl.Map({
@@ -115,16 +110,16 @@
     });
 
     map.on('load', () => {
-        // Terreno 3D
+        // Terreno 3D (No exaggerazione per match analitico esatto)
         map.addSource('aws-terrain', {
             type: 'raster-dem',
             tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
             encoding: 'terrarium',
             tileSize: 256
         });
-        map.setTerrain({ source: 'aws-terrain', exaggeration: 1.2 });
+        map.setTerrain({ source: 'aws-terrain', exaggeration: 1.0 });
 
-        // Edifici
+        // Layer Edifici (Grigio Chiaro)
         map.addSource('buildings-src', { type: 'geojson', data: buildingsGeoJSON });
         map.addLayer({
             'id': '3d-buildings',
@@ -138,7 +133,7 @@
             }
         });
 
-        // Antenna
+        // Layer Antenna (Rosso)
         map.addSource('antenna-src', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addLayer({
             'id': '3d-antenna',
@@ -152,7 +147,7 @@
             }
         });
 
-        // Footprint (Copertura Rossa)
+        // Layer Copertura (Footprint Rosso)
         map.addSource('coverage-src', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addLayer({
             'id': 'rf-coverage',
@@ -172,23 +167,23 @@
     map.on('click', (e) => {
         const features = map.queryRenderedFeatures(e.point, { layers: ['3d-buildings'] });
         
+        // 1. Modifica Edificio Esistente
         if (features.length > 0) {
-            // Modifica Altezza Edificio
             const id = features[0].properties.id;
             const currentH = features[0].properties.height;
-            const userInput = prompt(`Edificio (ID: ${id})\nAltezza: ${currentH}m.\nNuova altezza (m):`, currentH);
+            const userInput = prompt(`Modifica Edificio (ID: ${id})\nAltezza attuale: ${currentH}m.\nNuova altezza (m):`, currentH);
             
             if (userInput !== null && !isNaN(userInput) && userInput.trim() !== '') {
                 const newHeight = parseFloat(userInput);
                 
-                // Aggiorna GeoJSON Visuale
+                // Aggiorna grafica
                 const geoF = buildingsGeoJSON.features.find(f => f.properties.id === id);
                 if (geoF) {
                     geoF.properties.height = newHeight;
                     map.getSource('buildings-src').setData(buildingsGeoJSON);
                 }
                 
-                // Aggiorna Dati Motore Fisico
+                // Aggiorna fisica
                 const physB = physicsBuildings.find(b => b.id === id);
                 if (physB) { physB.height = newHeight; }
                 
@@ -198,7 +193,7 @@
             return; 
         }
 
-        // Posizionamento Antenna
+        // 2. Posizionamento Nuova Antenna
         antennaPos = [e.lngLat.lng, e.lngLat.lat];
         disegnaAntenna3D();
         map.getSource('coverage-src').setData({ type: 'FeatureCollection', features: [] });
@@ -209,7 +204,7 @@
         const hAnt = parseFloat(document.getElementById('inp-h-ant').value) || 10;
         const zBase = map.queryTerrainElevation(antennaPos) || 0;
         
-        const rad = 0.000015;
+        const rad = 0.000015; // Raggio visuale del palo
         const polyCoords = [
             [antennaPos[0]-rad, antennaPos[1]-rad], [antennaPos[0]+rad, antennaPos[1]-rad],
             [antennaPos[0]+rad, antennaPos[1]+rad], [antennaPos[0]-rad, antennaPos[1]+rad],
@@ -228,7 +223,10 @@
         document.getElementById('status-log').innerText = `Antenna posizionata. Quota Base: ${zBase.toFixed(1)}m.`;
     }
 
-    document.getElementById('inp-h-ant').addEventListener('change', disegnaAntenna3D);
+    document.getElementById('inp-h-ant').addEventListener('change', () => {
+        disegnaAntenna3D();
+        if(antennaPos && map.getSource('coverage-src')._data.features.length > 0) calcolaCopertura();
+    });
 
     async function estraiEdifici() {
         if (!antennaPos) { alert("Clicca sulla mappa per posizionare l'antenna!"); return; }
@@ -264,7 +262,7 @@
                     let coords = el.nodes.map(n => nodes[n]).filter(c => c);
                     if (coords.length > 2) {
                         if (coords[0][0] !== coords[coords.length-1][0] || coords[0][1] !== coords[coords.length-1][1]) {
-                            coords.push([...coords[0]]); // Chiudi
+                            coords.push([...coords[0]]); // Assicura chiusura
                         }
                         
                         let height = el.tags.height ? parseFloat(el.tags.height) : (el.tags['building:levels'] ? parseInt(el.tags['building:levels']) * 3.5 : 8);
@@ -288,18 +286,17 @@
             });
             
             map.getSource('buildings-src').setData(buildingsGeoJSON);
-            document.getElementById('status-log').innerText = `Letti ${buildingsGeoJSON.features.length} edifici reali.`;
+            document.getElementById('status-log').innerText = `Letti ${buildingsGeoJSON.features.length} edifici reali (R: ${radius}m).`;
             
         } catch (error) {
             console.error(error);
-            alert("Errore Server OpenStreetMap.");
+            alert("Errore Server OpenStreetMap. Riprova più tardi.");
         } finally {
             btn.innerHTML = '<i class="fa-solid fa-city"></i> 1. Estrai Edifici OSM';
             btn.disabled = false;
         }
     }
 
-    // Trasformazione Equirettangolare Locale (Lon/Lat -> Metri Cartesiani x,y)
     function latLonToCartesian(lng, lat, originLng, originLat) {
         const x = (lng - originLng) * (Math.PI / 180) * EARTH_RADIUS * Math.cos(originLat * Math.PI / 180);
         const y = (lat - originLat) * (Math.PI / 180) * EARTH_RADIUS;
@@ -312,29 +309,20 @@
         return [lng, lat];
     }
 
-    // Algoritmo di Line Intersection (Segmento Raggio vs Segmento Muro)
-    // Ritorna la frazione t (da 0 a 1) sul segmento Raggio, oppure null
     function getSegmentIntersection(rx, ry, dx, dy, x1, y1, x2, y2) {
-        // Segmento Edificio: Start(x1,y1), Vector(sx, sy)
         const sx = x2 - x1;
         const sy = y2 - y1;
-        
-        // Raggio vettore: Start(rx,ry), Vector(dx, dy)
-        // Prodotto vettoriale 2D
         const cross = dx * sy - dy * sx;
-        
-        // Linee parallele
-        if (Math.abs(cross) < 1e-8) return null; 
+        if (Math.abs(cross) < 1e-8) return null; // Parallele
         
         const diffX = x1 - rx;
         const diffY = y1 - ry;
         
-        const t = (diffX * sy - diffY * sx) / cross;
-        const u = (diffX * dy - diffY * dx) / cross;
+        const t = (diffX * sy - diffY * sx) / cross; // Frazione sul raggio (0-1)
+        const u = (diffX * dy - diffY * dx) / cross; // Frazione sul muro (0-1)
         
-        // Intersezione valida solo se cade all'interno di entrambi i segmenti
         if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-            return t; // t rappresenta la proporzione della distanza totale (MaxDist)
+            return t; 
         }
         return null;
     }
@@ -346,6 +334,7 @@
         btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Geometria in corso...';
         btn.disabled = true;
 
+        // Yield al browser per l'UI
         setTimeout(() => {
             const hAnt = parseFloat(document.getElementById('inp-h-ant').value) || 0;
             const elevDeg = parseFloat(document.getElementById('inp-angle').value) || 0;
@@ -355,7 +344,7 @@
             const tanElev = Math.tan(elevRad);
             const antennaBaseZ = map.queryTerrainElevation(antennaPos) || 0;
             
-            // 1. Converti tutti i poligoni degli edifici in spazio cartesiano relativo all'antenna
+            // Convertiamo gli edifici in un piano cartesiano piatto rispetto all'antenna
             const cartesianBuildings = physicsBuildings.map(b => {
                 const cCoords = b.coords.map(pt => latLonToCartesian(pt[0], pt[1], antennaPos[0], antennaPos[1]));
                 return { ...b, cCoords: cCoords };
@@ -363,17 +352,16 @@
 
             let coveragePolygon = [];
 
-            // 2. Lancia 360 raggi
+            // Sweep 360 Gradi
             for (let az = 0; az < 360; az++) {
                 const azRad = az * (Math.PI / 180);
-                // Direzione X,Y del raggio alla massima distanza (Azimut maplibre: 0=Nord, 90=Est)
-                // Usiamo seni e coseni mappati standard (x=sin, y=cos)
+                // Vettore Direzione Cartesiana
                 const rayDx = maxDist * Math.sin(azRad);
                 const rayDy = maxDist * Math.cos(azRad);
 
-                let minDistFraction = 1.0; // Assume che arrivi a fine corsa
+                let minDistFraction = 1.0; 
 
-                // --- FASE A: INTERSEZIONE GEOMETRICA EDIFICI ---
+                // FASE 1: Intersezioni analitiche con i muri degli edifici
                 for (let b of cartesianBuildings) {
                     for (let i = 0; i < b.cCoords.length - 1; i++) {
                         let p1 = b.cCoords[i];
@@ -382,37 +370,31 @@
                         let t = getSegmentIntersection(0, 0, rayDx, rayDy, p1[0], p1[1], p2[0], p2[1]);
                         
                         if (t !== null && t < minDistFraction) {
-                            // C'è una collisione con il muro sul piano 2D. 
-                            // Verifica l'altitudine 3D!
                             let impactDist = t * maxDist;
-                            
-                            // Punto d'impatto geografico
                             let impactLngLat = cartesianToLatLon(rayDx * t, rayDy * t, antennaPos[0], antennaPos[1]);
                             
-                            // Altitudine del terreno all'edificio
+                            // Quota terreno all'edificio (fallback alla quota antenna)
                             let bldgTerrainZ = map.queryTerrainElevation(impactLngLat);
-                            if (bldgTerrainZ === null) bldgTerrainZ = antennaBaseZ;
+                            if (bldgTerrainZ === null) bldgTerrainZ = antennaBaseZ; 
                             
-                            // Altezza Onda
-                            let rayZ = antennaBaseZ + hAnt + impactDist * tanElev;
-                            // Altezza Tetto
+                            // Z dell'onda e Z del tetto dell'edificio
+                            let rayZ = antennaBaseZ + hAnt + (impactDist * tanElev);
                             let bldgTopZ = bldgTerrainZ + b.height;
 
                             if (rayZ <= bldgTopZ) {
-                                // Il raggio va a sbattere contro il muro dell'edificio!
+                                // L'onda sbatte contro il muro: registriamo il nuovo limite
                                 minDistFraction = t;
                             }
                         }
                     }
                 }
 
-                // --- FASE B: CONTROLLO TERRENO FINO ALL'OSTACOLO ---
-                // Percorre la linea solo fino all'edificio (o alla fine se non ci sono edifici)
+                // FASE 2: Verifica altimetrica del terreno fino all'ostacolo più vicino
                 let maxWalkDist = minDistFraction * maxDist;
                 let finalDist = maxWalkDist;
-                const step = 20; // Passo di verifica orografia
+                const stepTerrain = 25; // Controllo morfologia ogni 25 metri
                 
-                for (let d = step; d <= maxWalkDist; d += step) {
+                for (let d = stepTerrain; d <= maxWalkDist; d += stepTerrain) {
                     let cx = (d / maxDist) * rayDx;
                     let cy = (d / maxDist) * rayDy;
                     let cLngLat = cartesianToLatLon(cx, cy, antennaPos[0], antennaPos[1]);
@@ -423,22 +405,22 @@
                     let rayZ = antennaBaseZ + hAnt + d * tanElev;
                     
                     if (rayZ <= terrainZ) {
-                        // Sbatte contro la montagna
+                        // L'onda sbatte contro la montagna/terreno prima dell'edificio o del maxDist
                         finalDist = d;
                         break;
                     }
                 }
 
-                // Genera coordinate finali del raggio per questo grado azimutale
+                // Generazione punto d'arresto
                 let fX = (finalDist / maxDist) * rayDx;
                 let fY = (finalDist / maxDist) * rayDy;
                 coveragePolygon.push(cartesianToLatLon(fX, fY, antennaPos[0], antennaPos[1]));
             }
 
-            // Chiudi il poligono
+            // Chiusura Poligono Geometrico
             coveragePolygon.push([...coveragePolygon[0]]);
 
-            // Renderizza GeoJSON Copertura
+            // Renderizza su Mappa
             map.getSource('coverage-src').setData({
                 type: 'FeatureCollection',
                 features: [{
@@ -448,11 +430,11 @@
                 }]
             });
 
-            // Ripristina UI
-            btn.innerHTML = '<i class="fa-solid fa-radar"></i> 2. Calcola Copertura Geometria';
+            document.getElementById('status-log').innerText = `Calcolo completato. Dist max: ${maxDist}m`;
+            btn.innerHTML = '<i class="fa-solid fa-radar"></i> 2. Calcola Copertura';
             btn.disabled = false;
             
-        }, 50); // Lascia tempo al DOM per disegnare il Loading
+        }, 50); 
     }
 </script>
 
