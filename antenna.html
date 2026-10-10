@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RF Unified Lab Pro - Skywave & Topografia</title>
+    <title>RF Unified Lab Pro - Skywave & Direzionalità</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.js"></script>
@@ -42,10 +42,10 @@
             text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.5); 
             backdrop-filter: blur(4px); line-height: 1.4; text-shadow: 1px 1px 2px black;
             transition: transform 0.1s;
-            pointer-events: none; /* Default non cliccabile per non bloccare la mappa */
+            pointer-events: none;
         }
         .custom-map-label.clickable {
-            pointer-events: auto; /* Attiva il clic solo per le sonde */
+            pointer-events: auto;
             cursor: pointer;
         }
         .custom-map-label:hover { transform: scale(1.05); z-index: 20; }
@@ -55,8 +55,7 @@
 
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 3px; }
-        .drawing-active { cursor: crosshair !important; }
-        .probing-active { cursor: crosshair !important; }
+        .drawing-active, .probing-active { cursor: crosshair !important; }
     </style>
 </head>
 <body>
@@ -106,7 +105,6 @@
             </div>
         </div>
         
-        <!-- NUOVO PANNELLO SKYWAVE CON QUOTA DINAMICA -->
         <div class="mt-2 mb-2 flex items-center justify-between bg-slate-800 p-2 rounded border border-slate-700">
             <label class="chk-label font-bold text-fuchsia-400">
                 <input type="checkbox" id="chk-skywave"> <i class="fa-solid fa-satellite"></i> Skywave Ionosfera
@@ -131,7 +129,7 @@
                 <i class="fa-solid fa-radar"></i> Fisica
             </button>
         </div>
-        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-1 text-center">Tutti gli strumenti attivi. Clicca sui marker della Sonda per rimuoverli.</div>
+        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-1 text-center">Strumenti attivi. Clicca sui marker della Sonda per rimuoverli.</div>
 
         <!-- RBN GLOBAL -->
         <div class="section-title text-rose-400 mt-4"><i class="fa-solid fa-globe"></i> 2. RBN Globale (A/B Test)</div>
@@ -151,7 +149,7 @@
             <i class="fa-solid fa-bolt"></i> Analizza & Mappa
         </button>
 
-        <!-- RESULTS -->
+        <!-- RESULTS (DIREZIONALITA' RIPRISTINATA) -->
         <div id="panel-results" class="hidden mt-4">
             <div class="section-title text-amber-400"><i class="fa-solid fa-chart-pie"></i> Report Direzionale A/B</div>
             
@@ -170,6 +168,35 @@
                     <div class="text-lg font-bold text-blue-300" id="dx-b">0 km</div>
                 </div>
             </div>
+
+            <!-- VANTAGGIO IN DB PER DIREZIONE (RIPRISTINATO) -->
+            <div class="bg-slate-800 border border-slate-700 p-3 rounded text-[11px] mt-2">
+                <div class="font-bold text-slate-300 uppercase mb-2 border-b border-slate-700 pb-1">Vantaggio in dB per Direzione</div>
+                <div class="space-y-2">
+                    <div class="flex justify-between border-b border-slate-700 pb-1">
+                        <span class="font-bold text-slate-400 w-12">NORD:</span> <span id="dir-N-winner" class="font-bold text-right text-sky-300">--</span>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-700 pb-1">
+                        <span class="font-bold text-slate-400 w-12">SUD:</span> <span id="dir-S-winner" class="font-bold text-right text-sky-300">--</span>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-700 pb-1">
+                        <span class="font-bold text-slate-400 w-12">EST:</span> <span id="dir-E-winner" class="font-bold text-right text-sky-300">--</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="font-bold text-slate-400 w-12">OVEST:</span> <span id="dir-W-winner" class="font-bold text-right text-sky-300">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OTTIMIZZAZIONE SINGOLA ANTENNA (RIPRISTINATO) -->
+            <div class="bg-slate-800 border border-slate-700 p-3 rounded text-[11px] mt-2">
+                <div class="font-bold text-slate-300 uppercase mb-2 border-b border-slate-700 pb-1">Ottimizzazione Singola Antenna</div>
+                <div class="space-y-2">
+                    <div class="text-slate-300">A performa meglio verso: <span id="best-dist-A" class="font-bold text-red-400 ml-1">--</span></div>
+                    <div class="text-slate-300" id="best-dist-B-container">B performa meglio verso: <span id="best-dist-B" class="font-bold text-blue-400 ml-1">--</span></div>
+                </div>
+            </div>
+
             <div id="log-global" class="text-[10px] text-emerald-400 mt-2 font-mono text-center font-bold"></div>
         </div>
     </div>
@@ -253,7 +280,7 @@
                 return;
             }
             
-            // Delete building
+            // Cancella edificio
             let features = map.queryRenderedFeatures(e.point, { layers: ['3d-buildings'] });
             if(features.length > 0) {
                 if(confirm("Vuoi eliminare questo edificio?")) {
@@ -299,13 +326,12 @@
             let htmlText = bldgH > 0 ? `⛰️ Terreno: ${terrElev}m<br>🏢 Edificio: +${bldgH}m<br><b>Totale: ${terrElev + bldgH}m</b>` : `📍 Quota:<br><b>${terrElev}m</b>`;
             
             let el = document.createElement('div');
-            el.className = 'custom-map-label clickable'; // Aggiunta classe per renderlo cliccabile
+            el.className = 'custom-map-label clickable'; 
             el.style.borderColor = '#06b6d4';
             el.innerHTML = htmlText;
             
             let m = new maplibregl.Marker({ element: el }).setLngLat(e.lngLat).addTo(map);
             
-            // Evento di cancellazione (stopPropagation impedisce che il clic finisca sulla mappa sotto)
             el.addEventListener('click', (ev) => {
                 ev.stopPropagation(); 
                 m.remove();
@@ -395,7 +421,7 @@
                 }
             });
             map.getSource('buildings-src').setData(bGeo);
-            document.getElementById('log-local').innerText = "Edifici OSM estratti (Cliccaci per eliminare).";
+            document.getElementById('log-local').innerText = "Edifici OSM estratti.";
         } catch(e) {}
         btn.innerHTML = '<i class="fa-solid fa-download"></i> OSM';
     };
@@ -428,9 +454,8 @@
             let skywaveLine = [];
             let origin = turf.point(homeLngLat);
 
-            // SKYWAVE MATH con altezza variabile in base all'input
             const R_earth = 6371000;
-            const ionoInput = parseFloat(document.getElementById('inp-iono-h').value) || 300; // Legge il campo
+            const ionoInput = parseFloat(document.getElementById('inp-iono-h').value) || 300; 
             const H_iono = ionoInput * 1000; 
             const skipAngle = Math.PI/2 - angleRad - Math.asin(R_earth * Math.cos(angleRad) / (R_earth + H_iono));
             const skipDist = 2 * R_earth * skipAngle; 
@@ -459,7 +484,6 @@
                 }
                 covPoly.push(turf.destination(origin, hitDist, az, {units: 'meters'}).geometry.coordinates);
                 
-                // SKYWAVE logic
                 if(calcSkywave && !obstacleHit && skipDist > 0 && angleDeg > 0) {
                     skywaveLine.push(turf.destination(origin, skipDist, az, {units: 'meters'}).geometry.coordinates);
                 } else if (calcSkywave) {
@@ -503,7 +527,7 @@
 
     function createDOMMarker(coords, htmlText, color, type) {
         const el = document.createElement('div');
-        el.className = 'custom-map-label'; // Qui lasciamo disattivato il clic (vedi CSS) per non bloccare la mappa globale
+        el.className = 'custom-map-label'; 
         el.innerHTML = htmlText;
         el.style.borderColor = color;
         const m = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -4] }).setLngLat(coords).addTo(map);
@@ -568,6 +592,12 @@
         document.getElementById('lbl-fb').innerText = fB ? `B: ${fB.freq} kHz` : `B: N/A`;
 
         let ptsA = [], ptsB = [], maxDxA = 0, maxDxB = 0;
+        
+        // --- CALCOLO STATISTICHE DIREZIONALI ---
+        let stats = { 'N': {a:0, b:0, c:0}, 'S': {a:0, b:0, c:0}, 'E': {a:0, b:0, c:0}, 'W': {a:0, b:0, c:0} };
+        let maxQuadA = { 'N': 0, 'S': 0, 'E': 0, 'W': 0 };
+        let maxQuadB = { 'N': 0, 'S': 0, 'E': 0, 'W': 0 };
+
         let allSkims = new Set(Object.keys(fA.spots));
         if(fB) Object.keys(fB.spots).forEach(s => allSkims.add(s));
 
@@ -579,14 +609,20 @@
                 let distKm = Math.round(turf.distance(ptHome, ptSpot, {units: 'kilometers'}));
                 if (distKm === 0) return; 
                 mapBounds.extend(coords);
+
+                let b = (turf.bearing(ptHome, ptSpot) + 360) % 360;
+                let quad = (b >= 315 || b < 45) ? 'N' : (b >= 45 && b < 135) ? 'E' : (b >= 135 && b < 225) ? 'S' : 'W';
                 
                 let sA = fA.spots[skim], sB = fB ? fB.spots[skim] : undefined;
-                if (sA !== undefined) { ptsA.push(coords); if(distKm > maxDxA) maxDxA = distKm; }
-                if (sB !== undefined) { ptsB.push(coords); if(distKm > maxDxB) maxDxB = distKm; }
+                
+                if (sA !== undefined) { ptsA.push(coords); if(distKm > maxDxA) maxDxA = distKm; if(distKm > maxQuadA[quad]) maxQuadA[quad] = distKm; }
+                if (sB !== undefined) { ptsB.push(coords); if(distKm > maxDxB) maxDxB = distKm; if(distKm > maxQuadB[quad]) maxQuadB[quad] = distKm; }
 
                 let color = '#ef4444', htmlText = '', fType = 'A';
                 if (sA !== undefined && sB !== undefined) {
-                    fType = 'AB'; let diff = sA - sB; 
+                    fType = 'AB'; 
+                    stats[quad].a += sA; stats[quad].b += sB; stats[quad].c++;
+                    let diff = sA - sB; 
                     color = (diff > 0) ? '#ef4444' : (diff < 0 ? '#3b82f6' : '#eab308'); 
                     htmlText = (diff > 0) ? `${skim}<br><span style="color:#f87171">A +${diff}dB</span>` : 
                                (diff < 0 ? `${skim}<br><span style="color:#60a5fa">B +${Math.abs(diff)}dB</span>` : `${skim}<br><span style="color:#fde047">Pari</span>`);
@@ -616,9 +652,35 @@
 
         document.getElementById('dx-a').innerText = `${maxDxA} km`;
         document.getElementById('dx-b').innerText = fB ? `${maxDxB} km` : `-`;
-        if(fB) document.getElementById('panel-fb').classList.remove('hidden');
-        else document.getElementById('panel-fb').classList.add('hidden');
+
+        // --- POPOLA STATISTICHE DIREZIONALI ---
+        ['N','S','E','W'].forEach(d => {
+            let s = stats[d];
+            if(s.c > 0) {
+                let avgA = s.a / s.c; let avgB = s.b / s.c;
+                if(avgA > avgB) document.getElementById(`dir-${d}-winner`).innerHTML = `A domina (+${(avgA-avgB).toFixed(1)}dB)`;
+                else if(avgB > avgA) document.getElementById(`dir-${d}-winner`).innerHTML = `<span style="color:#60a5fa">B domina (+${(avgB-avgA).toFixed(1)}dB)</span>`;
+                else document.getElementById(`dir-${d}-winner`).innerHTML = `<span style="color:#fde047">Parità</span>`;
+            } else {
+                document.getElementById(`dir-${d}-winner`).innerHTML = `<span style="color:#64748b">--</span>`;
+            }
+        });
+
+        let bestDirA = Object.keys(maxQuadA).reduce((a, b) => maxQuadA[a] > maxQuadA[b] ? a : b);
+        document.getElementById('best-dist-A').innerText = maxQuadA[bestDirA] > 0 ? `${bestDirA} (${maxQuadA[bestDirA]} km)` : 'N/A';
+        
+        if (fB) {
+            let bestDirB = Object.keys(maxQuadB).reduce((a, b) => maxQuadB[a] > maxQuadB[b] ? a : b);
+            document.getElementById('best-dist-B-container').classList.remove('hidden');
+            document.getElementById('best-dist-B').innerText = maxQuadB[bestDirB] > 0 ? `${bestDirB} (${maxQuadB[bestDirB]} km)` : 'N/A';
+            document.getElementById('panel-fb').classList.remove('hidden');
+        } else {
+            document.getElementById('best-dist-B-container').classList.add('hidden');
+            document.getElementById('panel-fb').classList.add('hidden');
+        }
+
         document.getElementById('panel-results').classList.remove('hidden');
+        document.getElementById('log-global').innerText = "Analisi Globale RBN completata e direzionalità calcolata!";
     }
 </script>
 </body>
