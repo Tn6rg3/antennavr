@@ -121,7 +121,6 @@
             </div>
             <div>
                 <label class="block text-slate-400 font-bold uppercase mb-1 mt-1">Distanza 3D (m)</label>
-                <!-- Default distance set to 1500m per user testing context -->
                 <input type="number" id="inp-dist" value="1500">
             </div>
         </div>
@@ -137,7 +136,7 @@
                 <i class="fa-solid fa-radar"></i> Fisica 3D
             </button>
         </div>
-        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-2 text-center bg-slate-800 p-1.5 rounded">Trascina il Marker Giallo per spostare l'antenna.</div>
+        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-2 text-center bg-slate-800 p-1.5 rounded">Trascina Antenna o Clicca un Edificio 3D per modificarlo.</div>
 
         <!-- SECTION 2: Global RBN -->
         <div class="section-title text-rose-400"><i class="fa-solid fa-rss"></i> 2. Dati Empirici RBN (A/B Test)</div>
@@ -197,7 +196,6 @@
             
             <div id="log-global" class="text-[10px] text-emerald-400 mt-2 font-mono text-center font-bold"></div>
         </div>
-
     </div>
 </div>
 
@@ -210,15 +208,31 @@
     </div>
 </div>
 
-<!-- Modal: Prompt Edifici -->
+<!-- Modal: Disegno Edifici -->
 <div id="custom-prompt" class="modal-overlay flex">
     <div class="modal-box">
-        <h3 class="text-lg font-bold text-sky-400 mb-2 border-b border-slate-700 pb-2"><i class="fa-solid fa-building"></i> Disegno Edificio</h3>
+        <h3 class="text-lg font-bold text-sky-400 mb-2 border-b border-slate-700 pb-2"><i class="fa-solid fa-building"></i> Crea Edificio</h3>
         <p class="text-sm text-slate-300 mb-3">Inserisci l'altezza dell'edificio in metri:</p>
         <input type="number" id="prompt-input" class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white mb-4 font-bold text-lg text-center" value="15">
         <div class="flex gap-2">
             <button onclick="cancelPrompt()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded text-xs uppercase">Annulla</button>
             <button onclick="confirmPrompt()" class="flex-1 bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 rounded text-xs uppercase">Conferma</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Modifica/Elimina Edifici -->
+<div id="edit-bldg-modal" class="modal-overlay flex">
+    <div class="modal-box">
+        <h3 class="text-lg font-bold text-sky-400 mb-2 border-b border-slate-700 pb-2"><i class="fa-solid fa-hammer"></i> Gestisci Edificio</h3>
+        <p class="text-sm text-slate-300 mb-3">Modifica l'altezza in metri:</p>
+        <input type="number" id="edit-bldg-h" class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white mb-4 font-bold text-lg text-center">
+        <div class="flex flex-col gap-2">
+            <div class="flex gap-2">
+                <button onclick="closeEditBldgModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded text-xs uppercase">Annulla</button>
+                <button onclick="saveEditBldg()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded text-xs uppercase">Salva</button>
+            </div>
+            <button onclick="deleteBldg()" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded text-xs uppercase mt-2"><i class="fa-solid fa-trash"></i> Elimina Edificio</button>
         </div>
     </div>
 </div>
@@ -229,11 +243,12 @@
     let physicsBuildings = []; // Stores { id, poly, height, base_z, bbox }
     let domLabels = []; 
     
-    // Variabili Disegno
+    // Variabili Disegno e Modifica
     let isDrawing = false;
     let currentPolygon = [];
     let drawingGeoJSON = { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }] };
     let promptCallback = null;
+    let activeBuildingId = null;
 
     // Aggiorna l'indicatore trigonometrico in UI
     function updateRayHelper() {
@@ -259,6 +274,7 @@
         'VE': [-106.0, 56.0], 'VA': [-106.0, 56.0], 'PY': [-51.0, -14.0], 'LU': [-64.0, -34.0], 'VK': [133.0, -25.0], 'ZL': [174.0, -41.0], 'JA': [138.0, 36.0]
     };
 
+    // --- Modal Logic ---
     function showMsg(title, msg) {
         document.getElementById('alert-title').innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${title}`;
         document.getElementById('alert-text').innerText = msg;
@@ -271,13 +287,48 @@
         document.getElementById('custom-prompt').style.display = 'flex';
         document.getElementById('prompt-input').focus();
     }
-
     function cancelPrompt() { document.getElementById('custom-prompt').style.display = 'none'; promptCallback = null; }
     function confirmPrompt() {
         const val = document.getElementById('prompt-input').value;
         document.getElementById('custom-prompt').style.display = 'none';
         if (promptCallback) promptCallback(val);
         promptCallback = null;
+    }
+
+    // Modal Edit/Delete Logic
+    function closeEditBldgModal() {
+        document.getElementById('edit-bldg-modal').style.display = 'none';
+        activeBuildingId = null;
+    }
+
+    function saveEditBldg() {
+        if (activeBuildingId === null) return;
+        const newH = parseFloat(document.getElementById('edit-bldg-h').value);
+        if (!isNaN(newH)) {
+            let bGeo = map.getSource('buildings-src')._data;
+            let feature = bGeo.features.find(f => f.properties.id === activeBuildingId);
+            if (feature) feature.properties.height = newH;
+            map.getSource('buildings-src').setData(bGeo);
+            
+            let phys = physicsBuildings.find(p => p.id === activeBuildingId);
+            if (phys) phys.height = newH;
+            
+            document.getElementById('log-local').innerText = "Altezza edificio aggiornata.";
+        }
+        closeEditBldgModal();
+    }
+
+    function deleteBldg() {
+        if (activeBuildingId === null) return;
+        
+        let bGeo = map.getSource('buildings-src')._data;
+        bGeo.features = bGeo.features.filter(f => f.properties.id !== activeBuildingId);
+        map.getSource('buildings-src').setData(bGeo);
+        
+        physicsBuildings = physicsBuildings.filter(p => p.id !== activeBuildingId);
+        
+        document.getElementById('log-local').innerText = "Edificio eliminato.";
+        closeEditBldgModal();
     }
 
     // Mappa Base: ArcGIS World Imagery (Satellite)
@@ -333,15 +384,32 @@
         map.addLayer({ 'id': 'layer-lines', 'type': 'line', 'source': 'rbn-lines', 'layout': { 'line-join': 'round', 'line-cap': 'round' }, 'paint': { 'line-color': ['get', 'color'], 'line-width': 2, 'line-opacity': 0.7 } });
 
         antennaMarker = new maplibregl.Marker({ draggable: true, color: "#eab308" }).setLngLat(homeLngLat).addTo(map);
-        antennaMarker.on('dragend', () => { updateLocation([antennaMarker.getLngLat().lng, antennaMarker.getLngLat().lat]); });
+        antennaMarker.on('dragend', () => { updateLocation([antennaMarker.getLngLat().lng, antennaMarker.getLngLat().lat], false); });
 
         updateLocationUI();
 
+        // Cursor rules
+        map.on('mouseenter', '3d-buildings', () => { if (!isDrawing) map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', '3d-buildings', () => { if (!isDrawing) map.getCanvas().style.cursor = ''; });
+
+        // Map Click handling: Drawing vs Editing vs Moving
         map.on('click', (e) => {
             if (isDrawing) {
                 currentPolygon.push([e.lngLat.lng, e.lngLat.lat]);
                 drawingGeoJSON.features[0].geometry.coordinates = currentPolygon;
                 map.getSource('draw-src').setData(drawingGeoJSON);
+                return;
+            }
+
+            // Check if clicking a building to Edit/Delete
+            const features = map.queryRenderedFeatures(e.point, { layers: ['3d-buildings'] });
+            if (features.length > 0) {
+                activeBuildingId = features[0].properties.id;
+                document.getElementById('edit-bldg-h').value = features[0].properties.height;
+                document.getElementById('edit-bldg-modal').style.display = 'flex';
+            } else {
+                // Otherwise move antenna
+                updateLocation([e.lngLat.lng, e.lngLat.lat], true);
             }
         });
         
@@ -375,17 +443,17 @@
         if (inpLon) inpLon.value = homeLngLat[0].toFixed(4);
     }
 
-    function updateLocation(coords) {
+    function updateLocation(coords, moveMarker) {
         homeLngLat = coords;
         updateLocationUI();
-        if (antennaMarker) antennaMarker.setLngLat(homeLngLat);
+        if (moveMarker && antennaMarker) antennaMarker.setLngLat(homeLngLat);
         map.getSource('local-coverage-src').setData({ type: 'FeatureCollection', features: [] });
     }
 
     window.syncFromLocator = function() { 
         const locVal = document.getElementById('inp-locator') ? document.getElementById('inp-locator').value : '';
         const c = maidenheadToLngLat(locVal); 
-        if(c) { updateLocation(c); map.flyTo({center: c}); } 
+        if(c) { updateLocation(c, true); map.flyTo({center: c}); } 
     };
     
     window.syncFromCoords = function() { 
@@ -394,7 +462,7 @@
         if (!latInp || !lonInp) return;
         const lat = parseFloat(latInp.value);
         const lon = parseFloat(lonInp.value);
-        if(!isNaN(lat) && !isNaN(lon)) { updateLocation([lon, lat]); map.flyTo({center: [lon, lat]}); } 
+        if(!isNaN(lat) && !isNaN(lon)) { updateLocation([lon, lat], true); map.flyTo({center: [lon, lat]}); } 
     };
 
     window.startDrawingBuilding = function() {
@@ -416,10 +484,10 @@
             customPrompt("15", function(val) {
                 let h = parseFloat(val) || 15;
                 let bz = map.queryTerrainElevation(currentPolygon[0]) || map.queryTerrainElevation(homeLngLat) || 0;
-                let id = Date.now();
+                let id = Date.now(); // Generates unique numeric ID
                 
                 let poly = turf.polygon([currentPolygon]);
-                let bbox = turf.bbox(poly); // CRITICAL FIX 2: Precalculate Bounding Box
+                let bbox = turf.bbox(poly); 
                 
                 let newBldg = { type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: poly.geometry };
                 
@@ -428,7 +496,7 @@
                 map.getSource('buildings-src').setData(bGeo);
                 
                 physicsBuildings.push({ id: id, poly: poly, height: h, base_z: bz, bbox: bbox });
-                document.getElementById('log-local').innerText = `Edificio di ${h}m salvato in memoria fisica.`;
+                document.getElementById('log-local').innerText = `Edificio di ${h}m salvato. Cliccalo per modificarlo.`;
                 
                 currentPolygon = [];
                 drawingGeoJSON.features[0].geometry.coordinates = [];
@@ -475,24 +543,27 @@
                     if (c.length > 2) {
                         if (c[0][0] !== c[c.length-1][0] || c[0][1] !== c[c.length-1][1]) c.push([...c[0]]);
                         let h = el.tags.height ? parseFloat(el.tags.height) : (el.tags['building:levels'] ? parseInt(el.tags['building:levels']) * 3.5 : 8);
-                        let id = Date.now() + idx; 
+                        let id = el.id || (Date.now() + idx); 
                         let bz = map.queryTerrainElevation(c[0]) || map.queryTerrainElevation(homeLngLat) || 0;
                         
                         let poly = turf.polygon([c]);
-                        let bbox = turf.bbox(poly); // CRITICAL FIX 2: BBox Precalculation
+                        let bbox = turf.bbox(poly); 
                         
-                        bGeo.features.push({ type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: poly.geometry });
-                        physicsBuildings.push({ id: id, poly: poly, height: h, base_z: bz, bbox: bbox });
-                        addedCount++;
+                        // Avoid duplicates if fetching multiple times
+                        if (!physicsBuildings.find(p => p.id === id)) {
+                            bGeo.features.push({ type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: poly.geometry });
+                            physicsBuildings.push({ id: id, poly: poly, height: h, base_z: bz, bbox: bbox });
+                            addedCount++;
+                        }
                     }
                 }
             });
             map.getSource('buildings-src').setData(bGeo);
-            document.getElementById('log-local').innerText = `Estratti ${addedCount} edifici OSM.`;
+            document.getElementById('log-local').innerText = `Estratti ${addedCount} nuovi edifici OSM. Cliccali per modificarli.`;
         } catch(e) { 
             console.error(e);
             showMsg("Connessione Fallita", e.message || "Errore nello scaricamento palazzi. Riprova più tardi.");
-            document.getElementById('log-local').innerText = "Errore di connessione.";
+            document.getElementById('log-local').innerText = "Errore di connessione OSM.";
         }
         btn.innerHTML = '<i class="fa-solid fa-download"></i> Edifici';
     };
@@ -533,7 +604,7 @@
                 
                 // DYNAMIC STEPPING: High precision strictly starting at 1 meter!
                 for (let d = 1; d <= maxDist; ) {
-                    // CRITICAL FIX 1: MUST SPECIFY {units: 'meters'}
+                    // CRITICAL FIX: MUST SPECIFY {units: 'meters'}
                     let pt = turf.destination(origin, d, az, {units: 'meters'}); 
                     let coords = pt.geometry.coordinates;
                     
@@ -544,7 +615,7 @@
                     let rayZ = startZ + (d * Math.tan(angleRad)) - ((d * d) / (2 * R_eff));
                     
                     let bldgH = 0;
-                    // CRITICAL FIX 2: BBOX Check before complex Polygon Intersection to prevent freezing
+                    // BBOX Check before complex Polygon Intersection to prevent freezing
                     for(let b of physicsBuildings) {
                         let box = b.bbox; // [minX, minY, maxX, maxY]
                         if (coords[0] >= box[0] && coords[0] <= box[2] && coords[1] >= box[1] && coords[1] <= box[3]) {
@@ -562,19 +633,18 @@
                     }
 
                     // Stepping increases as ray goes further out to prevent lag
-                    if (d < 100) d += 1; // 1m precision near antenna
-                    else if (d < 500) d += 5; // 5m precision up to 500m
-                    else if (d < 2000) d += 10;
-                    else d += 25;
+                    if (d < 50) d += 1; // 1m precision tight to antenna
+                    else if (d < 250) d += 5; // 5m precision up to 250m
+                    else if (d < 1000) d += 15;
+                    else d += 50;
                 }
                 
-                // Apply Fix 1 again for the final point recording
                 covPoly.push(turf.destination(origin, hitDist, az, {units: 'meters'}).geometry.coordinates);
             }
             covPoly.push([...covPoly[0]]);
 
             map.getSource('local-coverage-src').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [covPoly] } }] });
-            document.getElementById('log-local').innerText = "Fisica completata (passo da 1m).";
+            document.getElementById('log-local').innerText = "Fisica completata (passo da 1m a ostacolo).";
             btn.innerHTML = '<i class="fa-solid fa-radar"></i> Fisica 3D';
             btn.disabled = false;
         }, 2000); 
