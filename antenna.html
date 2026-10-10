@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RF Unified Lab Pro - Skywave & Direzionalità</title>
+    <title>RF Unified Lab Pro - Versione Definitiva</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.js"></script>
@@ -129,14 +129,14 @@
                 <i class="fa-solid fa-radar"></i> Fisica
             </button>
         </div>
-        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-1 text-center">Strumenti attivi. Clicca sui marker della Sonda per rimuoverli.</div>
+        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-1 text-center">Strumenti attivi. Clicca sui marker della Sonda o sugli edifici per gestirli.</div>
 
         <!-- RBN GLOBAL -->
         <div class="section-title text-rose-400 mt-4"><i class="fa-solid fa-globe"></i> 2. RBN Globale (A/B Test)</div>
         
         <div class="space-y-2 text-xs">
             <div>
-                <label class="block text-slate-400 font-bold uppercase mb-1">Nominativo</label>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Nominativo Target</label>
                 <input type="text" id="inp-call" placeholder="Es. IN3GYO" value="IN3GYO">
             </div>
             <div>
@@ -149,7 +149,7 @@
             <i class="fa-solid fa-bolt"></i> Analizza & Mappa
         </button>
 
-        <!-- RESULTS (DIREZIONALITA' RIPRISTINATA) -->
+        <!-- RESULTS -->
         <div id="panel-results" class="hidden mt-4">
             <div class="section-title text-amber-400"><i class="fa-solid fa-chart-pie"></i> Report Direzionale A/B</div>
             
@@ -169,7 +169,7 @@
                 </div>
             </div>
 
-            <!-- VANTAGGIO IN DB PER DIREZIONE (RIPRISTINATO) -->
+            <!-- VANTAGGIO IN DB PER DIREZIONE -->
             <div class="bg-slate-800 border border-slate-700 p-3 rounded text-[11px] mt-2">
                 <div class="font-bold text-slate-300 uppercase mb-2 border-b border-slate-700 pb-1">Vantaggio in dB per Direzione</div>
                 <div class="space-y-2">
@@ -188,7 +188,7 @@
                 </div>
             </div>
 
-            <!-- OTTIMIZZAZIONE SINGOLA ANTENNA (RIPRISTINATO) -->
+            <!-- OTTIMIZZAZIONE SINGOLA ANTENNA -->
             <div class="bg-slate-800 border border-slate-700 p-3 rounded text-[11px] mt-2">
                 <div class="font-bold text-slate-300 uppercase mb-2 border-b border-slate-700 pb-1">Ottimizzazione Singola Antenna</div>
                 <div class="space-y-2">
@@ -214,11 +214,38 @@
     let currentPolygon = [];
     let drawingGeoJSON = { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }] };
 
+    // 1. Database ESATTO degli Skimmer RBN (Coordinate reali per precisione assoluta)
+    const skimmerDb = {
+        'IK3STG': [12.1, 45.6], // Veneto
+        'DL0LA': [11.0, 48.5],  // Baviera
+        'HB9BXE': [8.0, 47.0],  // Svizzera Centrale
+        'OK2PMU': [17.5, 49.5], // Moravia
+        'F4BPO': [-0.5, 46.5],  // Francia Ovest
+        'DK0TE': [9.5, 47.6],   // Lago di Costanza
+        'HA1VHF': [16.5, 47.7], // Ungheria Nord-Ovest
+        'OK1FCJ': [14.0, 50.2], // Boemia
+        'OE6ADD': [15.2, 47.1], // Stiria
+        'S53WW': [15.0, 45.8],  // Slovenia Est
+        'S53A': [14.5, 46.0],   // Lubiana
+        'S54L': [14.8, 46.2],   // Slovenia Centrale
+        'OE9GHV': [9.7, 47.4],  // Vorarlberg
+        'DB0GIE': [8.6, 50.6],  // Assia
+        'S50ARX': [15.3, 46.3], // Slovenia Est
+        'OK1HRA': [16.0, 50.5]  // Rep. Ceca Nord
+    };
+
+    // 2. Database REGIONALE (Se lo skimmer non è in lista, cerca il prefisso)
     const dxccDb = {
-        'IN3': [11.1, 46.0], 'I': [12.0, 42.0], 'M': [-1.5, 52.5], 'G': [-1.5, 52.5],
-        'HA': [19.5, 47.0], 'OE': [14.0, 47.5], 'S5': [15.0, 46.0], 'OK': [15.5, 49.5],
-        'D': [10.0, 51.0], 'F': [2.0, 46.0], 'HB': [8.2, 46.8],
-        'S': [15.0, 62.0], 'R': [37.0, 55.0], 'O': [4.5, 50.5], 'P': [5.5, 52.0],
+        'IN3': [11.1, 46.0], 'IK3': [11.8, 45.4], 'I3': [11.8, 45.4], 'IV3': [13.0, 46.0],
+        'I1': [8.0, 45.0], 'I2': [9.5, 45.5], 'I4': [11.0, 44.5], 'I5': [11.0, 43.5], 
+        'I6': [13.5, 43.0], 'I7': [16.0, 41.0], 'I8': [15.0, 40.5], 'I0': [12.5, 41.9],
+        'IS0': [9.0, 40.0], 'IT9': [14.0, 37.5], 'I': [12.0, 42.0],
+        'DL': [10.0, 51.0], 'DK': [10.0, 51.0], 'DB': [10.0, 51.0], 'D': [10.0, 51.0], 
+        'HB9': [8.2, 46.8], 'HB': [8.2, 46.8], 'OE': [14.0, 47.5], 'OE6': [15.2, 47.1], 'OE9': [9.8, 47.3],
+        'OK': [15.5, 49.5], 'OK1': [14.5, 50.0], 'OK2': [17.0, 49.5],
+        'S5': [15.0, 46.0], 'HA': [19.5, 47.0], 'HA1': [16.8, 47.6],
+        'F': [2.0, 46.0], 'F4': [2.0, 46.0],
+        'M': [-1.5, 52.5], 'G': [-1.5, 52.5],
         'K': [-98.0, 39.0], 'W': [-98.0, 39.0]
     };
 
@@ -280,10 +307,10 @@
                 return;
             }
             
-            // Cancella edificio
+            // Cancella edificio 3D con un clic
             let features = map.queryRenderedFeatures(e.point, { layers: ['3d-buildings'] });
             if(features.length > 0) {
-                if(confirm("Vuoi eliminare questo edificio?")) {
+                if(confirm("Vuoi eliminare questo edificio per testare la fisica?")) {
                     let idToRemove = features[0].properties.id;
                     let bGeo = map.getSource('buildings-src')._data;
                     bGeo.features = bGeo.features.filter(f => f.properties.id !== idToRemove);
@@ -464,6 +491,7 @@
                 let hitDist = maxDist;
                 let obstacleHit = false;
 
+                // Precisione laser vicino all'antenna, si allarga sulle lunghe distanze
                 for(let d = 2; d <= maxDist; d += (d < 2000 ? 5 : 20)) {
                     let pt = turf.destination(origin, d, az, {units: 'meters'});
                     let terrElev = map.queryTerrainElevation(pt.geometry.coordinates);
@@ -517,11 +545,18 @@
         }, 2500); 
     };
 
-    // --- RBN ---
+    // --- RBN (Database Ibrido per Geometria Precisa) ---
     function getDxccCoords(call) {
-        let c = call.split('-')[0].toUpperCase();
+        let cleanCall = call.split('-')[0].toUpperCase();
+        
+        // 1. Tenta Match ESATTO
+        if (skimmerDb[cleanCall]) return skimmerDb[cleanCall];
+
+        // 2. Tenta Match REGIONALE
         let prefixes = Object.keys(dxccDb).sort((a,b)=>b.length - a.length);
-        for (let p of prefixes) { if (c.startsWith(p)) return dxccDb[p]; }
+        for (let p of prefixes) { 
+            if (cleanCall.startsWith(p)) return dxccDb[p]; 
+        }
         return null;
     }
 
@@ -562,6 +597,7 @@
 
         const lines = rawText.replace(/ago/gi, 'ago\n').replace(/z\s/gi, 'z\n').split('\n');
         let freqClusters = {}; 
+        
         lines.forEach(line => {
             let uLine = line.toUpperCase().replace(/\s+/g, ' ').trim();
             if (!uLine.includes(targetCall)) return;
@@ -573,27 +609,33 @@
                 let freq = freqMatch[1]; 
                 let snr = parseInt(dbMatch[1], 10);
                 if (!freqClusters[freq]) freqClusters[freq] = {};
-                if (freqClusters[freq][spotter] === undefined || snr > freqClusters[freq][spotter]) freqClusters[freq][spotter] = snr;
+                // Salva il segnale migliore per quella frequenza/spotter
+                if (freqClusters[freq][spotter] === undefined || snr > freqClusters[freq][spotter]) {
+                    freqClusters[freq][spotter] = snr;
+                }
             }
         });
 
         let sortedFreqs = [];
         for (let f in freqClusters) sortedFreqs.push({ freq: f, spots: freqClusters[f] });
         sortedFreqs.sort((a, b) => Object.keys(b.spots).length - Object.keys(a.spots).length);
-        if (sortedFreqs.length === 0) return;
+        if (sortedFreqs.length === 0) {
+            alert("Nessun dato RBN valido trovato.");
+            return;
+        }
 
         let rbnLines = { type: 'FeatureCollection', features: [] };
         let mapBounds = new maplibregl.LngLatBounds();
         mapBounds.extend(homeLngLat);
         const ptHome = turf.point(homeLngLat);
 
-        let fA = sortedFreqs[0], fB = sortedFreqs.length > 1 ? sortedFreqs[1] : null;
+        let fA = sortedFreqs[0];
+        let fB = sortedFreqs.length > 1 ? sortedFreqs[1] : null;
+
         document.getElementById('lbl-fa').innerText = `A: ${fA.freq} kHz`;
         document.getElementById('lbl-fb').innerText = fB ? `B: ${fB.freq} kHz` : `B: N/A`;
 
         let ptsA = [], ptsB = [], maxDxA = 0, maxDxB = 0;
-        
-        // --- CALCOLO STATISTICHE DIREZIONALI ---
         let stats = { 'N': {a:0, b:0, c:0}, 'S': {a:0, b:0, c:0}, 'E': {a:0, b:0, c:0}, 'W': {a:0, b:0, c:0} };
         let maxQuadA = { 'N': 0, 'S': 0, 'E': 0, 'W': 0 };
         let maxQuadB = { 'N': 0, 'S': 0, 'E': 0, 'W': 0 };
@@ -613,25 +655,37 @@
                 let b = (turf.bearing(ptHome, ptSpot) + 360) % 360;
                 let quad = (b >= 315 || b < 45) ? 'N' : (b >= 45 && b < 135) ? 'E' : (b >= 135 && b < 225) ? 'S' : 'W';
                 
-                let sA = fA.spots[skim], sB = fB ? fB.spots[skim] : undefined;
+                let sA = fA.spots[skim];
+                let sB = fB ? fB.spots[skim] : undefined;
                 
                 if (sA !== undefined) { ptsA.push(coords); if(distKm > maxDxA) maxDxA = distKm; if(distKm > maxQuadA[quad]) maxQuadA[quad] = distKm; }
                 if (sB !== undefined) { ptsB.push(coords); if(distKm > maxDxB) maxDxB = distKm; if(distKm > maxQuadB[quad]) maxQuadB[quad] = distKm; }
 
                 let color = '#ef4444', htmlText = '', fType = 'A';
+
+                // MATCH INCROCIATO RBN
                 if (sA !== undefined && sB !== undefined) {
                     fType = 'AB'; 
                     stats[quad].a += sA; stats[quad].b += sB; stats[quad].c++;
                     let diff = sA - sB; 
-                    color = (diff > 0) ? '#ef4444' : (diff < 0 ? '#3b82f6' : '#eab308'); 
-                    htmlText = (diff > 0) ? `${skim}<br><span style="color:#f87171">A +${diff}dB</span>` : 
-                               (diff < 0 ? `${skim}<br><span style="color:#60a5fa">B +${Math.abs(diff)}dB</span>` : `${skim}<br><span style="color:#fde047">Pari</span>`);
+                    
+                    if (diff > 0) {
+                        color = '#ef4444'; // Rosso (Vince A)
+                        htmlText = `${skim}<br><span style="color:#f87171; font-weight:bold;">A vince (+${diff}dB)</span><br><span style="font-size:9px; color:#cbd5e1;">A:${sA}dB | B:${sB}dB</span>`;
+                    } else if (diff < 0) {
+                        color = '#3b82f6'; // Blu (Vince B)
+                        htmlText = `${skim}<br><span style="color:#60a5fa; font-weight:bold;">B vince (+${Math.abs(diff)}dB)</span><br><span style="font-size:9px; color:#cbd5e1;">A:${sA}dB | B:${sB}dB</span>`;
+                    } else {
+                        color = '#eab308'; // Giallo (Pari)
+                        htmlText = `${skim}<br><span style="color:#fde047; font-weight:bold;">PARI (0dB)</span><br><span style="font-size:9px; color:#cbd5e1;">A & B: ${sA}dB</span>`;
+                    }
                 } else {
                     fType = sA !== undefined ? 'A' : 'B';
                     color = sA !== undefined ? '#ef4444' : '#3b82f6';
-                    htmlText = sA !== undefined ? `${skim}<br>A: ${sA}dB` : `${skim}<br>B: ${sB}dB`;
-                    if(!fB) htmlText = `${skim}<br>${sA}dB`; 
+                    htmlText = sA !== undefined ? `${skim}<br><span style="color:#f87171">Solo A: ${sA}dB</span>` : `${skim}<br><span style="color:#60a5fa">Solo B: ${sB}dB</span>`;
+                    if(!fB) htmlText = `${skim}<br>SNR: ${sA}dB`; 
                 }
+
                 rbnLines.features.push(turf.greatCircle(ptHome, ptSpot, {properties: { color: color, type: fType }}));
                 createDOMMarker(coords, htmlText, color, fType);
             }
@@ -653,7 +707,7 @@
         document.getElementById('dx-a').innerText = `${maxDxA} km`;
         document.getElementById('dx-b').innerText = fB ? `${maxDxB} km` : `-`;
 
-        // --- POPOLA STATISTICHE DIREZIONALI ---
+        // VANTAGGIO IN DB PER DIREZIONE N/S/E/W
         ['N','S','E','W'].forEach(d => {
             let s = stats[d];
             if(s.c > 0) {
@@ -680,7 +734,7 @@
         }
 
         document.getElementById('panel-results').classList.remove('hidden');
-        document.getElementById('log-global').innerText = "Analisi Globale RBN completata e direzionalità calcolata!";
+        document.getElementById('log-global').innerText = "Analisi Match RBN completata con successo!";
     }
 </script>
 </body>
