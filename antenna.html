@@ -58,6 +58,10 @@
         .chk-label { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; color: #f8fafc; font-weight: bold; justify-content: center; }
         .chk-label input { width: 16px; height: 16px; cursor: pointer; accent-color: #38bdf8; }
 
+        /* Modals */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 50; display: none; align-items: center; justify-content: center; }
+        .modal-box { background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 20px; width: 320px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); }
+
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 3px; }
         .loading-spin { animation: spin 1s linear infinite; }
@@ -97,6 +101,14 @@
                 <input type="text" id="inp-locator" placeholder="Es. JN56ab" onchange="syncFromLocator()">
             </div>
             <div>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Latitudine</label>
+                <input type="number" id="inp-lat" step="0.0001" onchange="syncFromCoords()">
+            </div>
+            <div>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Longitudine</label>
+                <input type="number" id="inp-lon" step="0.0001" onchange="syncFromCoords()">
+            </div>
+            <div>
                 <label class="block text-slate-400 font-bold uppercase mb-1">Alt. Ant. (m)</label>
                 <input type="number" id="inp-h-ant" value="10" min="0" step="1" title="Altezza dell'antenna dal suolo">
             </div>
@@ -125,7 +137,7 @@
                 <i class="fa-solid fa-radar"></i> Fisica 3D
             </button>
         </div>
-        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-2 text-center bg-slate-800 p-1.5 rounded">Trascina il Marker Giallo. Auto-zoom durante il calcolo.</div>
+        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-2 text-center bg-slate-800 p-1.5 rounded">Trascina il Marker Giallo. Il sistema si posizionerà da solo.</div>
 
         <!-- SECTION 2: Global RBN -->
         <div class="section-title text-rose-400"><i class="fa-solid fa-rss"></i> 2. Dati Empirici RBN (A/B Test)</div>
@@ -189,16 +201,41 @@
     </div>
 </div>
 
+<!-- Modal: Alert generico -->
+<div id="custom-alert" class="modal-overlay flex">
+    <div class="modal-box">
+        <h3 id="alert-title" class="text-lg font-bold text-rose-400 mb-2 border-b border-slate-700 pb-2"><i class="fa-solid fa-triangle-exclamation"></i> Avviso</h3>
+        <p id="alert-text" class="text-sm text-slate-300 mb-4 leading-relaxed"></p>
+        <button onclick="document.getElementById('custom-alert').style.display='none'" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded">Ricevuto</button>
+    </div>
+</div>
+
+<!-- Modal: Prompt Edifici -->
+<div id="custom-prompt" class="modal-overlay flex">
+    <div class="modal-box">
+        <h3 class="text-lg font-bold text-sky-400 mb-2 border-b border-slate-700 pb-2"><i class="fa-solid fa-building"></i> Disegno Edificio</h3>
+        <p class="text-sm text-slate-300 mb-3">Inserisci l'altezza dell'edificio in metri:</p>
+        <input type="number" id="prompt-input" class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white mb-4 font-bold text-lg text-center" value="15">
+        <div class="flex gap-2">
+            <button onclick="cancelPrompt()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded text-xs uppercase">Annulla</button>
+            <button onclick="confirmPrompt()" class="flex-1 bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 rounded text-xs uppercase">Conferma</button>
+        </div>
+    </div>
+</div>
+
 <script>
-    let homeLngLat = [11.2366, 46.0655]; // Pergine Valsugana
+    let homeLngLat = [11.2366, 46.0655]; // Default Pergine Valsugana
     let antennaMarker = null;
     let physicsBuildings = []; 
     let domLabels = []; 
     
+    // Variabili per il disegno manuale
     let isDrawing = false;
     let currentPolygon = [];
     let drawingGeoJSON = { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }] };
+    let promptCallback = null;
 
+    // Database DXCC
     const dxccDb = {
         'IN3': [11.1, 46.0], 'IK': [12.0, 42.0], 'IZ': [12.0, 42.0], 'I': [12.0, 42.0], 'IT': [14.0, 37.0],
         'MM': [-4.0, 56.0], 'M': [-1.5, 52.5], 'G': [-1.5, 52.5], '2': [-1.5, 52.5],
@@ -212,20 +249,46 @@
         'VE': [-106.0, 56.0], 'VA': [-106.0, 56.0], 'PY': [-51.0, -14.0], 'LU': [-64.0, -34.0], 'VK': [133.0, -25.0], 'ZL': [174.0, -41.0], 'JA': [138.0, 36.0]
     };
 
-    // Notice: Using OSM standard tiles to strictly prevent any 404s, while maintaining 3D AWS terrain.
+    // Funzioni Modali Personalizzate
+    function showMsg(title, msg) {
+        document.getElementById('alert-title').innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${title}`;
+        document.getElementById('alert-text').innerText = msg;
+        document.getElementById('custom-alert').style.display = 'flex';
+    }
+
+    function customPrompt(defaultVal, callback) {
+        document.getElementById('prompt-input').value = defaultVal;
+        promptCallback = callback;
+        document.getElementById('custom-prompt').style.display = 'flex';
+        document.getElementById('prompt-input').focus();
+    }
+
+    function cancelPrompt() {
+        document.getElementById('custom-prompt').style.display = 'none';
+        promptCallback = null;
+    }
+
+    function confirmPrompt() {
+        const val = document.getElementById('prompt-input').value;
+        document.getElementById('custom-prompt').style.display = 'none';
+        if (promptCallback) promptCallback(val);
+        promptCallback = null;
+    }
+
+    // Mappa Base: ArcGIS World Imagery (Satellite Reale)
     const map = new maplibregl.Map({
         container: 'map',
         style: {
             version: 8,
             sources: { 
-                'osm': { 
+                'satellite': { 
                     type: 'raster', 
-                    tiles: ['https://a.tile.openstreetmap.org/{z}/{x}/{y}.png'], 
+                    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], 
                     tileSize: 256,
-                    attribution: '© OpenStreetMap contributors'
+                    attribution: 'Tiles &copy; Esri'
                 } 
             },
-            layers: [{ id: 'osm-layer', type: 'raster', source: 'osm' }]
+            layers: [{ id: 'sat-layer', type: 'raster', source: 'satellite' }]
         },
         center: homeLngLat, zoom: 15, pitch: 65, bearing: -15
     });
@@ -233,7 +296,7 @@
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
 
     map.on('load', () => {
-        // AWS Terrain limited to zoom 14 to avoid deep-zoom 404s
+        // Terreno 3D AWS Terrarium (Limitato a zoom 14 per evitare errori 404 in profondità)
         map.addSource('aws-terrain', { 
             type: 'raster-dem', 
             tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], 
@@ -243,7 +306,6 @@
         });
         map.setTerrain({ source: 'aws-terrain', exaggeration: 1.0 });
 
-        // --- Layers ---
         map.addSource('buildings-src', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addLayer({
             'id': '3d-buildings', 'type': 'fill-extrusion', 'source': 'buildings-src',
@@ -265,13 +327,12 @@
         map.addSource('rbn-lines', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addLayer({ 'id': 'layer-lines', 'type': 'line', 'source': 'rbn-lines', 'layout': { 'line-join': 'round', 'line-cap': 'round' }, 'paint': { 'line-color': ['get', 'color'], 'line-width': 2, 'line-opacity': 0.7 } });
 
-        // Draggable Antenna
         antennaMarker = new maplibregl.Marker({ draggable: true, color: "#eab308" }).setLngLat(homeLngLat).addTo(map);
         antennaMarker.on('dragend', () => { updateLocation([antennaMarker.getLngLat().lng, antennaMarker.getLngLat().lat]); });
 
         updateLocationUI();
 
-        // Mouse Events
+        // Eventi di click per il disegno manuale
         map.on('click', (e) => {
             if (isDrawing) {
                 currentPolygon.push([e.lngLat.lng, e.lngLat.lat]);
@@ -279,6 +340,7 @@
                 map.getSource('draw-src').setData(drawingGeoJSON);
             }
         });
+        
         map.on('dblclick', (e) => {
             if (isDrawing) { e.preventDefault(); finishDrawing(); }
         });
@@ -301,9 +363,14 @@
     }
 
     function updateLocationUI() {
-        document.getElementById('inp-locator').value = lngLatToMaidenhead(homeLngLat[0], homeLngLat[1]);
-        document.getElementById('inp-lat').value = homeLngLat[1].toFixed(4);
-        document.getElementById('inp-lon').value = homeLngLat[0].toFixed(4);
+        const inpLoc = document.getElementById('inp-locator');
+        const inpLat = document.getElementById('inp-lat');
+        const inpLon = document.getElementById('inp-lon');
+        
+        // Verifica esistenza per evitare l'errore "Cannot set properties of null"
+        if (inpLoc) inpLoc.value = lngLatToMaidenhead(homeLngLat[0], homeLngLat[1]);
+        if (inpLat) inpLat.value = homeLngLat[1].toFixed(4);
+        if (inpLon) inpLon.value = homeLngLat[0].toFixed(4);
     }
 
     function updateLocation(coords) {
@@ -313,8 +380,20 @@
         map.getSource('local-coverage-src').setData({ type: 'FeatureCollection', features: [] });
     }
 
-    window.syncFromLocator = function() { const c = maidenheadToLngLat(document.getElementById('inp-locator').value); if(c) { updateLocation(c); map.flyTo({center: c}); } };
-    window.syncFromCoords = function() { const lat = parseFloat(document.getElementById('inp-lat').value), lon = parseFloat(document.getElementById('inp-lon').value); if(!isNaN(lat) && !isNaN(lon)) { updateLocation([lon, lat]); map.flyTo({center: [lon, lat]}); } };
+    window.syncFromLocator = function() { 
+        const locVal = document.getElementById('inp-locator') ? document.getElementById('inp-locator').value : '';
+        const c = maidenheadToLngLat(locVal); 
+        if(c) { updateLocation(c); map.flyTo({center: c}); } 
+    };
+    
+    window.syncFromCoords = function() { 
+        const latInp = document.getElementById('inp-lat');
+        const lonInp = document.getElementById('inp-lon');
+        if (!latInp || !lonInp) return;
+        const lat = parseFloat(latInp.value);
+        const lon = parseFloat(lonInp.value);
+        if(!isNaN(lat) && !isNaN(lon)) { updateLocation([lon, lat]); map.flyTo({center: [lon, lat]}); } 
+    };
 
     window.startDrawingBuilding = function() {
         isDrawing = true;
@@ -331,32 +410,38 @@
         
         if (currentPolygon.length >= 3) {
             currentPolygon.push([...currentPolygon[0]]); 
-            let h = prompt("Inserisci l'altezza dell'edificio in metri (es: 15):", "15");
-            h = parseFloat(h) || 15;
             
-            let bz = map.queryTerrainElevation(currentPolygon[0]) || map.queryTerrainElevation(homeLngLat) || 0;
-            let id = Date.now();
-            
-            let newBldg = { type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: { type: 'Polygon', coordinates: [currentPolygon] } };
-            
-            let bGeo = map.getSource('buildings-src')._data;
-            bGeo.features.push(newBldg);
-            map.getSource('buildings-src').setData(bGeo);
-            
-            physicsBuildings.push({ id: id, poly: turf.polygon([currentPolygon]), height: h, base_z: bz });
-            document.getElementById('log-local').innerText = `Edificio di ${h}m salvato in memoria fisica.`;
+            // Richiesta custom senza bloccare il browser
+            customPrompt("15", function(val) {
+                let h = parseFloat(val) || 15;
+                let bz = map.queryTerrainElevation(currentPolygon[0]) || map.queryTerrainElevation(homeLngLat) || 0;
+                let id = Date.now();
+                
+                let newBldg = { type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: { type: 'Polygon', coordinates: [currentPolygon] } };
+                
+                let bGeo = map.getSource('buildings-src')._data;
+                bGeo.features.push(newBldg);
+                map.getSource('buildings-src').setData(bGeo);
+                
+                physicsBuildings.push({ id: id, poly: turf.polygon([currentPolygon]), height: h, base_z: bz });
+                document.getElementById('log-local').innerText = `Edificio di ${h}m salvato in memoria fisica.`;
+                
+                currentPolygon = [];
+                drawingGeoJSON.features[0].geometry.coordinates = [];
+                map.getSource('draw-src').setData(drawingGeoJSON);
+            });
+        } else {
+            currentPolygon = [];
+            drawingGeoJSON.features[0].geometry.coordinates = [];
+            map.getSource('draw-src').setData(drawingGeoJSON);
         }
-        
-        currentPolygon = [];
-        drawingGeoJSON.features[0].geometry.coordinates = [];
-        map.getSource('draw-src').setData(drawingGeoJSON);
     }
 
     window.fetchBuildings = async function() {
         if (!homeLngLat) return;
         const btn = document.getElementById('btn-fetch');
         const rad = parseFloat(document.getElementById('inp-osm-rad').value) || 500;
-        btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Dwnld...';
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Attendi...';
         
         const query = `[out:json][timeout:25];(way["building"](around:${rad},${homeLngLat[1]},${homeLngLat[0]});relation["building"](around:${rad},${homeLngLat[1]},${homeLngLat[0]}););out body; >; out skel qt;`;
         
@@ -366,7 +451,12 @@
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: 'data=' + encodeURIComponent(query)
             });
-            if(!res.ok) throw new Error("API Failed");
+            
+            if(!res.ok) {
+                if (res.status === 504) throw new Error("Timeout Server OSM (504). I server sono sovraccarichi, riprova tra un minuto.");
+                throw new Error("Errore API Overpass: " + res.status);
+            }
+            
             const data = await res.json();
             
             let nodes = {};
@@ -394,7 +484,8 @@
             document.getElementById('log-local').innerText = `Estratti ${addedCount} edifici OSM.`;
         } catch(e) { 
             console.error(e);
-            document.getElementById('log-local').innerText = "Errore OSM API. Riprova più tardi.";
+            showMsg("Connessione Fallita", e.message || "Errore nello scaricamento palazzi. Riprova più tardi.");
+            document.getElementById('log-local').innerText = "Errore di connessione.";
         }
         btn.innerHTML = '<i class="fa-solid fa-download"></i> Edifici OSM';
     };
@@ -407,18 +498,16 @@
 
         const maxDist = parseFloat(document.getElementById('inp-dist').value) || 15000; 
 
-        // 1. Auto Zoom-out to force DEM tile fetch before calculating
-        const ptHome = turf.point(homeLngLat);
-        const buffered = turf.buffer(ptHome, maxDist / 1000, {units: 'kilometers'});
-        map.fitBounds(turf.bbox(buffered), { padding: 50, pitch: 0, duration: 1500 });
+        // 1. Auto Zoom-out a livello 11 per forzare il download del DEM del terreno circostante
+        map.flyTo({ center: homeLngLat, zoom: 11, pitch: 0, duration: 1500 });
 
-        // 2. Wait 2 seconds for DEM to render
+        // 2. Attendiamo 2 secondi completi per garantire che Amazon S3 invii le altimetrie
         setTimeout(() => {
-            btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Calcolo in corso...';
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Scansione 3D...';
             
             const zBase = map.queryTerrainElevation(homeLngLat);
             if (zBase === null) {
-                document.getElementById('log-local').innerText = "Terreno non caricato in tempo. Riprova.";
+                showMsg("Errore Dati", "Terreno non scaricato in tempo o sei su un oceano. Fai zoom manuale sulla mappa e riprova.");
                 btn.innerHTML = '<i class="fa-solid fa-radar"></i> Fisica 3D';
                 btn.disabled = false;
                 return;
@@ -427,45 +516,44 @@
             const hAnt = parseFloat(document.getElementById('inp-h-ant').value) || 0;
             const angleRad = (parseFloat(document.getElementById('inp-angle').value) || 0) * Math.PI / 180;
             const startZ = zBase + hAnt;
-            const R_eff = 6371000 * (4/3); // 4/3 Earth Refraction
+            const R_eff = 6371000 * (4/3); // Modello di Rifrazione Standard 4/3
             
             let covPoly = [];
             let origin = turf.point(homeLngLat);
 
-            // Sweep 360 degrees (Resolution: 1.5 deg for performance/accuracy balance)
-            for (let az = 0; az < 360; az += 1.5) {
+            // Sweep a 360 gradi (Risoluzione: 2 gradi per prestazioni ottimali)
+            for (let az = 0; az < 360; az += 2) {
                 let hitDist = maxDist;
                 
-                // DYNAMIC STEPPING ALGORITHM:
-                // 1m precision near antenna to catch close buildings/walls!
-                // Progressively larger steps at distance to save CPU.
+                // SISTEMA A PASSO DINAMICO (Dynamic Stepping)
+                // 1 metro di precisione vicino all'antenna, poi si allarga
                 for (let d = 1; d <= maxDist; ) {
                     let pt = turf.destination(origin, d, az);
                     let coords = pt.geometry.coordinates;
                     
                     let terrElev = map.queryTerrainElevation(coords);
-                    if (terrElev === null) { hitDist = d; break; } // Edge of loaded DEM map
+                    if (terrElev === null) { hitDist = d; break; } // Bordo mappa
                     
-                    // Ray Physics: Origin Height + Angle Trajectory - Earth Curvature Drop
+                    // Fisica: Quota Partenza + Traiettoria Angolo - Caduta per Curvatura Terrestre
                     let rayZ = startZ + (d * Math.tan(angleRad)) - ((d * d) / (2 * R_eff));
                     
-                    // Building collision check
+                    // Hitbox Edifici
                     let bldgH = 0;
                     for(let b of physicsBuildings) {
                         if(turf.booleanPointInPolygon(pt, b.poly)) { bldgH = b.height; break; }
                     }
                     
-                    // Collision logic
+                    // Collisione se il raggio è sotto o pari all'ostacolo
                     if (rayZ <= (terrElev + bldgH)) { 
                         hitDist = d; 
                         break; 
                     }
 
-                    // Increment dynamically
-                    if (d < 50) d += 1;          // 1m steps for first 50m
-                    else if (d < 500) d += 5;    // 5m steps up to 500m
-                    else if (d < 2000) d += 10;  // 10m steps up to 2km
-                    else d += 25;                // 25m steps beyond 2km
+                    // Incremento Passo Dinamico
+                    if (d < 200) d += 1;          // Precisione 1 metro
+                    else if (d < 1000) d += 5;    // Precisione 5 metri
+                    else if (d < 5000) d += 10;   // Precisione 10 metri
+                    else d += 25;                 // Precisione 25 metri
                 }
                 
                 covPoly.push(turf.destination(origin, hitDist, az).geometry.coordinates);
@@ -473,7 +561,7 @@
             covPoly.push([...covPoly[0]]);
 
             map.getSource('local-coverage-src').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [covPoly] } }] });
-            document.getElementById('log-local').innerText = "Fisica 3D (Passo Dinamico 1m) Applicata.";
+            document.getElementById('log-local').innerText = "Fisica 3D (Passo Dinamico: da 1m) Applicata.";
             btn.innerHTML = '<i class="fa-solid fa-radar"></i> Fisica 3D';
             btn.disabled = false;
         }, 2000); 
@@ -494,6 +582,7 @@
         return null;
     }
 
+    // Marker Testuali Personalizzati (Evitano MapLibre 404 font errors)
     function createDOMMarker(coords, htmlText, color, type) {
         const el = document.createElement('div');
         el.className = 'custom-map-label';
@@ -510,7 +599,7 @@
         map.setLayoutProperty('layer-hull-a', 'visibility', showA ? 'visible' : 'none');
         map.setLayoutProperty('layer-hull-b', 'visibility', showB ? 'visible' : 'none');
 
-        // Toggle safe DOM labels
+        // Toggle visibilità Marker HTML
         domLabels.forEach(lbl => {
             let isVis = false;
             if(lbl.type === 'AB' && (showA || showB)) isVis = true;
@@ -519,6 +608,7 @@
             lbl.marker.getElement().style.display = isVis ? 'block' : 'none';
         });
 
+        // Filtro Linee
         let allowedTypes = [];
         if (showA) allowedTypes.push('A');
         if (showB) allowedTypes.push('B');
@@ -530,12 +620,11 @@
     window.analyzeRBN = function() {
         const targetCall = document.getElementById('inp-call').value.trim().toUpperCase();
         const rawText = document.getElementById('inp-rbn').value;
-        if (!targetCall || !rawText) return;
+        if (!targetCall || !rawText) { showMsg("Attenzione", "Inserisci nominativo e incolla i dati."); return; }
 
-        // Clear UI
         domLabels.forEach(m => m.marker.remove()); domLabels = [];
 
-        // Parse Text
+        // Parse ultra-flessibile per testo incollato male
         const splitText = rawText.replace(/ago/gi, 'ago\n').replace(/z\s/gi, 'z\n').replace(/minutes/gi, 'minutes\n');
         const lines = splitText.split('\n');
         let freqClusters = {}; 
@@ -553,7 +642,6 @@
                 let freq = freqMatch[1]; 
                 let snr = parseInt(dbMatch[1], 10);
                 if (!freqClusters[freq]) freqClusters[freq] = {};
-                // Track highest SNR
                 if (freqClusters[freq][spotter] === undefined || snr > freqClusters[freq][spotter]) freqClusters[freq][spotter] = snr;
             }
         });
@@ -563,7 +651,7 @@
         sortedFreqs.sort((a, b) => Object.keys(b.spots).length - Object.keys(a.spots).length);
 
         if (sortedFreqs.length === 0) { 
-            document.getElementById('log-global').innerText = "Nessun dato valido estratto. Verifica i log."; return; 
+            showMsg("Nessun Dato", "Impossibile estrarre segnali. Verifica i log incollati."); return; 
         }
 
         let rbnLines = { type: 'FeatureCollection', features: [] };
@@ -588,14 +676,13 @@
         allSkims.forEach(skim => {
             let coords = getDxccCoords(skim);
             if (coords) {
-                // Strict validation to avoid Turf crashes
                 if(isNaN(coords[0]) || isNaN(coords[1])) return;
                 
                 let ptSpot = turf.point(coords);
                 let distKm = 0;
                 try { distKm = Math.round(turf.distance(ptHome, ptSpot, {units: 'kilometers'})); } catch(e){}
                 
-                if (distKm === 0) return; // Prevent greatCircle math crash on identical points
+                if (distKm === 0) return; // Evita crash geometria
 
                 mapBounds.extend(coords);
                 let quad = getQuad(turf.bearing(ptHome, ptSpot));
@@ -626,7 +713,7 @@
             }
         });
 
-        // Convex Hulls Safety
+        // Poligoni Convessi (Aree Copertura)
         let hullA = { type: 'FeatureCollection', features: [] }, hullB = { type: 'FeatureCollection', features: [] };
         if (ptsA.length >= 3) { try { hullA = turf.convex(turf.featureCollection(ptsA.map(p => turf.point(p)))); } catch(e){} }
         if (ptsB.length >= 3) { try { hullB = turf.convex(turf.featureCollection(ptsB.map(p => turf.point(p)))); } catch(e){} }
@@ -641,11 +728,10 @@
         if(document.getElementById('chk-b')) document.getElementById('chk-b').checked = true;
         toggleLayers();
 
-        // UI Stats
+        // UI Report Aggiornamento
         document.getElementById('dx-a').innerText = `${maxDxA} km`;
         document.getElementById('dx-b').innerText = fB ? `${maxDxB} km` : `-`;
 
-        // Quadrant Winner Math
         ['N','S','E','W'].forEach(d => {
             let s = stats[d];
             if(s.c > 0) {
@@ -658,9 +744,8 @@
             }
         });
 
-        // Best Distance Execution
         let bestDirA = Object.keys(maxQuadA).reduce((a, b) => maxQuadA[a] > maxQuadA[b] ? a : b);
-        document.getElementById('best-dist-A').innerText = maxQuadA[bestDirA] > 0 ? `${bestDirA} (${maxQuadA[bestDirA]} km)` : 'N/A';
+        document.getElementById('best-dist-A').innerText = maxQuadA[bestDirA] > 0 ? `${bestDirA} (${maxQuadA[bestDirA]} km)` : 'Nessun Dato';
         
         if (fB) {
             let bestDirB = Object.keys(maxQuadB).reduce((a, b) => maxQuadB[a] > maxQuadB[b] ? a : b);
@@ -668,7 +753,7 @@
             document.getElementById('panel-fb').classList.remove('hidden');
             document.getElementById('panel-advantage').classList.remove('hidden');
             document.getElementById('best-dist-B-container').classList.remove('hidden');
-            document.getElementById('best-dist-B').innerText = maxQuadB[bestDirB] > 0 ? `${bestDirB} (${maxQuadB[bestDirB]} km)` : 'N/A';
+            document.getElementById('best-dist-B').innerText = maxQuadB[bestDirB] > 0 ? `${bestDirB} (${maxQuadB[bestDirB]} km)` : 'Nessun Dato';
         } else {
             document.getElementById('chk-container-b').style.display = 'none';
             document.getElementById('panel-fb').classList.add('hidden');
@@ -680,5 +765,6 @@
         document.getElementById('log-global').innerText = "Analisi Globale Completata.";
     }
 </script>
+
 </body>
 </html>
