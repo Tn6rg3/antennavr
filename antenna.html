@@ -5,17 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RF Unified Lab Pro</title>
 
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- MapLibre GL JS -->
     <script src="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.css" rel="stylesheet" />
-
-    <!-- Turf.js for Spatial Math -->
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-
-    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
@@ -113,7 +106,6 @@
             </div>
             <div>
                 <label class="block text-slate-400 font-bold uppercase mb-1">Elevazione (°)</label>
-                <!-- Default a 0 gradi per sbattere contro gli edifici vicini -->
                 <input type="number" id="inp-angle" value="0" min="-20" max="89" step="1" oninput="updateRayHelper()">
             </div>
 
@@ -129,7 +121,8 @@
             </div>
             <div>
                 <label class="block text-slate-400 font-bold uppercase mb-1 mt-1">Distanza 3D (m)</label>
-                <input type="number" id="inp-dist" value="5000">
+                <!-- Default distance set to 1500m per user testing context -->
+                <input type="number" id="inp-dist" value="1500">
             </div>
         </div>
 
@@ -233,7 +226,7 @@
 <script>
     let homeLngLat = [11.2366, 46.0655]; // Default Pergine Valsugana
     let antennaMarker = null;
-    let physicsBuildings = []; 
+    let physicsBuildings = []; // Stores { id, poly, height, base_z, bbox }
     let domLabels = []; 
     
     // Variabili Disegno
@@ -250,7 +243,6 @@
         document.getElementById('ray-h-100').innerText = heightAt100m.toFixed(1);
     }
     
-    // Inizializza helper su load
     document.addEventListener("DOMContentLoaded", updateRayHelper);
 
     // Database DXCC
@@ -281,7 +273,6 @@
     }
 
     function cancelPrompt() { document.getElementById('custom-prompt').style.display = 'none'; promptCallback = null; }
-
     function confirmPrompt() {
         const val = document.getElementById('prompt-input').value;
         document.getElementById('custom-prompt').style.display = 'none';
@@ -289,7 +280,7 @@
         promptCallback = null;
     }
 
-    // Mappa Base: ArcGIS World Imagery
+    // Mappa Base: ArcGIS World Imagery (Satellite)
     const map = new maplibregl.Map({
         container: 'map',
         style: {
@@ -427,13 +418,16 @@
                 let bz = map.queryTerrainElevation(currentPolygon[0]) || map.queryTerrainElevation(homeLngLat) || 0;
                 let id = Date.now();
                 
-                let newBldg = { type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: { type: 'Polygon', coordinates: [currentPolygon] } };
+                let poly = turf.polygon([currentPolygon]);
+                let bbox = turf.bbox(poly); // CRITICAL FIX 2: Precalculate Bounding Box
+                
+                let newBldg = { type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: poly.geometry };
                 
                 let bGeo = map.getSource('buildings-src')._data;
                 bGeo.features.push(newBldg);
                 map.getSource('buildings-src').setData(bGeo);
                 
-                physicsBuildings.push({ id: id, poly: turf.polygon([currentPolygon]), height: h, base_z: bz });
+                physicsBuildings.push({ id: id, poly: poly, height: h, base_z: bz, bbox: bbox });
                 document.getElementById('log-local').innerText = `Edificio di ${h}m salvato in memoria fisica.`;
                 
                 currentPolygon = [];
@@ -484,8 +478,11 @@
                         let id = Date.now() + idx; 
                         let bz = map.queryTerrainElevation(c[0]) || map.queryTerrainElevation(homeLngLat) || 0;
                         
-                        bGeo.features.push({ type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: { type: 'Polygon', coordinates: [c] } });
-                        physicsBuildings.push({ id: id, poly: turf.polygon([c]), height: h, base_z: bz });
+                        let poly = turf.polygon([c]);
+                        let bbox = turf.bbox(poly); // CRITICAL FIX 2: BBox Precalculation
+                        
+                        bGeo.features.push({ type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: poly.geometry });
+                        physicsBuildings.push({ id: id, poly: poly, height: h, base_z: bz, bbox: bbox });
                         addedCount++;
                     }
                 }
@@ -497,7 +494,7 @@
             showMsg("Connessione Fallita", e.message || "Errore nello scaricamento palazzi. Riprova più tardi.");
             document.getElementById('log-local').innerText = "Errore di connessione.";
         }
-        btn.innerHTML = '<i class="fa-solid fa-download"></i> Edifici OSM';
+        btn.innerHTML = '<i class="fa-solid fa-download"></i> Edifici';
     };
 
     window.calcViewshed = function() {
@@ -506,7 +503,7 @@
         btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Preparazione...';
         btn.disabled = true;
 
-        const maxDist = parseFloat(document.getElementById('inp-dist').value) || 5000; 
+        const maxDist = parseFloat(document.getElementById('inp-dist').value) || 1500; 
 
         // Auto zoom out for terrain caching
         map.flyTo({ center: homeLngLat, zoom: 12, pitch: 0, duration: 1500 });
@@ -536,7 +533,8 @@
                 
                 // DYNAMIC STEPPING: High precision strictly starting at 1 meter!
                 for (let d = 1; d <= maxDist; ) {
-                    let pt = turf.destination(origin, d, az);
+                    // CRITICAL FIX 1: MUST SPECIFY {units: 'meters'}
+                    let pt = turf.destination(origin, d, az, {units: 'meters'}); 
                     let coords = pt.geometry.coordinates;
                     
                     let terrElev = map.queryTerrainElevation(coords);
@@ -546,8 +544,15 @@
                     let rayZ = startZ + (d * Math.tan(angleRad)) - ((d * d) / (2 * R_eff));
                     
                     let bldgH = 0;
+                    // CRITICAL FIX 2: BBOX Check before complex Polygon Intersection to prevent freezing
                     for(let b of physicsBuildings) {
-                        if(turf.booleanPointInPolygon(pt, b.poly)) { bldgH = b.height; break; }
+                        let box = b.bbox; // [minX, minY, maxX, maxY]
+                        if (coords[0] >= box[0] && coords[0] <= box[2] && coords[1] >= box[1] && coords[1] <= box[3]) {
+                            if(turf.booleanPointInPolygon(pt, b.poly)) { 
+                                bldgH = b.height; 
+                                break; 
+                            }
+                        }
                     }
                     
                     // Collision check (hits building roof OR terrain)
@@ -557,13 +562,14 @@
                     }
 
                     // Stepping increases as ray goes further out to prevent lag
-                    if (d < 100) d += 1;
-                    else if (d < 500) d += 5;
+                    if (d < 100) d += 1; // 1m precision near antenna
+                    else if (d < 500) d += 5; // 5m precision up to 500m
                     else if (d < 2000) d += 10;
                     else d += 25;
                 }
                 
-                covPoly.push(turf.destination(origin, hitDist, az).geometry.coordinates);
+                // Apply Fix 1 again for the final point recording
+                covPoly.push(turf.destination(origin, hitDist, az, {units: 'meters'}).geometry.coordinates);
             }
             covPoly.push([...covPoly[0]]);
 
@@ -654,7 +660,7 @@
         sortedFreqs.sort((a, b) => Object.keys(b.spots).length - Object.keys(a.spots).length);
 
         if (sortedFreqs.length === 0) { 
-            showMsg("Nessun Dato", "Impossibile estrarre segnali. Verifica i log."); return; 
+            showMsg("Nessun Dato", "Impossibile estrarre segnali validi dal testo incollato."); return; 
         }
 
         let rbnLines = { type: 'FeatureCollection', features: [] };
