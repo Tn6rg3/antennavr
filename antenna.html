@@ -22,11 +22,11 @@
         body { margin: 0; padding: 0; overflow: hidden; background-color: #0f172a; font-family: 'Inter', sans-serif; }
         #map { position: absolute; top: 0; bottom: 0; width: 100vw; height: 100vh; }
         
-        /* Unified Scrollable Panel */
+        /* Unified Panel */
         #ui-panel {
             position: absolute; top: 1rem; left: 1rem; width: 420px; max-height: calc(100vh - 2rem);
             display: flex; flex-direction: column;
-            background: rgba(15, 23, 42, 0.90); backdrop-filter: blur(12px);
+            background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(12px);
             border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.8); color: #f8fafc; z-index: 10;
         }
@@ -45,14 +45,13 @@
         .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 10px; margin-top: 20px; font-weight: bold; display: flex; align-items: center; gap: 8px; }
         .section-title:first-child { margin-top: 0; }
 
-        /* Custom DOM Map Labels (Crash-Proof) */
+        /* Custom Crash-Proof Map Labels */
         .custom-map-label {
             background-color: rgba(15, 23, 42, 0.90); color: white; padding: 4px 6px;
             border-radius: 6px; border: 2px solid transparent; font-size: 11px;
             font-family: 'Inter', sans-serif; font-weight: bold; white-space: pre-line;
             text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.5); pointer-events: none;
-            backdrop-filter: blur(4px); line-height: 1.2; text-shadow: 1px 1px 2px black;
-            z-index: 5;
+            backdrop-filter: blur(4px); line-height: 1.2; text-shadow: 1px 1px 2px black; z-index: 5;
         }
 
         .chk-label { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; color: #f8fafc; font-weight: bold; justify-content: center; }
@@ -93,7 +92,7 @@
     <div id="ui-content" class="space-y-2">
         
         <!-- SECTION 1: Local 3D Physics -->
-        <div class="section-title text-sky-400"><i class="fa-solid fa-layer-group"></i> 1. Setup & Simulazione Locale</div>
+        <div class="section-title text-sky-400"><i class="fa-solid fa-layer-group"></i> 1. Setup & Simulazione 3D</div>
         
         <div class="grid grid-cols-2 gap-2 text-xs">
             <div class="col-span-2">
@@ -110,34 +109,42 @@
             </div>
             <div>
                 <label class="block text-slate-400 font-bold uppercase mb-1">Alt. Ant. (m)</label>
-                <input type="number" id="inp-h-ant" value="10" min="0" step="1" title="Altezza dell'antenna dal suolo">
+                <input type="number" id="inp-h-ant" value="10" min="0" step="1" oninput="updateRayHelper()">
             </div>
             <div>
                 <label class="block text-slate-400 font-bold uppercase mb-1">Elevazione (°)</label>
-                <input type="number" id="inp-angle" value="5" min="-20" max="89" step="1" title="Angolo di radiazione">
+                <!-- Default a 0 gradi per sbattere contro gli edifici vicini -->
+                <input type="number" id="inp-angle" value="0" min="-20" max="89" step="1" oninput="updateRayHelper()">
+            </div>
+
+            <!-- TRIGONOMETRY HELPER -->
+            <div class="col-span-2 bg-slate-800 border border-slate-700 rounded p-2 text-center text-amber-400 text-[10px] mt-1 shadow-inner">
+                <i class="fa-solid fa-ruler-combined"></i> A 100m di distanza, il centro del raggio viaggia a<br>
+                <span id="ray-h-100" class="font-bold text-white text-xs">10.0</span> <span class="text-white">metri di altezza base</span>.
+            </div>
+
+            <div>
+                <label class="block text-slate-400 font-bold uppercase mb-1 mt-1">Raggio OSM (m)</label>
+                <input type="number" id="inp-osm-rad" value="500" min="100" step="100">
             </div>
             <div>
-                <label class="block text-slate-400 font-bold uppercase mb-1">Raggio OSM (m)</label>
-                <input type="number" id="inp-osm-rad" value="500" min="100" step="100" title="Raggio estrazione palazzi OSM">
-            </div>
-            <div>
-                <label class="block text-slate-400 font-bold uppercase mb-1">Distanza 3D (m)</label>
-                <input type="number" id="inp-dist" value="15000" placeholder="Max 100km">
+                <label class="block text-slate-400 font-bold uppercase mb-1 mt-1">Distanza 3D (m)</label>
+                <input type="number" id="inp-dist" value="5000">
             </div>
         </div>
 
         <div class="flex gap-2 mt-3">
-            <button id="btn-fetch" onclick="fetchBuildings()" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded uppercase text-[10px] transition shadow" title="Scarica palazzi da OSM">
-                <i class="fa-solid fa-download"></i> Edifici OSM
+            <button id="btn-fetch" onclick="fetchBuildings()" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded uppercase text-[10px] transition shadow">
+                <i class="fa-solid fa-download"></i> Edifici
             </button>
-            <button id="btn-draw" onclick="startDrawingBuilding()" class="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded uppercase text-[10px] transition shadow" title="Clicca sulla mappa per i vertici, doppio clic per chiudere">
-                <i class="fa-solid fa-pencil"></i> Disegna 3D
+            <button id="btn-draw" onclick="startDrawingBuilding()" class="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded uppercase text-[10px] transition shadow">
+                <i class="fa-solid fa-pencil"></i> Disegna
             </button>
-            <button id="btn-calc" onclick="calcViewshed()" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded uppercase text-[10px] transition shadow" title="Esegui raycasting a passo di 1m">
+            <button id="btn-calc" onclick="calcViewshed()" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded uppercase text-[10px] transition shadow">
                 <i class="fa-solid fa-radar"></i> Fisica 3D
             </button>
         </div>
-        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-2 text-center bg-slate-800 p-1.5 rounded">Trascina il Marker Giallo. Il sistema si posizionerà da solo.</div>
+        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-2 text-center bg-slate-800 p-1.5 rounded">Trascina il Marker Giallo per spostare l'antenna.</div>
 
         <!-- SECTION 2: Global RBN -->
         <div class="section-title text-rose-400"><i class="fa-solid fa-rss"></i> 2. Dati Empirici RBN (A/B Test)</div>
@@ -201,7 +208,7 @@
     </div>
 </div>
 
-<!-- Modal: Alert generico -->
+<!-- Modal: Alert -->
 <div id="custom-alert" class="modal-overlay flex">
     <div class="modal-box">
         <h3 id="alert-title" class="text-lg font-bold text-rose-400 mb-2 border-b border-slate-700 pb-2"><i class="fa-solid fa-triangle-exclamation"></i> Avviso</h3>
@@ -229,11 +236,22 @@
     let physicsBuildings = []; 
     let domLabels = []; 
     
-    // Variabili per il disegno manuale
+    // Variabili Disegno
     let isDrawing = false;
     let currentPolygon = [];
     let drawingGeoJSON = { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }] };
     let promptCallback = null;
+
+    // Aggiorna l'indicatore trigonometrico in UI
+    function updateRayHelper() {
+        let hAnt = parseFloat(document.getElementById('inp-h-ant').value) || 0;
+        let ang = parseFloat(document.getElementById('inp-angle').value) || 0;
+        let heightAt100m = hAnt + 100 * Math.tan(ang * Math.PI / 180);
+        document.getElementById('ray-h-100').innerText = heightAt100m.toFixed(1);
+    }
+    
+    // Inizializza helper su load
+    document.addEventListener("DOMContentLoaded", updateRayHelper);
 
     // Database DXCC
     const dxccDb = {
@@ -249,7 +267,6 @@
         'VE': [-106.0, 56.0], 'VA': [-106.0, 56.0], 'PY': [-51.0, -14.0], 'LU': [-64.0, -34.0], 'VK': [133.0, -25.0], 'ZL': [174.0, -41.0], 'JA': [138.0, 36.0]
     };
 
-    // Funzioni Modali Personalizzate
     function showMsg(title, msg) {
         document.getElementById('alert-title').innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${title}`;
         document.getElementById('alert-text').innerText = msg;
@@ -263,10 +280,7 @@
         document.getElementById('prompt-input').focus();
     }
 
-    function cancelPrompt() {
-        document.getElementById('custom-prompt').style.display = 'none';
-        promptCallback = null;
-    }
+    function cancelPrompt() { document.getElementById('custom-prompt').style.display = 'none'; promptCallback = null; }
 
     function confirmPrompt() {
         const val = document.getElementById('prompt-input').value;
@@ -275,7 +289,7 @@
         promptCallback = null;
     }
 
-    // Mappa Base: ArcGIS World Imagery (Satellite Reale)
+    // Mappa Base: ArcGIS World Imagery
     const map = new maplibregl.Map({
         container: 'map',
         style: {
@@ -296,7 +310,7 @@
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
 
     map.on('load', () => {
-        // Terreno 3D AWS Terrarium (Limitato a zoom 14 per evitare errori 404 in profondità)
+        // Terreno 3D AWS Terrarium
         map.addSource('aws-terrain', { 
             type: 'raster-dem', 
             tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], 
@@ -332,7 +346,6 @@
 
         updateLocationUI();
 
-        // Eventi di click per il disegno manuale
         map.on('click', (e) => {
             if (isDrawing) {
                 currentPolygon.push([e.lngLat.lng, e.lngLat.lat]);
@@ -366,8 +379,6 @@
         const inpLoc = document.getElementById('inp-locator');
         const inpLat = document.getElementById('inp-lat');
         const inpLon = document.getElementById('inp-lon');
-        
-        // Verifica esistenza per evitare l'errore "Cannot set properties of null"
         if (inpLoc) inpLoc.value = lngLatToMaidenhead(homeLngLat[0], homeLngLat[1]);
         if (inpLat) inpLat.value = homeLngLat[1].toFixed(4);
         if (inpLon) inpLon.value = homeLngLat[0].toFixed(4);
@@ -411,7 +422,6 @@
         if (currentPolygon.length >= 3) {
             currentPolygon.push([...currentPolygon[0]]); 
             
-            // Richiesta custom senza bloccare il browser
             customPrompt("15", function(val) {
                 let h = parseFloat(val) || 15;
                 let bz = map.queryTerrainElevation(currentPolygon[0]) || map.queryTerrainElevation(homeLngLat) || 0;
@@ -496,18 +506,17 @@
         btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Preparazione...';
         btn.disabled = true;
 
-        const maxDist = parseFloat(document.getElementById('inp-dist').value) || 15000; 
+        const maxDist = parseFloat(document.getElementById('inp-dist').value) || 5000; 
 
-        // 1. Auto Zoom-out a livello 11 per forzare il download del DEM del terreno circostante
-        map.flyTo({ center: homeLngLat, zoom: 11, pitch: 0, duration: 1500 });
+        // Auto zoom out for terrain caching
+        map.flyTo({ center: homeLngLat, zoom: 12, pitch: 0, duration: 1500 });
 
-        // 2. Attendiamo 2 secondi completi per garantire che Amazon S3 invii le altimetrie
         setTimeout(() => {
             btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Scansione 3D...';
             
             const zBase = map.queryTerrainElevation(homeLngLat);
             if (zBase === null) {
-                showMsg("Errore Dati", "Terreno non scaricato in tempo o sei su un oceano. Fai zoom manuale sulla mappa e riprova.");
+                showMsg("Errore Dati", "Terreno non scaricato in tempo. Fai zoom manuale e riprova.");
                 btn.innerHTML = '<i class="fa-solid fa-radar"></i> Fisica 3D';
                 btn.disabled = false;
                 return;
@@ -516,44 +525,42 @@
             const hAnt = parseFloat(document.getElementById('inp-h-ant').value) || 0;
             const angleRad = (parseFloat(document.getElementById('inp-angle').value) || 0) * Math.PI / 180;
             const startZ = zBase + hAnt;
-            const R_eff = 6371000 * (4/3); // Modello di Rifrazione Standard 4/3
+            const R_eff = 6371000 * (4/3); // 4/3 earth refraction
             
             let covPoly = [];
             let origin = turf.point(homeLngLat);
 
-            // Sweep a 360 gradi (Risoluzione: 2 gradi per prestazioni ottimali)
+            // 2 degree ray sweeps
             for (let az = 0; az < 360; az += 2) {
                 let hitDist = maxDist;
                 
-                // SISTEMA A PASSO DINAMICO (Dynamic Stepping)
-                // 1 metro di precisione vicino all'antenna, poi si allarga
+                // DYNAMIC STEPPING: High precision strictly starting at 1 meter!
                 for (let d = 1; d <= maxDist; ) {
                     let pt = turf.destination(origin, d, az);
                     let coords = pt.geometry.coordinates;
                     
                     let terrElev = map.queryTerrainElevation(coords);
-                    if (terrElev === null) { hitDist = d; break; } // Bordo mappa
+                    if (terrElev === null) { hitDist = d; break; } // stop at map edge
                     
-                    // Fisica: Quota Partenza + Traiettoria Angolo - Caduta per Curvatura Terrestre
+                    // Ray Height = Base + ray angle climb - earth curve drop
                     let rayZ = startZ + (d * Math.tan(angleRad)) - ((d * d) / (2 * R_eff));
                     
-                    // Hitbox Edifici
                     let bldgH = 0;
                     for(let b of physicsBuildings) {
                         if(turf.booleanPointInPolygon(pt, b.poly)) { bldgH = b.height; break; }
                     }
                     
-                    // Collisione se il raggio è sotto o pari all'ostacolo
+                    // Collision check (hits building roof OR terrain)
                     if (rayZ <= (terrElev + bldgH)) { 
                         hitDist = d; 
                         break; 
                     }
 
-                    // Incremento Passo Dinamico
-                    if (d < 200) d += 1;          // Precisione 1 metro
-                    else if (d < 1000) d += 5;    // Precisione 5 metri
-                    else if (d < 5000) d += 10;   // Precisione 10 metri
-                    else d += 25;                 // Precisione 25 metri
+                    // Stepping increases as ray goes further out to prevent lag
+                    if (d < 100) d += 1;
+                    else if (d < 500) d += 5;
+                    else if (d < 2000) d += 10;
+                    else d += 25;
                 }
                 
                 covPoly.push(turf.destination(origin, hitDist, az).geometry.coordinates);
@@ -561,7 +568,7 @@
             covPoly.push([...covPoly[0]]);
 
             map.getSource('local-coverage-src').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [covPoly] } }] });
-            document.getElementById('log-local').innerText = "Fisica 3D (Passo Dinamico: da 1m) Applicata.";
+            document.getElementById('log-local').innerText = "Fisica completata (passo da 1m).";
             btn.innerHTML = '<i class="fa-solid fa-radar"></i> Fisica 3D';
             btn.disabled = false;
         }, 2000); 
@@ -582,7 +589,6 @@
         return null;
     }
 
-    // Marker Testuali Personalizzati (Evitano MapLibre 404 font errors)
     function createDOMMarker(coords, htmlText, color, type) {
         const el = document.createElement('div');
         el.className = 'custom-map-label';
@@ -599,7 +605,6 @@
         map.setLayoutProperty('layer-hull-a', 'visibility', showA ? 'visible' : 'none');
         map.setLayoutProperty('layer-hull-b', 'visibility', showB ? 'visible' : 'none');
 
-        // Toggle visibilità Marker HTML
         domLabels.forEach(lbl => {
             let isVis = false;
             if(lbl.type === 'AB' && (showA || showB)) isVis = true;
@@ -608,7 +613,6 @@
             lbl.marker.getElement().style.display = isVis ? 'block' : 'none';
         });
 
-        // Filtro Linee
         let allowedTypes = [];
         if (showA) allowedTypes.push('A');
         if (showB) allowedTypes.push('B');
@@ -624,7 +628,6 @@
 
         domLabels.forEach(m => m.marker.remove()); domLabels = [];
 
-        // Parse ultra-flessibile per testo incollato male
         const splitText = rawText.replace(/ago/gi, 'ago\n').replace(/z\s/gi, 'z\n').replace(/minutes/gi, 'minutes\n');
         const lines = splitText.split('\n');
         let freqClusters = {}; 
@@ -651,7 +654,7 @@
         sortedFreqs.sort((a, b) => Object.keys(b.spots).length - Object.keys(a.spots).length);
 
         if (sortedFreqs.length === 0) { 
-            showMsg("Nessun Dato", "Impossibile estrarre segnali. Verifica i log incollati."); return; 
+            showMsg("Nessun Dato", "Impossibile estrarre segnali. Verifica i log."); return; 
         }
 
         let rbnLines = { type: 'FeatureCollection', features: [] };
@@ -681,8 +684,7 @@
                 let ptSpot = turf.point(coords);
                 let distKm = 0;
                 try { distKm = Math.round(turf.distance(ptHome, ptSpot, {units: 'kilometers'})); } catch(e){}
-                
-                if (distKm === 0) return; // Evita crash geometria
+                if (distKm === 0) return; 
 
                 mapBounds.extend(coords);
                 let quad = getQuad(turf.bearing(ptHome, ptSpot));
@@ -713,7 +715,6 @@
             }
         });
 
-        // Poligoni Convessi (Aree Copertura)
         let hullA = { type: 'FeatureCollection', features: [] }, hullB = { type: 'FeatureCollection', features: [] };
         if (ptsA.length >= 3) { try { hullA = turf.convex(turf.featureCollection(ptsA.map(p => turf.point(p)))); } catch(e){} }
         if (ptsB.length >= 3) { try { hullB = turf.convex(turf.featureCollection(ptsB.map(p => turf.point(p)))); } catch(e){} }
@@ -728,7 +729,6 @@
         if(document.getElementById('chk-b')) document.getElementById('chk-b').checked = true;
         toggleLayers();
 
-        // UI Report Aggiornamento
         document.getElementById('dx-a').innerText = `${maxDxA} km`;
         document.getElementById('dx-b').innerText = fB ? `${maxDxB} km` : `-`;
 
