@@ -42,6 +42,11 @@
             text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.5); 
             backdrop-filter: blur(4px); line-height: 1.4; text-shadow: 1px 1px 2px black;
             transition: transform 0.1s;
+            pointer-events: none; /* Default non cliccabile per non bloccare la mappa */
+        }
+        .custom-map-label.clickable {
+            pointer-events: auto; /* Attiva il clic solo per le sonde */
+            cursor: pointer;
         }
         .custom-map-label:hover { transform: scale(1.05); z-index: 20; }
 
@@ -101,10 +106,15 @@
             </div>
         </div>
         
-        <div class="mt-2 mb-2">
+        <!-- NUOVO PANNELLO SKYWAVE CON QUOTA DINAMICA -->
+        <div class="mt-2 mb-2 flex items-center justify-between bg-slate-800 p-2 rounded border border-slate-700">
             <label class="chk-label font-bold text-fuchsia-400">
-                <input type="checkbox" id="chk-skywave"> <i class="fa-solid fa-satellite"></i> Attiva Riflessione Ionosferica (Skywave a 300km)
+                <input type="checkbox" id="chk-skywave"> <i class="fa-solid fa-satellite"></i> Skywave Ionosfera
             </label>
+            <div class="flex items-center gap-1">
+                <input type="number" id="inp-iono-h" value="300" class="w-16 text-center h-6 text-[11px] p-1 bg-slate-900 border border-slate-600 rounded text-white" min="50" max="1000" title="Quota Ionosfera in km">
+                <span class="text-[10px] text-slate-400 font-bold">km</span>
+            </div>
         </div>
 
         <div class="grid grid-cols-4 gap-1 mt-2">
@@ -121,7 +131,7 @@
                 <i class="fa-solid fa-radar"></i> Fisica
             </button>
         </div>
-        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-1 text-center">Tutti gli strumenti attivi. Sonda intelligente abilitata.</div>
+        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-1 text-center">Tutti gli strumenti attivi. Clicca sui marker della Sonda per rimuoverli.</div>
 
         <!-- RBN GLOBAL -->
         <div class="section-title text-rose-400 mt-4"><i class="fa-solid fa-globe"></i> 2. RBN Globale (A/B Test)</div>
@@ -243,7 +253,7 @@
                 return;
             }
             
-            // Delete building on click if not drawing/probing
+            // Delete building
             let features = map.queryRenderedFeatures(e.point, { layers: ['3d-buildings'] });
             if(features.length > 0) {
                 if(confirm("Vuoi eliminare questo edificio?")) {
@@ -280,23 +290,26 @@
     function placeProbe(e) {
         let rawElev = map.queryTerrainElevation(e.lngLat);
         if (rawElev !== null) {
-            let terrElev = Math.round(rawElev); // Numeri precisi senza decimali
+            let terrElev = Math.round(rawElev);
             let bldgH = 0;
             
-            // Controlla se abbiamo cliccato un tetto
             let features = map.queryRenderedFeatures(e.point, { layers: ['3d-buildings'] });
             if (features.length > 0) bldgH = Math.round(features[0].properties.height || 0);
             
             let htmlText = bldgH > 0 ? `⛰️ Terreno: ${terrElev}m<br>🏢 Edificio: +${bldgH}m<br><b>Totale: ${terrElev + bldgH}m</b>` : `📍 Quota:<br><b>${terrElev}m</b>`;
             
             let el = document.createElement('div');
-            el.className = 'custom-map-label';
+            el.className = 'custom-map-label clickable'; // Aggiunta classe per renderlo cliccabile
             el.style.borderColor = '#06b6d4';
-            el.style.cursor = 'pointer';
             el.innerHTML = htmlText;
             
             let m = new maplibregl.Marker({ element: el }).setLngLat(e.lngLat).addTo(map);
-            el.onclick = () => m.remove(); // Clicca per rimuovere
+            
+            // Evento di cancellazione (stopPropagation impedisce che il clic finisca sulla mappa sotto)
+            el.addEventListener('click', (ev) => {
+                ev.stopPropagation(); 
+                m.remove();
+            });
         } else {
             alert("Dati altitudine non ancora caricati. Fai zoom o attendi un istante.");
         }
@@ -415,19 +428,17 @@
             let skywaveLine = [];
             let origin = turf.point(homeLngLat);
 
-            // SKYWAVE MATH (First Hop)
-            // R = Earth Radius, H = Ionosphere Height
+            // SKYWAVE MATH con altezza variabile in base all'input
             const R_earth = 6371000;
-            const H_iono = 300000; // 300km F-layer
-            // Legge dei Seni per il calcolo della distanza sulla sfera terrestre
+            const ionoInput = parseFloat(document.getElementById('inp-iono-h').value) || 300; // Legge il campo
+            const H_iono = ionoInput * 1000; 
             const skipAngle = Math.PI/2 - angleRad - Math.asin(R_earth * Math.cos(angleRad) / (R_earth + H_iono));
-            const skipDist = 2 * R_earth * skipAngle; // Distanza in metri del primo salto
+            const skipDist = 2 * R_earth * skipAngle; 
 
             for (let az = 0; az < 360; az += 2) {
                 let hitDist = maxDist;
                 let obstacleHit = false;
 
-                // Passo 2m vicino all'antenna, poi si allarga
                 for(let d = 2; d <= maxDist; d += (d < 2000 ? 5 : 20)) {
                     let pt = turf.destination(origin, d, az, {units: 'meters'});
                     let terrElev = map.queryTerrainElevation(pt.geometry.coordinates);
@@ -436,7 +447,6 @@
                     
                     let rayZ = startZ + (d * Math.tan(angleRad)) - ((d * d) / (2 * R_eff));
                     
-                    // Bounding Box semplificata per performance
                     let bldgH = 0;
                     for(let b of physicsBuildings) {
                         if(turf.booleanPointInPolygon(pt, b.poly)) { bldgH = b.height; break; }
@@ -449,11 +459,10 @@
                 }
                 covPoly.push(turf.destination(origin, hitDist, az, {units: 'meters'}).geometry.coordinates);
                 
-                // SKYWAVE: Se il raggio NON ha colpito montagne, vola nello spazio e atterra!
+                // SKYWAVE logic
                 if(calcSkywave && !obstacleHit && skipDist > 0 && angleDeg > 0) {
                     skywaveLine.push(turf.destination(origin, skipDist, az, {units: 'meters'}).geometry.coordinates);
                 } else if (calcSkywave) {
-                    // Muro (Gap nella copertura skywave)
                     if(skywaveLine.length > 0 && skywaveLine[skywaveLine.length-1] !== null) skywaveLine.push(null);
                 }
             }
@@ -461,7 +470,6 @@
 
             map.getSource('local-coverage-src').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [covPoly] } }] });
             
-            // Draw Skywave Landing Footprint
             let skywaveGeo = { type: 'FeatureCollection', features: [] };
             if(calcSkywave) {
                 let currentSegment = [];
@@ -480,7 +488,7 @@
             document.getElementById('log-local').innerText = calcSkywave ? `Fisica completata. Skywave stimata a ${Math.round(skipDist/1000)}km.` : "Fisica morfologica completata.";
             btn.innerHTML = '<i class="fa-solid fa-radar"></i> Fisica';
             
-            if(calcSkywave) map.flyTo({ pitch: 0, zoom: 3, duration: 2000 }); // Zoom out to see the bounce
+            if(calcSkywave) map.flyTo({ pitch: 0, zoom: 3, duration: 2000 }); 
             
         }, 2500); 
     };
@@ -495,7 +503,7 @@
 
     function createDOMMarker(coords, htmlText, color, type) {
         const el = document.createElement('div');
-        el.className = 'custom-map-label';
+        el.className = 'custom-map-label'; // Qui lasciamo disattivato il clic (vedi CSS) per non bloccare la mappa globale
         el.innerHTML = htmlText;
         el.style.borderColor = color;
         const m = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -4] }).setLngLat(coords).addTo(map);
