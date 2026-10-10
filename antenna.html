@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RF Unified Lab Pro</title>
+    <title>RF Unified Lab Pro - Skywave & Topografia</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.js"></script>
@@ -16,15 +16,14 @@
         #map { position: absolute; top: 0; bottom: 0; width: 100vw; height: 100vh; }
         
         #ui-panel {
-            position: absolute; top: 1rem; left: 1rem; width: 420px; max-height: calc(100vh - 2rem);
+            position: absolute; top: 1rem; left: 1rem; width: 440px; max-height: calc(100vh - 2rem);
             display: flex; flex-direction: column;
-            background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(12px);
+            background: rgba(15, 23, 42, 0.90); backdrop-filter: blur(12px);
             border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.8); color: #f8fafc; z-index: 10;
         }
 
-        #ui-header { flex-shrink: 0; padding: 1rem 1rem 0.5rem 1rem; border-bottom: 1px solid #334155; }
-        #ui-content { padding: 1rem; overflow-y: auto; flex: 1; }
+        #ui-content { padding: 1.25rem; overflow-y: auto; flex: 1; }
 
         input[type="text"], input[type="number"], textarea {
             background: rgba(30, 41, 59, 0.8); border: 1px solid #475569;
@@ -34,40 +33,25 @@
         textarea { resize: vertical; min-height: 80px; font-size: 12px; }
         input:focus, textarea:focus { outline: none; border-color: #38bdf8; box-shadow: 0 0 8px rgba(56, 189, 248, 0.3); }
 
-        .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 10px; margin-top: 20px; font-weight: bold; display: flex; align-items: center; gap: 8px; }
-        .section-title:first-child { margin-top: 0; }
+        .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 10px; margin-top: 16px; font-weight: bold; }
 
         .custom-map-label {
-            background-color: rgba(15, 23, 42, 0.90); color: white; padding: 4px 6px;
+            background-color: rgba(15, 23, 42, 0.95); color: white; padding: 6px 8px;
             border-radius: 6px; border: 2px solid transparent; font-size: 11px;
             font-family: 'Inter', sans-serif; font-weight: bold; white-space: pre-line;
-            text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.5); pointer-events: none;
-            backdrop-filter: blur(4px); line-height: 1.2; text-shadow: 1px 1px 2px black; z-index: 5;
+            text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.5); 
+            backdrop-filter: blur(4px); line-height: 1.4; text-shadow: 1px 1px 2px black;
+            transition: transform 0.1s;
         }
+        .custom-map-label:hover { transform: scale(1.05); z-index: 20; }
 
-        .chk-label { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; color: #f8fafc; font-weight: bold; justify-content: center; }
-        .chk-label input { width: 16px; height: 16px; cursor: pointer; accent-color: #38bdf8; }
-
-        .probe-label {
-            background-color: rgba(147, 51, 234, 0.90); color: white; padding: 4px 8px;
-            border-radius: 6px; border: 1px solid #d8b4fe; font-size: 11px;
-            font-family: 'Inter', sans-serif; font-weight: bold;
-            text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.5); cursor: pointer;
-            backdrop-filter: blur(4px); line-height: 1.2; text-shadow: 1px 1px 2px black; z-index: 6;
-        }
-        .probe-label:hover { background-color: rgba(168, 85, 247, 1); }
-
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 50; display: none; align-items: center; justify-content: center; }
-        .modal-box { background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 20px; width: 320px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); }
+        .chk-label { display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; color: #cbd5e1; }
+        .chk-label input { width: auto; margin: 0; cursor: pointer; }
 
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 3px; }
-        .loading-spin { animation: spin 1s linear infinite; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        
         .drawing-active { cursor: crosshair !important; }
-        .drawing-active .maplibregl-canvas-container.maplibregl-interactive { cursor: crosshair !important; }
-        .probing-active .maplibregl-canvas-container.maplibregl-interactive { cursor: crosshair !important; }
+        .probing-active { cursor: crosshair !important; }
     </style>
 </head>
 <body>
@@ -75,23 +59,24 @@
 <div id="map"></div>
 
 <div id="ui-panel">
-    <div id="ui-header" class="flex flex-col gap-3">
+    <div class="flex justify-between items-center border-b border-slate-700 pb-3 mb-0 px-4 pt-4 shrink-0">
         <h2 class="text-sm font-bold text-sky-400 uppercase tracking-wider flex items-center gap-2">
-            <i class="fa-solid fa-satellite-dish"></i> RF Lab Pro Simulator
+            <i class="fa-solid fa-satellite-dish"></i> RF Unified Lab Pro
         </h2>
-        <div class="flex gap-2 pb-2">
-            <button onclick="zoomLocal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-1.5 rounded text-[11px] font-bold transition shadow border border-slate-600">
-                <i class="fa-solid fa-mountain-city"></i> Zoom Locale
+        <div class="flex gap-2">
+            <button onclick="map.flyTo({ center: homeLngLat, zoom: 15, pitch: 65, duration: 1500 });" class="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded text-xs transition" title="Zoom Locale">
+                <i class="fa-solid fa-mountain-city"></i>
             </button>
-            <button onclick="zoomGlobal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-1.5 rounded text-[11px] font-bold transition shadow border border-slate-600">
-                <i class="fa-solid fa-globe"></i> Zoom Globale
+            <button onclick="map.flyTo({ pitch: 0, zoom: 3, duration: 2000 });" class="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded text-xs transition" title="Zoom Globale">
+                <i class="fa-solid fa-globe"></i>
             </button>
         </div>
     </div>
 
     <div id="ui-content" class="space-y-2">
         
-        <div class="section-title text-sky-400"><i class="fa-solid fa-layer-group"></i> 1. Setup & Simulazione 3D</div>
+        <!-- LOCAL 3D SETUP -->
+        <div class="section-title text-sky-400 mt-0"><i class="fa-solid fa-location-crosshairs"></i> 1. Setup Locale 3D & Fisica</div>
         
         <div class="grid grid-cols-2 gap-2 text-xs">
             <div class="col-span-2">
@@ -99,258 +84,123 @@
                 <input type="text" id="inp-locator" placeholder="Es. JN56ab" onchange="syncFromLocator()">
             </div>
             <div>
-                <label class="block text-slate-400 font-bold uppercase mb-1">Latitudine</label>
-                <input type="number" id="inp-lat" step="0.0001" onchange="syncFromCoords()">
-            </div>
-            <div>
-                <label class="block text-slate-400 font-bold uppercase mb-1">Longitudine</label>
-                <input type="number" id="inp-lon" step="0.0001" onchange="syncFromCoords()">
-            </div>
-            <div>
                 <label class="block text-slate-400 font-bold uppercase mb-1">Alt. Ant. (m)</label>
-                <input type="number" id="inp-h-ant" value="10" min="0" step="1" oninput="updateRayHelper()">
+                <input type="number" id="inp-h-ant" value="10" min="0" step="1">
             </div>
             <div>
                 <label class="block text-slate-400 font-bold uppercase mb-1">Elevazione (°)</label>
-                <input type="number" id="inp-angle" value="0" min="-20" max="89" step="1" oninput="updateRayHelper()">
+                <input type="number" id="inp-angle" value="5" min="-20" max="89" step="1">
             </div>
-
-            <div class="col-span-2 bg-slate-800 border border-slate-700 rounded p-2 text-center text-amber-400 text-[10px] mt-1 shadow-inner">
-                <i class="fa-solid fa-ruler-combined"></i> A 100m di distanza, il centro del raggio viaggia a<br>
-                <span id="ray-h-100" class="font-bold text-white text-xs">10.0</span> <span class="text-white">metri di altezza base</span>.
-            </div>
-
             <div>
-                <label class="block text-slate-400 font-bold uppercase mb-1 mt-1">Raggio OSM (m)</label>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Raggio OSM (m)</label>
                 <input type="number" id="inp-osm-rad" value="500" min="100" step="100">
             </div>
             <div>
-                <label class="block text-slate-400 font-bold uppercase mb-1 mt-1">Distanza 3D (m)</label>
-                <input type="number" id="inp-dist" value="1500">
+                <label class="block text-slate-400 font-bold uppercase mb-1">Distanza Orizzonte (m)</label>
+                <input type="number" id="inp-dist" value="15000">
             </div>
         </div>
         
-        <div class="mt-2 bg-slate-800 p-2 rounded border border-slate-700">
-            <label class="chk-label justify-start mb-1 text-fuchsia-400">
-                <input type="checkbox" id="chk-skywave"> <i class="fa-solid fa-satellite"></i> Abilita Riflessione Skywave
+        <div class="mt-2 mb-2">
+            <label class="chk-label font-bold text-fuchsia-400">
+                <input type="checkbox" id="chk-skywave"> <i class="fa-solid fa-satellite"></i> Attiva Riflessione Ionosferica (Skywave a 300km)
             </label>
-            <div class="flex items-center justify-between pl-6 gap-2">
-                <span class="text-[10px] text-slate-400 uppercase font-bold">Alt. Ionosfera (km):</span>
-                <input type="number" id="inp-iono" value="300" class="w-16 h-6 text-center text-xs p-0 m-0">
-            </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-2 mt-3">
-            <button id="btn-fetch" onclick="fetchBuildings()" class="py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded uppercase text-[10px] transition shadow">
-                <i class="fa-solid fa-download"></i> Edifici
+        <div class="grid grid-cols-4 gap-1 mt-2">
+            <button id="btn-fetch" onclick="fetchBuildings()" class="py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded uppercase text-[10px] shadow" title="Scarica Edifici OSM">
+                <i class="fa-solid fa-download"></i> OSM
             </button>
-            <button id="btn-draw" onclick="startDrawingBuilding()" class="py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded uppercase text-[10px] transition shadow">
+            <button id="btn-draw" onclick="startDrawingBuilding()" class="py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded uppercase text-[10px] shadow" title="Disegna Edificio">
                 <i class="fa-solid fa-pencil"></i> Disegna
             </button>
-            <button id="btn-probe" onclick="toggleProbe()" class="py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded uppercase text-[10px] transition shadow">
+            <button id="btn-probe" onclick="toggleProbe()" class="py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded uppercase text-[10px] shadow" title="Misura Quota">
                 <i class="fa-solid fa-map-pin"></i> Sonda
             </button>
-            <button id="btn-calc" onclick="calcViewshed()" class="py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded uppercase text-[10px] transition shadow">
-                <i class="fa-solid fa-radar"></i> Fisica 3D
+            <button id="btn-calc" onclick="calcViewshed()" class="py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded uppercase text-[10px] shadow" title="Calcola Propagazione 3D">
+                <i class="fa-solid fa-radar"></i> Fisica
             </button>
         </div>
-        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-2 text-center bg-slate-800 p-1.5 rounded">Trascina Antenna o Clicca un Edificio per modificarlo.</div>
+        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-1 text-center">Tutti gli strumenti attivi. Sonda intelligente abilitata.</div>
 
-        <div class="section-title text-rose-400"><i class="fa-solid fa-rss"></i> 2. Dati Empirici RBN (A/B Test)</div>
+        <!-- RBN GLOBAL -->
+        <div class="section-title text-rose-400 mt-4"><i class="fa-solid fa-globe"></i> 2. RBN Globale (A/B Test)</div>
         
         <div class="space-y-2 text-xs">
             <div>
-                <label class="block text-slate-400 font-bold uppercase mb-1">Nominativo Target</label>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Nominativo</label>
                 <input type="text" id="inp-call" placeholder="Es. IN3GYO" value="IN3GYO">
             </div>
             <div>
-                <label class="block text-slate-400 font-bold uppercase mb-1">Dati RBN (Copia/Incolla tutto)</label>
-                <textarea id="inp-rbn" placeholder="Incolla log (ignora gli spazi saltati)..."></textarea>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Dati RBN (Copia e Incolla)</label>
+                <textarea id="inp-rbn" placeholder="Incolla qui le righe del Reverse Beacon..."></textarea>
             </div>
         </div>
 
-        <button onclick="analyzeRBN()" class="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded uppercase tracking-wider text-[11px] transition shadow mt-3">
-            <i class="fa-solid fa-bolt"></i> Analizza & Mappa RBN
+        <button onclick="analyzeRBN()" class="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded uppercase text-[11px] shadow mt-2">
+            <i class="fa-solid fa-bolt"></i> Analizza & Mappa
         </button>
 
+        <!-- RESULTS -->
         <div id="panel-results" class="hidden mt-4">
-            <div class="section-title text-amber-400"><i class="fa-solid fa-chart-pie"></i> Report Analitico</div>
+            <div class="section-title text-amber-400"><i class="fa-solid fa-chart-pie"></i> Report Direzionale A/B</div>
             
-            <div class="flex gap-4 mb-3 justify-center border border-slate-700 bg-slate-800 p-2 rounded-lg shadow-inner">
-                <label class="chk-label"><input type="checkbox" id="chk-a" checked onchange="toggleLayers()"> <span class="text-red-400 border-b border-red-400 border-dashed">Freq A</span></label>
-                <label class="chk-label" id="chk-container-b"><input type="checkbox" id="chk-b" checked onchange="toggleLayers()"> <span class="text-blue-400 border-b border-blue-400 border-dashed">Freq B</span></label>
+            <div class="flex gap-4 mb-3 justify-center border-b border-slate-700 pb-2">
+                <label class="chk-label"><input type="checkbox" id="chk-a" checked onchange="toggleLayers()"> Mostra Freq A</label>
+                <label class="chk-label"><input type="checkbox" id="chk-b" checked onchange="toggleLayers()"> Mostra Freq B</label>
             </div>
 
             <div class="grid grid-cols-2 gap-2 text-center text-xs mb-3">
                 <div class="bg-red-900/30 border border-red-800 p-2 rounded">
                     <div class="text-red-400 font-bold uppercase mb-1" id="lbl-fa">Freq A</div>
-                    <div class="text-[10px] text-slate-300">Max DX: <span class="font-bold text-red-300" id="dx-a">0 km</span></div>
+                    <div class="text-lg font-bold text-red-300" id="dx-a">0 km</div>
                 </div>
                 <div class="bg-blue-900/30 border border-blue-800 p-2 rounded" id="panel-fb">
                     <div class="text-blue-400 font-bold uppercase mb-1" id="lbl-fb">Freq B</div>
-                    <div class="text-[10px] text-slate-300">Max DX: <span class="font-bold text-blue-300" id="dx-b">0 km</span></div>
+                    <div class="text-lg font-bold text-blue-300" id="dx-b">0 km</div>
                 </div>
             </div>
-
-            <div class="bg-slate-800 border border-slate-700 p-3 rounded text-[11px] mb-3" id="panel-advantage">
-                <div class="font-bold text-slate-300 uppercase mb-2 border-b border-slate-700 pb-1">Vantaggio Medio per Direzione</div>
-                <div class="space-y-2">
-                    <div class="flex justify-between border-b border-slate-700 pb-1"><span class="font-bold text-slate-400 w-12">NORD:</span> <span id="dir-N-winner" class="font-bold text-right text-sky-300">--</span></div>
-                    <div class="flex justify-between border-b border-slate-700 pb-1"><span class="font-bold text-slate-400 w-12">SUD:</span> <span id="dir-S-winner" class="font-bold text-right text-sky-300">--</span></div>
-                    <div class="flex justify-between border-b border-slate-700 pb-1"><span class="font-bold text-slate-400 w-12">EST:</span> <span id="dir-E-winner" class="font-bold text-right text-sky-300">--</span></div>
-                    <div class="flex justify-between"><span class="font-bold text-slate-400 w-12">OVEST:</span> <span id="dir-W-winner" class="font-bold text-right text-sky-300">--</span></div>
-                </div>
-            </div>
-            
             <div id="log-global" class="text-[10px] text-emerald-400 mt-2 font-mono text-center font-bold"></div>
         </div>
     </div>
 </div>
 
-<div id="custom-alert" class="modal-overlay flex">
-    <div class="modal-box">
-        <h3 id="alert-title" class="text-lg font-bold text-rose-400 mb-2 border-b border-slate-700 pb-2"><i class="fa-solid fa-triangle-exclamation"></i> Avviso</h3>
-        <p id="alert-text" class="text-sm text-slate-300 mb-4 leading-relaxed"></p>
-        <button onclick="document.getElementById('custom-alert').style.display='none'" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded">Ricevuto</button>
-    </div>
-</div>
-
-<div id="custom-prompt" class="modal-overlay flex">
-    <div class="modal-box">
-        <h3 class="text-lg font-bold text-sky-400 mb-2 border-b border-slate-700 pb-2"><i class="fa-solid fa-building"></i> Crea Edificio</h3>
-        <p class="text-sm text-slate-300 mb-3">Inserisci l'altezza dell'edificio in metri:</p>
-        <input type="number" id="prompt-input" class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white mb-4 font-bold text-lg text-center" value="15">
-        <div class="flex gap-2">
-            <button onclick="cancelPrompt()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded text-xs uppercase">Annulla</button>
-            <button onclick="confirmPrompt()" class="flex-1 bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 rounded text-xs uppercase">Conferma</button>
-        </div>
-    </div>
-</div>
-
-<div id="edit-bldg-modal" class="modal-overlay flex">
-    <div class="modal-box">
-        <h3 class="text-lg font-bold text-sky-400 mb-2 border-b border-slate-700 pb-2"><i class="fa-solid fa-hammer"></i> Gestisci Edificio</h3>
-        <p class="text-sm text-slate-300 mb-3">Modifica l'altezza in metri:</p>
-        <input type="number" id="edit-bldg-h" class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white mb-4 font-bold text-lg text-center">
-        <div class="flex flex-col gap-2">
-            <div class="flex gap-2">
-                <button onclick="closeEditBldgModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded text-xs uppercase">Annulla</button>
-                <button onclick="saveEditBldg()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded text-xs uppercase">Salva</button>
-            </div>
-            <button onclick="deleteBldg()" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded text-xs uppercase mt-2"><i class="fa-solid fa-trash"></i> Elimina Edificio</button>
-        </div>
-    </div>
-</div>
-
 <script>
-    let homeLngLat = [11.2366, 46.0655]; // Default Pergine Valsugana
+    let homeLngLat = [11.2366, 46.0655];
     let antennaMarker = null;
     let physicsBuildings = []; 
-    let domLabels = []; 
+    let domLabels = [];
     
-    // Tools states
+    // States
     let isDrawing = false;
     let isProbing = false;
     let currentPolygon = [];
     let drawingGeoJSON = { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }] };
-    let promptCallback = null;
-    let activeBuildingId = null;
-
-    function updateRayHelper() {
-        let hAnt = parseFloat(document.getElementById('inp-h-ant').value) || 0;
-        let ang = parseFloat(document.getElementById('inp-angle').value) || 0;
-        let heightAt100m = hAnt + 100 * Math.tan(ang * Math.PI / 180);
-        const el = document.getElementById('ray-h-100');
-        if (el) el.innerText = heightAt100m.toFixed(1);
-    }
-    document.addEventListener("DOMContentLoaded", updateRayHelper);
 
     const dxccDb = {
-        'IN3': [11.1, 46.0], 'IK': [12.0, 42.0], 'IZ': [12.0, 42.0], 'I': [12.0, 42.0], 'IT': [14.0, 37.0],
-        'MM': [-4.0, 56.0], 'M': [-1.5, 52.5], 'G': [-1.5, 52.5], '2': [-1.5, 52.5],
+        'IN3': [11.1, 46.0], 'I': [12.0, 42.0], 'M': [-1.5, 52.5], 'G': [-1.5, 52.5],
         'HA': [19.5, 47.0], 'OE': [14.0, 47.5], 'S5': [15.0, 46.0], 'OK': [15.5, 49.5],
-        'DM': [10.0, 51.0], 'DK': [10.0, 51.0], 'DO': [10.0, 51.0], 'DC': [10.0, 51.0], 'DB': [10.0, 51.0], 'DL': [10.0, 51.0], 'DF': [10.0, 51.0],
-        'F': [2.0, 46.0], 'HB9': [8.2, 46.8], 'HB': [8.2, 46.8],
-        'SE': [15.0, 62.0], 'SM': [15.0, 62.0], 'LA': [8.0, 61.0], 'OH': [26.0, 64.0],
-        'RU': [37.0, 55.0], 'UA': [37.0, 55.0], 'RA': [37.0, 55.0],
-        'ON': [4.5, 50.5], 'ES': [26.0, 59.0], 'PI': [5.5, 52.0], 'PD': [5.5, 52.0], 'PA': [5.5, 52.0], 'PB': [5.5, 52.0],
-        'K': [-98.0, 39.0], 'W': [-98.0, 39.0], 'N': [-98.0, 39.0], 'A': [-98.0, 39.0],
-        'VE': [-106.0, 56.0], 'VA': [-106.0, 56.0], 'PY': [-51.0, -14.0], 'LU': [-64.0, -34.0], 'VK': [133.0, -25.0], 'ZL': [174.0, -41.0], 'JA': [138.0, 36.0]
+        'D': [10.0, 51.0], 'F': [2.0, 46.0], 'HB': [8.2, 46.8],
+        'S': [15.0, 62.0], 'R': [37.0, 55.0], 'O': [4.5, 50.5], 'P': [5.5, 52.0],
+        'K': [-98.0, 39.0], 'W': [-98.0, 39.0]
     };
 
-    // --- STREAMING_CHUNK:Modals Logic ---
-    function showMsg(title, msg) {
-        document.getElementById('alert-title').innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${title}`;
-        document.getElementById('alert-text').innerText = msg;
-        document.getElementById('custom-alert').style.display = 'flex';
-    }
-
-    function customPrompt(defaultVal, callback) {
-        document.getElementById('prompt-input').value = defaultVal;
-        promptCallback = callback;
-        document.getElementById('custom-prompt').style.display = 'flex';
-        document.getElementById('prompt-input').focus();
-    }
-    function cancelPrompt() { document.getElementById('custom-prompt').style.display = 'none'; promptCallback = null; }
-    function confirmPrompt() {
-        const val = document.getElementById('prompt-input').value;
-        document.getElementById('custom-prompt').style.display = 'none';
-        if (promptCallback) promptCallback(val);
-        promptCallback = null;
-    }
-
-    function closeEditBldgModal() { document.getElementById('edit-bldg-modal').style.display = 'none'; activeBuildingId = null; }
-    function saveEditBldg() {
-        if (activeBuildingId === null) return;
-        const newH = parseFloat(document.getElementById('edit-bldg-h').value);
-        if (!isNaN(newH)) {
-            let bGeo = map.getSource('buildings-src')._data;
-            let feature = bGeo.features.find(f => f.properties.id === activeBuildingId);
-            if (feature) feature.properties.height = newH;
-            map.getSource('buildings-src').setData(bGeo);
-            
-            let phys = physicsBuildings.find(p => p.id === activeBuildingId);
-            if (phys) phys.height = newH;
-        }
-        closeEditBldgModal();
-    }
-    function deleteBldg() {
-        if (activeBuildingId === null) return;
-        let bGeo = map.getSource('buildings-src')._data;
-        bGeo.features = bGeo.features.filter(f => f.properties.id !== activeBuildingId);
-        map.getSource('buildings-src').setData(bGeo);
-        physicsBuildings = physicsBuildings.filter(p => p.id !== activeBuildingId);
-        closeEditBldgModal();
-    }
-
-    // --- STREAMING_CHUNK:Map Initialization ---
     const map = new maplibregl.Map({
         container: 'map',
         style: {
             version: 8,
-            sources: { 
-                'satellite': { 
-                    type: 'raster', 
-                    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], 
-                    tileSize: 256, attribution: 'Tiles &copy; Esri'
-                } 
-            },
+            sources: { 'satellite': { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256 } },
             layers: [{ id: 'sat-layer', type: 'raster', source: 'satellite' }]
         },
-        center: homeLngLat, zoom: 15, pitch: 65, bearing: -15
+        center: homeLngLat, zoom: 14, pitch: 60
     });
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
 
     map.on('load', () => {
-        // AWS Terrain
-        map.addSource('aws-terrain', { 
-            type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], 
-            encoding: 'terrarium', tileSize: 256, maxzoom: 14 
-        });
+        map.addSource('aws-terrain', { type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 14 });
         map.setTerrain({ source: 'aws-terrain', exaggeration: 1.0 });
 
-        // Local 3D
         map.addSource('buildings-src', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addLayer({
             'id': '3d-buildings', 'type': 'fill-extrusion', 'source': 'buildings-src',
@@ -358,16 +208,15 @@
         });
 
         map.addSource('draw-src', { type: 'geojson', data: drawingGeoJSON });
-        map.addLayer({ 'id': 'draw-line', 'type': 'line', 'source': 'draw-src', 'paint': { 'line-color': '#f59e0b', 'line-width': 4 } });
+        map.addLayer({ 'id': 'draw-line', 'type': 'line', 'source': 'draw-src', 'paint': { 'line-color': '#f59e0b', 'line-width': 3 } });
 
         map.addSource('local-coverage-src', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addLayer({ 'id': 'local-coverage', 'type': 'fill', 'source': 'local-coverage-src', 'paint': { 'fill-color': '#eab308', 'fill-opacity': 0.4, 'fill-outline-color': '#fef08a' } });
 
-        // Skywave Layer
+        // SKYWAVE LAYER
         map.addSource('skywave-src', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-        map.addLayer({ 'id': 'layer-skywave', 'type': 'line', 'source': 'skywave-src', 'layout': { 'line-join': 'round', 'line-cap': 'round' }, 'paint': { 'line-color': '#d946ef', 'line-width': 2, 'line-dasharray': [2, 2] } });
+        map.addLayer({ 'id': 'layer-skywave', 'type': 'line', 'source': 'skywave-src', 'paint': { 'line-color': '#d946ef', 'line-width': 3, 'line-dasharray': [2, 2], 'line-opacity': 0.7 } });
 
-        // Global RBN
         map.addSource('rbn-hull-a', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addLayer({ 'id': 'layer-hull-a', 'type': 'fill', 'source': 'rbn-hull-a', 'paint': { 'fill-color': '#ef4444', 'fill-opacity': 0.25, 'fill-outline-color': '#ef4444' } });
 
@@ -375,26 +224,16 @@
         map.addLayer({ 'id': 'layer-hull-b', 'type': 'fill', 'source': 'rbn-hull-b', 'paint': { 'fill-color': '#3b82f6', 'fill-opacity': 0.25, 'fill-outline-color': '#3b82f6' } });
         
         map.addSource('rbn-lines', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-        map.addLayer({ 'id': 'layer-lines', 'type': 'line', 'source': 'rbn-lines', 'layout': { 'line-join': 'round', 'line-cap': 'round' }, 'paint': { 'line-color': ['get', 'color'], 'line-width': 2, 'line-opacity': 0.7 } });
+        map.addLayer({ 'id': 'layer-lines', 'type': 'line', 'source': 'rbn-lines', 'paint': { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': 0.6 } });
 
         antennaMarker = new maplibregl.Marker({ draggable: true, color: "#eab308" }).setLngLat(homeLngLat).addTo(map);
-        antennaMarker.on('dragend', () => { updateLocation([antennaMarker.getLngLat().lng, antennaMarker.getLngLat().lat], false); });
+        antennaMarker.on('dragend', () => { updateLocation([antennaMarker.getLngLat().lng, antennaMarker.getLngLat().lat]); });
 
         updateLocationUI();
 
-        // Mouse Events
-        map.on('mouseenter', '3d-buildings', () => { if (!isDrawing && !isProbing) map.getCanvas().style.cursor = 'pointer'; });
-        map.on('mouseleave', '3d-buildings', () => { if (!isDrawing && !isProbing) map.getCanvas().style.cursor = ''; });
-
         map.on('click', (e) => {
             if (isProbing) {
-                let elev = map.queryTerrainElevation(e.lngLat);
-                if (elev === null) elev = 0;
-                const el = document.createElement('div');
-                el.className = 'probe-label';
-                el.innerHTML = `<i class="fa-solid fa-mountain"></i> Quota: ${Math.round(elev)}m<br><span style="font-size:8px; font-weight:normal;">Clicca per Rimuovere</span>`;
-                const marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -10] }).setLngLat(e.lngLat).addTo(map);
-                el.addEventListener('click', (ev) => { ev.stopPropagation(); marker.remove(); });
+                placeProbe(e);
                 return;
             }
             if (isDrawing) {
@@ -403,22 +242,97 @@
                 map.getSource('draw-src').setData(drawingGeoJSON);
                 return;
             }
-            const features = map.queryRenderedFeatures(e.point, { layers: ['3d-buildings'] });
-            if (features.length > 0) {
-                activeBuildingId = features[0].properties.id;
-                document.getElementById('edit-bldg-h').value = features[0].properties.height;
-                document.getElementById('edit-bldg-modal').style.display = 'flex';
-            } else {
-                updateLocation([e.lngLat.lng, e.lngLat.lat], true);
+            
+            // Delete building on click if not drawing/probing
+            let features = map.queryRenderedFeatures(e.point, { layers: ['3d-buildings'] });
+            if(features.length > 0) {
+                if(confirm("Vuoi eliminare questo edificio?")) {
+                    let idToRemove = features[0].properties.id;
+                    let bGeo = map.getSource('buildings-src')._data;
+                    bGeo.features = bGeo.features.filter(f => f.properties.id !== idToRemove);
+                    map.getSource('buildings-src').setData(bGeo);
+                    physicsBuildings = physicsBuildings.filter(b => b.id !== idToRemove);
+                }
             }
         });
-        
+
         map.on('dblclick', (e) => { if (isDrawing) { e.preventDefault(); finishDrawing(); } });
     });
 
-    // --- STREAMING_CHUNK:Location Math & Tools ---
-    window.zoomLocal = function() { map.flyTo({ center: homeLngLat, zoom: 15, pitch: 65, duration: 1500 }); };
-    window.zoomGlobal = function() { map.flyTo({ pitch: 0, zoom: 3, duration: 2000 }); };
+    // --- PROBE TOOL (Sonda Quota) ---
+    window.toggleProbe = function() {
+        if(isDrawing) finishDrawing();
+        isProbing = !isProbing;
+        const btn = document.getElementById('btn-probe');
+        if (isProbing) {
+            btn.classList.replace('bg-cyan-600', 'bg-red-600');
+            btn.innerHTML = '<i class="fa-solid fa-stop"></i> Ferma Sonda';
+            document.getElementById('map').classList.add('probing-active');
+            document.getElementById('log-local').innerText = "Clicca sulla mappa per misurare le quote esatte.";
+        } else {
+            btn.classList.replace('bg-red-600', 'bg-cyan-600');
+            btn.innerHTML = '<i class="fa-solid fa-map-pin"></i> Sonda';
+            document.getElementById('map').classList.remove('probing-active');
+            document.getElementById('log-local').innerText = "Sonda disattivata.";
+        }
+    };
+
+    function placeProbe(e) {
+        let rawElev = map.queryTerrainElevation(e.lngLat);
+        if (rawElev !== null) {
+            let terrElev = Math.round(rawElev); // Numeri precisi senza decimali
+            let bldgH = 0;
+            
+            // Controlla se abbiamo cliccato un tetto
+            let features = map.queryRenderedFeatures(e.point, { layers: ['3d-buildings'] });
+            if (features.length > 0) bldgH = Math.round(features[0].properties.height || 0);
+            
+            let htmlText = bldgH > 0 ? `⛰️ Terreno: ${terrElev}m<br>🏢 Edificio: +${bldgH}m<br><b>Totale: ${terrElev + bldgH}m</b>` : `📍 Quota:<br><b>${terrElev}m</b>`;
+            
+            let el = document.createElement('div');
+            el.className = 'custom-map-label';
+            el.style.borderColor = '#06b6d4';
+            el.style.cursor = 'pointer';
+            el.innerHTML = htmlText;
+            
+            let m = new maplibregl.Marker({ element: el }).setLngLat(e.lngLat).addTo(map);
+            el.onclick = () => m.remove(); // Clicca per rimuovere
+        } else {
+            alert("Dati altitudine non ancora caricati. Fai zoom o attendi un istante.");
+        }
+    }
+
+    // --- DRAWING TOOL ---
+    window.startDrawingBuilding = function() {
+        if(isProbing) toggleProbe();
+        isDrawing = true;
+        currentPolygon = [];
+        drawingGeoJSON.features[0].geometry.coordinates = [];
+        map.getSource('draw-src').setData(drawingGeoJSON);
+        document.getElementById('map').classList.add('drawing-active');
+        document.getElementById('log-local').innerText = "Disegna sulla mappa. Doppio clic per chiudere l'edificio.";
+    };
+
+    function finishDrawing() {
+        isDrawing = false;
+        document.getElementById('map').classList.remove('drawing-active');
+        if (currentPolygon.length >= 3) {
+            currentPolygon.push([...currentPolygon[0]]); 
+            let h = prompt("Inserisci altezza in metri:", "15");
+            h = parseFloat(h) || 15;
+            let bz = map.queryTerrainElevation(currentPolygon[0]) || map.queryTerrainElevation(homeLngLat) || 0;
+            let id = Date.now();
+            let newBuilding = { type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: { type: 'Polygon', coordinates: [currentPolygon] } };
+            let bGeo = map.getSource('buildings-src')._data;
+            bGeo.features.push(newBuilding);
+            map.getSource('buildings-src').setData(bGeo);
+            physicsBuildings.push({ id: id, poly: turf.polygon([currentPolygon]), height: h, base_z: bz });
+            document.getElementById('log-local').innerText = `Edificio di ${h}m aggiunto!`;
+        }
+        currentPolygon = [];
+        drawingGeoJSON.features[0].geometry.coordinates = [];
+        map.getSource('draw-src').setData(drawingGeoJSON);
+    }
 
     function maidenheadToLngLat(grid) {
         grid = grid.toUpperCase().trim();
@@ -429,255 +343,154 @@
     }
     function lngLatToMaidenhead(lng, lat) {
         lng += 180; lat += 90;
-        return String.fromCharCode(65 + Math.floor(lng / 20)) + String.fromCharCode(65 + Math.floor(lat / 10)) + 
-               String.fromCharCode(48 + Math.floor((lng % 20) / 2)) + String.fromCharCode(48 + Math.floor(lat % 10));
+        return String.fromCharCode(65 + Math.floor(lng / 20)) + String.fromCharCode(65 + Math.floor(lat / 10)) + String.fromCharCode(48 + Math.floor((lng % 20) / 2)) + String.fromCharCode(48 + Math.floor(lat % 10));
     }
 
-    function updateLocationUI() {
-        const inpLoc = document.getElementById('inp-locator');
-        const inpLat = document.getElementById('inp-lat');
-        const inpLon = document.getElementById('inp-lon');
-        if (inpLoc) inpLoc.value = lngLatToMaidenhead(homeLngLat[0], homeLngLat[1]);
-        if (inpLat) inpLat.value = homeLngLat[1].toFixed(4);
-        if (inpLon) inpLon.value = homeLngLat[0].toFixed(4);
-    }
-
-    function updateLocation(coords, moveMarker) {
+    function updateLocationUI() { document.getElementById('inp-locator').value = lngLatToMaidenhead(homeLngLat[0], homeLngLat[1]); }
+    function updateLocation(coords) {
         homeLngLat = coords;
         updateLocationUI();
-        if (moveMarker && antennaMarker) antennaMarker.setLngLat(homeLngLat);
+        if (antennaMarker) antennaMarker.setLngLat(homeLngLat);
         map.getSource('local-coverage-src').setData({ type: 'FeatureCollection', features: [] });
+        map.getSource('skywave-src').setData({ type: 'FeatureCollection', features: [] });
     }
+    window.syncFromLocator = function() { const c = maidenheadToLngLat(document.getElementById('inp-locator').value); if(c) { updateLocation(c); map.flyTo({center: c}); } };
 
-    window.syncFromLocator = function() { 
-        const locVal = document.getElementById('inp-locator') ? document.getElementById('inp-locator').value : '';
-        const c = maidenheadToLngLat(locVal); 
-        if(c) { updateLocation(c, true); map.flyTo({center: c}); } 
-    };
-    window.syncFromCoords = function() { 
-        const lat = parseFloat(document.getElementById('inp-lat').value);
-        const lon = parseFloat(document.getElementById('inp-lon').value);
-        if(!isNaN(lat) && !isNaN(lon)) { updateLocation([lon, lat], true); map.flyTo({center: [lon, lat]}); } 
-    };
-
-    window.toggleProbe = function() {
-        isProbing = !isProbing;
-        if (isProbing) {
-            isDrawing = false;
-            document.getElementById('map').classList.remove('drawing-active');
-            document.getElementById('map').classList.add('probing-active');
-            document.getElementById('btn-probe').classList.add('ring-2', 'ring-white');
-        } else {
-            document.getElementById('map').classList.remove('probing-active');
-            document.getElementById('btn-probe').classList.remove('ring-2', 'ring-white');
-        }
-    };
-
-    window.startDrawingBuilding = function() {
-        isDrawing = true;
-        isProbing = false;
-        document.getElementById('map').classList.remove('probing-active');
-        if (document.getElementById('btn-probe')) document.getElementById('btn-probe').classList.remove('ring-2', 'ring-white');
-        
-        currentPolygon = [];
-        drawingGeoJSON.features[0].geometry.coordinates = [];
-        map.getSource('draw-src').setData(drawingGeoJSON);
-        document.getElementById('map').classList.add('drawing-active');
-    };
-
-    function finishDrawing() {
-        isDrawing = false;
-        document.getElementById('map').classList.remove('drawing-active');
-        if (currentPolygon.length >= 3) {
-            currentPolygon.push([...currentPolygon[0]]); 
-            customPrompt("15", function(val) {
-                let h = parseFloat(val) || 15;
-                let bz = map.queryTerrainElevation(currentPolygon[0]) || map.queryTerrainElevation(homeLngLat) || 0;
-                let id = Date.now(); 
-                let poly = turf.polygon([currentPolygon]);
-                let bbox = turf.bbox(poly); 
-                let newBldg = { type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: poly.geometry };
-                let bGeo = map.getSource('buildings-src')._data;
-                bGeo.features.push(newBldg);
-                map.getSource('buildings-src').setData(bGeo);
-                physicsBuildings.push({ id: id, poly: poly, height: h, base_z: bz, bbox: bbox });
-                
-                currentPolygon = [];
-                drawingGeoJSON.features[0].geometry.coordinates = [];
-                map.getSource('draw-src').setData(drawingGeoJSON);
-            });
-        } else {
-            currentPolygon = [];
-            drawingGeoJSON.features[0].geometry.coordinates = [];
-            map.getSource('draw-src').setData(drawingGeoJSON);
-        }
-    }
-
-    // --- STREAMING_CHUNK:Local Raycasting & Skywave Engine ---
     window.fetchBuildings = async function() {
         if (!homeLngLat) return;
         const btn = document.getElementById('btn-fetch');
         const rad = parseFloat(document.getElementById('inp-osm-rad').value) || 500;
-        btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Attendi...';
-        
+        btn.innerHTML = 'Dwnld...';
         const query = `[out:json][timeout:25];(way["building"](around:${rad},${homeLngLat[1]},${homeLngLat[0]});relation["building"](around:${rad},${homeLngLat[1]},${homeLngLat[0]}););out body; >; out skel qt;`;
-        
         try {
-            const res = await fetch('https://overpass-api.de/api/interpreter', { 
-                method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query)
-            });
-            if(!res.ok) throw new Error("Timeout Server OSM. Riprova.");
+            const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query) });
             const data = await res.json();
-            
             let nodes = {};
             data.elements.forEach(el => { if (el.type === 'node') nodes[el.id] = [el.lon, el.lat]; });
-            
             let bGeo = map.getSource('buildings-src')._data; 
-            
             data.elements.forEach((el, idx) => {
                 if (el.type === 'way' && el.tags && el.tags.building) {
                     let c = el.nodes.map(n => nodes[n]).filter(x => x);
                     if (c.length > 2) {
                         if (c[0][0] !== c[c.length-1][0] || c[0][1] !== c[c.length-1][1]) c.push([...c[0]]);
-                        let h = el.tags.height ? parseFloat(el.tags.height) : (el.tags['building:levels'] ? parseInt(el.tags['building:levels']) * 3.5 : 8);
-                        let id = el.id || (Date.now() + idx); 
+                        let h = el.tags.height ? parseFloat(el.tags.height) : 8;
+                        let id = Date.now() + idx; 
                         let bz = map.queryTerrainElevation(c[0]) || map.queryTerrainElevation(homeLngLat) || 0;
-                        let poly = turf.polygon([c]);
-                        let bbox = turf.bbox(poly); 
-                        
-                        if (!physicsBuildings.find(p => p.id === id)) {
-                            bGeo.features.push({ type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: poly.geometry });
-                            physicsBuildings.push({ id: id, poly: poly, height: h, base_z: bz, bbox: bbox });
-                        }
+                        bGeo.features.push({ type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: { type: 'Polygon', coordinates: [c] } });
+                        physicsBuildings.push({ id: id, poly: turf.polygon([c]), height: h, base_z: bz });
                     }
                 }
             });
             map.getSource('buildings-src').setData(bGeo);
-        } catch(e) { showMsg("Errore", e.message); }
-        btn.innerHTML = '<i class="fa-solid fa-download"></i> Edifici';
+            document.getElementById('log-local').innerText = "Edifici OSM estratti (Cliccaci per eliminare).";
+        } catch(e) {}
+        btn.innerHTML = '<i class="fa-solid fa-download"></i> OSM';
     };
-
-    function getSkywaveDistanceKm(elevationDeg, ionoKm) {
-        if (elevationDeg < 0) return null; // Wave hits earth immediately
-        const R = 6371; 
-        const h = parseFloat(ionoKm) || 300;
-        const delta = elevationDeg * Math.PI / 180;
-        // Law of sines to find angle at the Earth's center for the bounce
-        const sinGamma = (R * Math.cos(delta)) / (R + h);
-        const gamma = Math.asin(sinGamma);
-        const theta = (Math.PI / 2) - delta - gamma;
-        // Distance is Arc length
-        return R * (2 * theta);
-    }
 
     window.calcViewshed = function() {
         if (!homeLngLat) return;
         const btn = document.getElementById('btn-calc');
-        btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Prep...';
-        btn.disabled = true;
-
-        const maxDist = parseFloat(document.getElementById('inp-dist').value) || 1500; 
-        map.flyTo({ center: homeLngLat, zoom: 12, pitch: 0, duration: 1500 });
-
+        btn.innerHTML = 'Zoom...';
+        
+        map.flyTo({ center: homeLngLat, zoom: 11, pitch: 0, duration: 1500 });
+        
         setTimeout(() => {
-            btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Calcolo...';
-            
+            btn.innerHTML = 'Fisica...';
             const zBase = map.queryTerrainElevation(homeLngLat);
             if (zBase === null) {
-                showMsg("Errore Dati", "Terreno non scaricato in tempo. Fai zoom manuale e riprova.");
-                btn.innerHTML = '<i class="fa-solid fa-radar"></i> Fisica 3D';
-                btn.disabled = false;
+                document.getElementById('log-local').innerText = "Mappa non ancora pronta, riprova!";
+                btn.innerHTML = '<i class="fa-solid fa-radar"></i> Fisica';
                 return;
             }
 
             const hAnt = parseFloat(document.getElementById('inp-h-ant').value) || 0;
             const angleDeg = parseFloat(document.getElementById('inp-angle').value) || 0;
             const angleRad = angleDeg * Math.PI / 180;
+            const maxDist = parseFloat(document.getElementById('inp-dist').value) || 15000; 
+            const calcSkywave = document.getElementById('chk-skywave').checked;
             const startZ = zBase + hAnt;
-            const R_eff = 6371000 * (4/3); // Standard 4/3 earth radius
+            const R_eff = 6371000 * (4/3); 
             
             let covPoly = [];
+            let skywaveLine = [];
             let origin = turf.point(homeLngLat);
-            
-            // SKYWAVE PREP
-            const skywaveEnabled = document.getElementById('chk-skywave').checked;
-            const ionoH = document.getElementById('inp-iono').value;
-            let skywaveSegments = [];
-            let currentSkywaveLine = null;
 
-            for (let az = 0; az <= 360; az += 2) {
-                let currentAz = az === 360 ? 0 : az;
+            // SKYWAVE MATH (First Hop)
+            // R = Earth Radius, H = Ionosphere Height
+            const R_earth = 6371000;
+            const H_iono = 300000; // 300km F-layer
+            // Legge dei Seni per il calcolo della distanza sulla sfera terrestre
+            const skipAngle = Math.PI/2 - angleRad - Math.asin(R_earth * Math.cos(angleRad) / (R_earth + H_iono));
+            const skipDist = 2 * R_earth * skipAngle; // Distanza in metri del primo salto
+
+            for (let az = 0; az < 360; az += 2) {
                 let hitDist = maxDist;
-                
-                // Surgical ray trace logic
-                for (let d = 2; d <= maxDist; ) {
-                    let pt = turf.destination(origin, d, currentAz, {units: 'meters'}); 
-                    let coords = pt.geometry.coordinates;
-                    let terrElev = map.queryTerrainElevation(coords);
+                let obstacleHit = false;
+
+                // Passo 2m vicino all'antenna, poi si allarga
+                for(let d = 2; d <= maxDist; d += (d < 2000 ? 5 : 20)) {
+                    let pt = turf.destination(origin, d, az, {units: 'meters'});
+                    let terrElev = map.queryTerrainElevation(pt.geometry.coordinates);
+                    
                     if (terrElev === null) { hitDist = d; break; }
                     
                     let rayZ = startZ + (d * Math.tan(angleRad)) - ((d * d) / (2 * R_eff));
+                    
+                    // Bounding Box semplificata per performance
                     let bldgH = 0;
-                    
-                    // BBOX checks for building
                     for(let b of physicsBuildings) {
-                        let box = b.bbox; 
-                        if (coords[0] >= box[0] && coords[0] <= box[2] && coords[1] >= box[1] && coords[1] <= box[3]) {
-                            if(turf.booleanPointInPolygon(pt, b.poly)) { bldgH = b.height; break; }
-                        }
+                        if(turf.booleanPointInPolygon(pt, b.poly)) { bldgH = b.height; break; }
                     }
-                    
-                    if (rayZ <= (terrElev + bldgH)) { hitDist = d; break; }
-                    
-                    if (d < 2000) d += 2; else d += 10;
+                    if(rayZ <= (terrElev + bldgH)) { 
+                        hitDist = d; 
+                        obstacleHit = true; 
+                        break; 
+                    }
                 }
+                covPoly.push(turf.destination(origin, hitDist, az, {units: 'meters'}).geometry.coordinates);
                 
-                let dest = turf.destination(origin, hitDist, currentAz, {units: 'meters'}).geometry.coordinates;
-                covPoly.push(dest);
-
-                // SKYWAVE LOGIC: If the ray escaped local topography, calculate bounce
-                if (skywaveEnabled && hitDist >= maxDist) {
-                    let skipDistKm = getSkywaveDistanceKm(angleDeg, ionoH);
-                    if (skipDistKm !== null) {
-                        let landPt = turf.destination(origin, skipDistKm, currentAz, {units: 'kilometers'}).geometry.coordinates;
-                        if (!currentSkywaveLine) currentSkywaveLine = [];
-                        currentSkywaveLine.push(landPt);
-                    } else {
-                        if (currentSkywaveLine) { skywaveSegments.push(currentSkywaveLine); currentSkywaveLine = null; }
-                    }
-                } else {
-                    if (currentSkywaveLine) { skywaveSegments.push(currentSkywaveLine); currentSkywaveLine = null; }
+                // SKYWAVE: Se il raggio NON ha colpito montagne, vola nello spazio e atterra!
+                if(calcSkywave && !obstacleHit && skipDist > 0 && angleDeg > 0) {
+                    skywaveLine.push(turf.destination(origin, skipDist, az, {units: 'meters'}).geometry.coordinates);
+                } else if (calcSkywave) {
+                    // Muro (Gap nella copertura skywave)
+                    if(skywaveLine.length > 0 && skywaveLine[skywaveLine.length-1] !== null) skywaveLine.push(null);
                 }
             }
-
-            if (currentSkywaveLine) skywaveSegments.push(currentSkywaveLine);
-
             covPoly.push([...covPoly[0]]);
+
             map.getSource('local-coverage-src').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [covPoly] } }] });
-
-            // Plot Skywave
-            let skyGeoJSON = { type: 'FeatureCollection', features: [] };
-            if (skywaveEnabled && skywaveSegments.length > 0) {
-                // Remove single isolated points to form valid LineStrings
-                skywaveSegments.filter(seg => seg.length > 1).forEach(seg => {
-                    skyGeoJSON.features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: seg } });
-                });
-                if(skyGeoJSON.features.length > 0) map.flyTo({ pitch: 0, zoom: 2, duration: 2500 });
+            
+            // Draw Skywave Landing Footprint
+            let skywaveGeo = { type: 'FeatureCollection', features: [] };
+            if(calcSkywave) {
+                let currentSegment = [];
+                for(let p of skywaveLine) {
+                    if(p === null) {
+                        if(currentSegment.length > 1) skywaveGeo.features.push({type: 'Feature', geometry: { type: 'LineString', coordinates: currentSegment }});
+                        currentSegment = [];
+                    } else {
+                        currentSegment.push(p);
+                    }
+                }
+                if(currentSegment.length > 1) skywaveGeo.features.push({type: 'Feature', geometry: { type: 'LineString', coordinates: currentSegment }});
             }
-            map.getSource('skywave-src').setData(skyGeoJSON);
+            map.getSource('skywave-src').setData(skywaveGeo);
 
-            btn.innerHTML = '<i class="fa-solid fa-radar"></i> Fisica 3D';
-            btn.disabled = false;
-        }, 2000); 
+            document.getElementById('log-local').innerText = calcSkywave ? `Fisica completata. Skywave stimata a ${Math.round(skipDist/1000)}km.` : "Fisica morfologica completata.";
+            btn.innerHTML = '<i class="fa-solid fa-radar"></i> Fisica';
+            
+            if(calcSkywave) map.flyTo({ pitch: 0, zoom: 3, duration: 2000 }); // Zoom out to see the bounce
+            
+        }, 2500); 
     };
 
-    // --- STREAMING_CHUNK:Global RBN Engine ---
-    function getQuad(bearing) {
-        let b = (bearing + 360) % 360;
-        if (b >= 315 || b < 45) return 'N';
-        if (b >= 45 && b < 135) return 'E';
-        if (b >= 135 && b < 225) return 'S';
-        return 'W';
+    // --- RBN ---
+    function getDxccCoords(call) {
+        let c = call.split('-')[0].toUpperCase();
+        let prefixes = Object.keys(dxccDb).sort((a,b)=>b.length - a.length);
+        for (let p of prefixes) { if (c.startsWith(p)) return dxccDb[p]; }
+        return null;
     }
 
     function createDOMMarker(coords, htmlText, color, type) {
@@ -685,17 +498,15 @@
         el.className = 'custom-map-label';
         el.innerHTML = htmlText;
         el.style.borderColor = color;
-        const m = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -6] }).setLngLat(coords).addTo(map);
+        const m = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -4] }).setLngLat(coords).addTo(map);
         domLabels.push({ marker: m, type: type });
     }
 
     window.toggleLayers = function() {
         const showA = document.getElementById('chk-a').checked;
-        const showB = document.getElementById('chk-b') ? document.getElementById('chk-b').checked : false;
-        
+        const showB = document.getElementById('chk-b').checked;
         map.setLayoutProperty('layer-hull-a', 'visibility', showA ? 'visible' : 'none');
         map.setLayoutProperty('layer-hull-b', 'visibility', showB ? 'visible' : 'none');
-
         domLabels.forEach(lbl => {
             let isVis = false;
             if(lbl.type === 'AB' && (showA || showB)) isVis = true;
@@ -703,7 +514,6 @@
             else if(lbl.type === 'B' && showB) isVis = true;
             lbl.marker.getElement().style.display = isVis ? 'block' : 'none';
         });
-
         let allowedTypes = [];
         if (showA) allowedTypes.push('A');
         if (showB) allowedTypes.push('B');
@@ -715,22 +525,17 @@
     window.analyzeRBN = function() {
         const targetCall = document.getElementById('inp-call').value.trim().toUpperCase();
         const rawText = document.getElementById('inp-rbn').value;
-        if (!targetCall || !rawText) { showMsg("Attenzione", "Inserisci nominativo e incolla i dati."); return; }
-
+        if (!targetCall || !rawText) return;
         domLabels.forEach(m => m.marker.remove()); domLabels = [];
 
-        const splitText = rawText.replace(/ago/gi, 'ago\n').replace(/z\s/gi, 'z\n').replace(/minutes/gi, 'minutes\n');
-        const lines = splitText.split('\n');
+        const lines = rawText.replace(/ago/gi, 'ago\n').replace(/z\s/gi, 'z\n').split('\n');
         let freqClusters = {}; 
-        
         lines.forEach(line => {
             let uLine = line.toUpperCase().replace(/\s+/g, ' ').trim();
             if (!uLine.includes(targetCall)) return;
-            
             let spotterMatch = uLine.match(/^[ \t]*([A-Z0-9\/]+)/);
             let freqMatch = uLine.match(/(\d{3,5}\.\d)/);
             let dbMatch = uLine.match(/(-?\d+)\s*DB/);
-            
             if (spotterMatch && freqMatch && dbMatch) {
                 let spotter = spotterMatch[1].split('-')[0];
                 let freq = freqMatch[1]; 
@@ -743,8 +548,7 @@
         let sortedFreqs = [];
         for (let f in freqClusters) sortedFreqs.push({ freq: f, spots: freqClusters[f] });
         sortedFreqs.sort((a, b) => Object.keys(b.spots).length - Object.keys(a.spots).length);
-
-        if (sortedFreqs.length === 0) { showMsg("Nessun Dato", "Impossibile estrarre segnali."); return; }
+        if (sortedFreqs.length === 0) return;
 
         let rbnLines = { type: 'FeatureCollection', features: [] };
         let mapBounds = new maplibregl.LngLatBounds();
@@ -755,47 +559,37 @@
         document.getElementById('lbl-fa').innerText = `A: ${fA.freq} kHz`;
         document.getElementById('lbl-fb').innerText = fB ? `B: ${fB.freq} kHz` : `B: N/A`;
 
-        let ptsA = [], ptsB = [];
-        let maxDxA = 0, maxDxB = 0;
-        let stats = { 'N': {a:0, b:0, c:0}, 'S': {a:0, b:0, c:0}, 'E': {a:0, b:0, c:0}, 'W': {a:0, b:0, c:0} };
-
+        let ptsA = [], ptsB = [], maxDxA = 0, maxDxB = 0;
         let allSkims = new Set(Object.keys(fA.spots));
         if(fB) Object.keys(fB.spots).forEach(s => allSkims.add(s));
 
         allSkims.forEach(skim => {
-            let coords = null;
-            let c = skim.split('-')[0].toUpperCase();
-            let prefixes = Object.keys(dxccDb).sort((a,b)=>b.length - a.length);
-            for (let p of prefixes) { if (c.startsWith(p)) { coords = dxccDb[p]; break; } }
-            
-            if (coords && !isNaN(coords[0]) && !isNaN(coords[1])) {
+            let coords = getDxccCoords(skim);
+            if (coords) {
+                if(isNaN(coords[0]) || isNaN(coords[1])) return;
                 let ptSpot = turf.point(coords);
-                let distKm = 0;
-                try { distKm = Math.round(turf.distance(ptHome, ptSpot, {units: 'kilometers'})); } catch(e){}
-                if (distKm > 0) {
-                    mapBounds.extend(coords);
-                    let quad = getQuad(turf.bearing(ptHome, ptSpot));
-                    let sA = fA.spots[skim], sB = fB ? fB.spots[skim] : undefined;
+                let distKm = Math.round(turf.distance(ptHome, ptSpot, {units: 'kilometers'}));
+                if (distKm === 0) return; 
+                mapBounds.extend(coords);
+                
+                let sA = fA.spots[skim], sB = fB ? fB.spots[skim] : undefined;
+                if (sA !== undefined) { ptsA.push(coords); if(distKm > maxDxA) maxDxA = distKm; }
+                if (sB !== undefined) { ptsB.push(coords); if(distKm > maxDxB) maxDxB = distKm; }
 
-                    if (sA !== undefined) { ptsA.push(coords); if(distKm > maxDxA) maxDxA = distKm; }
-                    if (sB !== undefined) { ptsB.push(coords); if(distKm > maxDxB) maxDxB = distKm; }
-
-                    let color = '#ef4444', htmlText = '', fType = 'A';
-                    if (sA !== undefined && sB !== undefined) {
-                        fType = 'AB'; stats[quad].a += sA; stats[quad].b += sB; stats[quad].c++;
-                        let diff = sA - sB; 
-                        color = (diff > 0) ? '#ef4444' : (diff < 0 ? '#3b82f6' : '#eab308'); 
-                        htmlText = (diff > 0) ? `${skim}<br><span style="color:#f87171">A +${diff}dB</span>` : 
-                                   (diff < 0 ? `${skim}<br><span style="color:#60a5fa">B +${Math.abs(diff)}dB</span>` : `${skim}<br><span style="color:#fde047">Pari</span>`);
-                    } else {
-                        fType = sA !== undefined ? 'A' : 'B';
-                        color = sA !== undefined ? '#ef4444' : '#3b82f6';
-                        htmlText = sA !== undefined ? `${skim}<br>A: ${sA}dB` : `${skim}<br>B: ${sB}dB`;
-                        if(!fB) htmlText = `${skim}<br>${sA}dB`; 
-                    }
-                    try { rbnLines.features.push(turf.greatCircle(ptHome, ptSpot, {properties: { color: color, type: fType }})); } catch(e){}
-                    createDOMMarker(coords, htmlText, color, fType);
+                let color = '#ef4444', htmlText = '', fType = 'A';
+                if (sA !== undefined && sB !== undefined) {
+                    fType = 'AB'; let diff = sA - sB; 
+                    color = (diff > 0) ? '#ef4444' : (diff < 0 ? '#3b82f6' : '#eab308'); 
+                    htmlText = (diff > 0) ? `${skim}<br><span style="color:#f87171">A +${diff}dB</span>` : 
+                               (diff < 0 ? `${skim}<br><span style="color:#60a5fa">B +${Math.abs(diff)}dB</span>` : `${skim}<br><span style="color:#fde047">Pari</span>`);
+                } else {
+                    fType = sA !== undefined ? 'A' : 'B';
+                    color = sA !== undefined ? '#ef4444' : '#3b82f6';
+                    htmlText = sA !== undefined ? `${skim}<br>A: ${sA}dB` : `${skim}<br>B: ${sB}dB`;
+                    if(!fB) htmlText = `${skim}<br>${sA}dB`; 
                 }
+                rbnLines.features.push(turf.greatCircle(ptHome, ptSpot, {properties: { color: color, type: fType }}));
+                createDOMMarker(coords, htmlText, color, fType);
             }
         });
 
@@ -803,40 +597,19 @@
         if (ptsA.length >= 3) { try { hullA = turf.convex(turf.featureCollection(ptsA.map(p => turf.point(p)))); } catch(e){} }
         if (ptsB.length >= 3) { try { hullB = turf.convex(turf.featureCollection(ptsB.map(p => turf.point(p)))); } catch(e){} }
         
-        map.getSource('rbn-hull-a').setData(hullA || { type: 'FeatureCollection', features: [] });
-        map.getSource('rbn-hull-b').setData(hullB || { type: 'FeatureCollection', features: [] });
+        map.getSource('rbn-hull-a').setData(hullA);
+        map.getSource('rbn-hull-b').setData(hullB);
         map.getSource('rbn-lines').setData(rbnLines);
         map.fitBounds(mapBounds, { padding: 100, pitch: 0, duration: 2500 });
         
         document.getElementById('chk-a').checked = true;
-        if(document.getElementById('chk-b')) document.getElementById('chk-b').checked = true;
+        document.getElementById('chk-b').checked = true;
         toggleLayers();
 
         document.getElementById('dx-a').innerText = `${maxDxA} km`;
         document.getElementById('dx-b').innerText = fB ? `${maxDxB} km` : `-`;
-
-        ['N','S','E','W'].forEach(d => {
-            let s = stats[d];
-            if(s.c > 0) {
-                let avgA = s.a / s.c; let avgB = s.b / s.c;
-                if(avgA > avgB) document.getElementById(`dir-${d}-winner`).innerHTML = `<span class="text-red-400">A domina (+${(avgA-avgB).toFixed(1)}dB)</span>`;
-                else if(avgB > avgA) document.getElementById(`dir-${d}-winner`).innerHTML = `<span class="text-blue-400">B domina (+${(avgB-avgA).toFixed(1)}dB)</span>`;
-                else document.getElementById(`dir-${d}-winner`).innerHTML = `<span class="text-yellow-400">Parità</span>`;
-            } else {
-                document.getElementById(`dir-${d}-winner`).innerHTML = `<span class="text-slate-600">--</span>`;
-            }
-        });
-
-        if (fB) {
-            document.getElementById('chk-container-b').style.display = 'flex';
-            document.getElementById('panel-fb').classList.remove('hidden');
-            document.getElementById('panel-advantage').classList.remove('hidden');
-        } else {
-            document.getElementById('chk-container-b').style.display = 'none';
-            document.getElementById('panel-fb').classList.add('hidden');
-            document.getElementById('panel-advantage').classList.add('hidden'); 
-        }
-
+        if(fB) document.getElementById('panel-fb').classList.remove('hidden');
+        else document.getElementById('panel-fb').classList.add('hidden');
         document.getElementById('panel-results').classList.remove('hidden');
     }
 </script>
