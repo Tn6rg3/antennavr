@@ -5,10 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RF Unified Lab Pro</title>
 
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- MapLibre GL JS -->
     <script src="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.css" rel="stylesheet" />
+    <!-- Turf.js for Spatial Math -->
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
@@ -255,7 +259,8 @@
         let hAnt = parseFloat(document.getElementById('inp-h-ant').value) || 0;
         let ang = parseFloat(document.getElementById('inp-angle').value) || 0;
         let heightAt100m = hAnt + 100 * Math.tan(ang * Math.PI / 180);
-        document.getElementById('ray-h-100').innerText = heightAt100m.toFixed(1);
+        const el = document.getElementById('ray-h-100');
+        if (el) el.innerText = heightAt100m.toFixed(1);
     }
     
     document.addEventListener("DOMContentLoaded", updateRayHelper);
@@ -576,7 +581,7 @@
 
         const maxDist = parseFloat(document.getElementById('inp-dist').value) || 1500; 
 
-        // Auto zoom out for terrain caching
+        // Auto zoom out for terrain caching before complex math
         map.flyTo({ center: homeLngLat, zoom: 12, pitch: 0, duration: 1500 });
 
         setTimeout(() => {
@@ -593,7 +598,7 @@
             const hAnt = parseFloat(document.getElementById('inp-h-ant').value) || 0;
             const angleRad = (parseFloat(document.getElementById('inp-angle').value) || 0) * Math.PI / 180;
             const startZ = zBase + hAnt;
-            const R_eff = 6371000 * (4/3); // 4/3 earth refraction
+            const R_eff = 6371000 * (4/3); // 4/3 earth refraction model
             
             let covPoly = [];
             let origin = turf.point(homeLngLat);
@@ -602,8 +607,8 @@
             for (let az = 0; az < 360; az += 2) {
                 let hitDist = maxDist;
                 
-                // DYNAMIC STEPPING: High precision strictly starting at 1 meter!
-                for (let d = 1; d <= maxDist; ) {
+                // DYNAMIC STEPPING: STRICT 2 METERS UP TO 2KM TO PREVENT SKIPPING BUILDINGS!
+                for (let d = 2; d <= maxDist; ) {
                     // CRITICAL FIX: MUST SPECIFY {units: 'meters'}
                     let pt = turf.destination(origin, d, az, {units: 'meters'}); 
                     let coords = pt.geometry.coordinates;
@@ -615,7 +620,7 @@
                     let rayZ = startZ + (d * Math.tan(angleRad)) - ((d * d) / (2 * R_eff));
                     
                     let bldgH = 0;
-                    // BBOX Check before complex Polygon Intersection to prevent freezing
+                    // FAST BBOX Check before complex Polygon Intersection to prevent browser freezing on 2m steps
                     for(let b of physicsBuildings) {
                         let box = b.bbox; // [minX, minY, maxX, maxY]
                         if (coords[0] >= box[0] && coords[0] <= box[2] && coords[1] >= box[1] && coords[1] <= box[3]) {
@@ -632,11 +637,9 @@
                         break; 
                     }
 
-                    // Stepping increases as ray goes further out to prevent lag
-                    if (d < 50) d += 1; // 1m precision tight to antenna
-                    else if (d < 250) d += 5; // 5m precision up to 250m
-                    else if (d < 1000) d += 15;
-                    else d += 50;
+                    // Strict stepping rule
+                    if (d < 2000) d += 2; // EXACTLY 2m steps up to 2000m
+                    else d += 10;         // Expand to 10m steps beyond 2000m
                 }
                 
                 covPoly.push(turf.destination(origin, hitDist, az, {units: 'meters'}).geometry.coordinates);
@@ -644,7 +647,7 @@
             covPoly.push([...covPoly[0]]);
 
             map.getSource('local-coverage-src').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [covPoly] } }] });
-            document.getElementById('log-local').innerText = "Fisica completata (passo da 1m a ostacolo).";
+            document.getElementById('log-local').innerText = "Fisica completata (passo rigoroso 2m).";
             btn.innerHTML = '<i class="fa-solid fa-radar"></i> Fisica 3D';
             btn.disabled = false;
         }, 2000); 
