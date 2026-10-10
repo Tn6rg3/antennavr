@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RF Unified Lab Pro</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- MapLibre GL JS -->
+    <script src="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.css" rel="stylesheet" />
+
+    <!-- Turf.js for Spatial Math -->
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #0f172a; font-family: 'Inter', sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100vw; height: 100vh; }
+        
+        /* Unified Scrollable Panel */
+        #ui-panel {
+            position: absolute; top: 1rem; left: 1rem; width: 420px; max-height: calc(100vh - 2rem);
+            display: flex; flex-direction: column;
+            background: rgba(15, 23, 42, 0.90); backdrop-filter: blur(12px);
+            border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8); color: #f8fafc; z-index: 10;
+        }
+
+        #ui-header { flex-shrink: 0; padding: 1rem 1rem 0.5rem 1rem; border-bottom: 1px solid #334155; }
+        #ui-content { padding: 1rem; overflow-y: auto; flex: 1; }
+
+        input[type="text"], input[type="number"], textarea {
+            background: rgba(30, 41, 59, 0.8); border: 1px solid #475569;
+            color: #e2e8f0; border-radius: 6px; padding: 8px; width: 100%;
+            transition: border-color 0.2s; font-size: 13px; font-family: monospace; font-weight: bold;
+        }
+        textarea { resize: vertical; min-height: 80px; font-size: 12px; }
+        input:focus, textarea:focus { outline: none; border-color: #38bdf8; box-shadow: 0 0 8px rgba(56, 189, 248, 0.3); }
+
+        .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 10px; margin-top: 20px; font-weight: bold; display: flex; align-items: center; gap: 8px; }
+        .section-title:first-child { margin-top: 0; }
+
+        /* Custom DOM Map Labels (Crash-Proof) */
+        .custom-map-label {
+            background-color: rgba(15, 23, 42, 0.90); color: white; padding: 4px 6px;
+            border-radius: 6px; border: 2px solid transparent; font-size: 11px;
+            font-family: 'Inter', sans-serif; font-weight: bold; white-space: pre-line;
+            text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.5); pointer-events: none;
+            backdrop-filter: blur(4px); line-height: 1.2; text-shadow: 1px 1px 2px black;
+            z-index: 5;
+        }
+
+        .chk-label { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; color: #f8fafc; font-weight: bold; justify-content: center; }
+        .chk-label input { width: 16px; height: 16px; cursor: pointer; accent-color: #38bdf8; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 3px; }
+        .loading-spin { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        
+        .drawing-active { cursor: crosshair !important; }
+        .drawing-active .maplibregl-canvas-container.maplibregl-interactive { cursor: crosshair !important; }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="ui-panel">
+    <div id="ui-header" class="flex flex-col gap-3">
+        <h2 class="text-sm font-bold text-sky-400 uppercase tracking-wider flex items-center gap-2">
+            <i class="fa-solid fa-satellite-dish"></i> RF Lab Pro Simulator
+        </h2>
+        <div class="flex gap-2 pb-2">
+            <button onclick="zoomLocal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-1.5 rounded text-[11px] font-bold transition shadow border border-slate-600">
+                <i class="fa-solid fa-mountain-city"></i> Zoom Locale
+            </button>
+            <button onclick="zoomGlobal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-1.5 rounded text-[11px] font-bold transition shadow border border-slate-600">
+                <i class="fa-solid fa-globe"></i> Zoom Globale
+            </button>
+        </div>
+    </div>
+
+    <div id="ui-content" class="space-y-2">
+        
+        <!-- SECTION 1: Local 3D Physics -->
+        <div class="section-title text-sky-400"><i class="fa-solid fa-layer-group"></i> 1. Setup & Simulazione Locale</div>
+        
+        <div class="grid grid-cols-2 gap-2 text-xs">
+            <div class="col-span-2">
+                <label class="block text-slate-400 font-bold uppercase mb-1">Locator (Maidenhead)</label>
+                <input type="text" id="inp-locator" placeholder="Es. JN56ab" onchange="syncFromLocator()">
+            </div>
+            <div>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Alt. Ant. (m)</label>
+                <input type="number" id="inp-h-ant" value="10" min="0" step="1" title="Altezza dell'antenna dal suolo">
+            </div>
+            <div>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Elevazione (°)</label>
+                <input type="number" id="inp-angle" value="5" min="-20" max="89" step="1" title="Angolo di radiazione">
+            </div>
+            <div>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Raggio OSM (m)</label>
+                <input type="number" id="inp-osm-rad" value="500" min="100" step="100" title="Raggio estrazione palazzi OSM">
+            </div>
+            <div>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Distanza 3D (m)</label>
+                <input type="number" id="inp-dist" value="15000" placeholder="Max 100km">
+            </div>
+        </div>
+
+        <div class="flex gap-2 mt-3">
+            <button id="btn-fetch" onclick="fetchBuildings()" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded uppercase text-[10px] transition shadow" title="Scarica palazzi da OSM">
+                <i class="fa-solid fa-download"></i> Edifici OSM
+            </button>
+            <button id="btn-draw" onclick="startDrawingBuilding()" class="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded uppercase text-[10px] transition shadow" title="Clicca sulla mappa per i vertici, doppio clic per chiudere">
+                <i class="fa-solid fa-pencil"></i> Disegna 3D
+            </button>
+            <button id="btn-calc" onclick="calcViewshed()" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded uppercase text-[10px] transition shadow" title="Esegui raycasting a passo di 1m">
+                <i class="fa-solid fa-radar"></i> Fisica 3D
+            </button>
+        </div>
+        <div id="log-local" class="text-[10px] text-slate-400 font-mono mt-2 text-center bg-slate-800 p-1.5 rounded">Trascina il Marker Giallo. Auto-zoom durante il calcolo.</div>
+
+        <!-- SECTION 2: Global RBN -->
+        <div class="section-title text-rose-400"><i class="fa-solid fa-rss"></i> 2. Dati Empirici RBN (A/B Test)</div>
+        
+        <div class="space-y-2 text-xs">
+            <div>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Nominativo Target</label>
+                <input type="text" id="inp-call" placeholder="Es. IN3GYO" value="IN3GYO">
+            </div>
+            <div>
+                <label class="block text-slate-400 font-bold uppercase mb-1">Dati RBN (Copia/Incolla tutto)</label>
+                <textarea id="inp-rbn" placeholder="Incolla log (ignora gli spazi saltati)..."></textarea>
+            </div>
+        </div>
+
+        <button onclick="analyzeRBN()" class="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded uppercase tracking-wider text-[11px] transition shadow mt-3">
+            <i class="fa-solid fa-bolt"></i> Analizza & Mappa RBN
+        </button>
+
+        <!-- RESULTS PANEL -->
+        <div id="panel-results" class="hidden mt-4">
+            <div class="section-title text-amber-400"><i class="fa-solid fa-chart-pie"></i> Report Analitico</div>
+            
+            <div class="flex gap-4 mb-3 justify-center border border-slate-700 bg-slate-800 p-2 rounded-lg shadow-inner">
+                <label class="chk-label"><input type="checkbox" id="chk-a" checked onchange="toggleLayers()"> <span class="text-red-400 border-b border-red-400 border-dashed">Freq A</span></label>
+                <label class="chk-label" id="chk-container-b"><input type="checkbox" id="chk-b" checked onchange="toggleLayers()"> <span class="text-blue-400 border-b border-blue-400 border-dashed">Freq B</span></label>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 text-center text-xs mb-3">
+                <div class="bg-red-900/30 border border-red-800 p-2 rounded">
+                    <div class="text-red-400 font-bold uppercase mb-1" id="lbl-fa">Freq A</div>
+                    <div class="text-[10px] text-slate-300">Max DX: <span class="font-bold text-red-300" id="dx-a">0 km</span></div>
+                </div>
+                <div class="bg-blue-900/30 border border-blue-800 p-2 rounded" id="panel-fb">
+                    <div class="text-blue-400 font-bold uppercase mb-1" id="lbl-fb">Freq B</div>
+                    <div class="text-[10px] text-slate-300">Max DX: <span class="font-bold text-blue-300" id="dx-b">0 km</span></div>
+                </div>
+            </div>
+
+            <div class="bg-slate-800 border border-slate-700 p-3 rounded text-[11px] mb-3" id="panel-advantage">
+                <div class="font-bold text-slate-300 uppercase mb-2 border-b border-slate-700 pb-1">Vantaggio Medio per Direzione</div>
+                <div class="space-y-2">
+                    <div class="flex justify-between border-b border-slate-700 pb-1"><span class="font-bold text-slate-400 w-12">NORD:</span> <span id="dir-N-winner" class="font-bold text-right text-sky-300">--</span></div>
+                    <div class="flex justify-between border-b border-slate-700 pb-1"><span class="font-bold text-slate-400 w-12">SUD:</span> <span id="dir-S-winner" class="font-bold text-right text-sky-300">--</span></div>
+                    <div class="flex justify-between border-b border-slate-700 pb-1"><span class="font-bold text-slate-400 w-12">EST:</span> <span id="dir-E-winner" class="font-bold text-right text-sky-300">--</span></div>
+                    <div class="flex justify-between"><span class="font-bold text-slate-400 w-12">OVEST:</span> <span id="dir-W-winner" class="font-bold text-right text-sky-300">--</span></div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-700 p-3 rounded text-[11px]">
+                <div class="font-bold text-amber-400 uppercase mb-2 border-b border-slate-700 pb-1">Direzione Assoluta (Distanza Max)</div>
+                <div class="space-y-2 text-slate-300 leading-relaxed">
+                    <div>Antenna <span class="text-red-400 font-bold">A</span> performa meglio verso:<br><span id="best-dist-A" class="font-bold text-white text-sm bg-red-900/50 px-2 py-0.5 rounded mt-1 inline-block">--</span></div>
+                    <div id="best-dist-B-container" class="border-t border-slate-700 pt-2 mt-2">Antenna <span class="text-blue-400 font-bold">B</span> performa meglio verso:<br><span id="best-dist-B" class="font-bold text-white text-sm bg-blue-900/50 px-2 py-0.5 rounded mt-1 inline-block">--</span></div>
+                </div>
+            </div>
+            
+            <div id="log-global" class="text-[10px] text-emerald-400 mt-2 font-mono text-center font-bold"></div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    let homeLngLat = [11.2366, 46.0655]; // Pergine Valsugana
+    let antennaMarker = null;
+    let physicsBuildings = []; 
+    let domLabels = []; 
+    
+    let isDrawing = false;
+    let currentPolygon = [];
+    let drawingGeoJSON = { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }] };
+
+    const dxccDb = {
+        'IN3': [11.1, 46.0], 'IK': [12.0, 42.0], 'IZ': [12.0, 42.0], 'I': [12.0, 42.0], 'IT': [14.0, 37.0],
+        'MM': [-4.0, 56.0], 'M': [-1.5, 52.5], 'G': [-1.5, 52.5], '2': [-1.5, 52.5],
+        'HA': [19.5, 47.0], 'OE': [14.0, 47.5], 'S5': [15.0, 46.0], 'OK': [15.5, 49.5],
+        'DM': [10.0, 51.0], 'DK': [10.0, 51.0], 'DO': [10.0, 51.0], 'DC': [10.0, 51.0], 'DB': [10.0, 51.0], 'DL': [10.0, 51.0], 'DF': [10.0, 51.0],
+        'F': [2.0, 46.0], 'HB9': [8.2, 46.8], 'HB': [8.2, 46.8],
+        'SE': [15.0, 62.0], 'SM': [15.0, 62.0], 'LA': [8.0, 61.0], 'OH': [26.0, 64.0],
+        'RU': [37.0, 55.0], 'UA': [37.0, 55.0], 'RA': [37.0, 55.0],
+        'ON': [4.5, 50.5], 'ES': [26.0, 59.0], 'PI': [5.5, 52.0], 'PD': [5.5, 52.0], 'PA': [5.5, 52.0], 'PB': [5.5, 52.0],
+        'K': [-98.0, 39.0], 'W': [-98.0, 39.0], 'N': [-98.0, 39.0], 'A': [-98.0, 39.0],
+        'VE': [-106.0, 56.0], 'VA': [-106.0, 56.0], 'PY': [-51.0, -14.0], 'LU': [-64.0, -34.0], 'VK': [133.0, -25.0], 'ZL': [174.0, -41.0], 'JA': [138.0, 36.0]
+    };
+
+    // Notice: Using OSM standard tiles to strictly prevent any 404s, while maintaining 3D AWS terrain.
+    const map = new maplibregl.Map({
+        container: 'map',
+        style: {
+            version: 8,
+            sources: { 
+                'osm': { 
+                    type: 'raster', 
+                    tiles: ['https://a.tile.openstreetmap.org/{z}/{x}/{y}.png'], 
+                    tileSize: 256,
+                    attribution: '© OpenStreetMap contributors'
+                } 
+            },
+            layers: [{ id: 'osm-layer', type: 'raster', source: 'osm' }]
+        },
+        center: homeLngLat, zoom: 15, pitch: 65, bearing: -15
+    });
+
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+
+    map.on('load', () => {
+        // AWS Terrain limited to zoom 14 to avoid deep-zoom 404s
+        map.addSource('aws-terrain', { 
+            type: 'raster-dem', 
+            tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], 
+            encoding: 'terrarium', 
+            tileSize: 256,
+            maxzoom: 14 
+        });
+        map.setTerrain({ source: 'aws-terrain', exaggeration: 1.0 });
+
+        // --- Layers ---
+        map.addSource('buildings-src', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({
+            'id': '3d-buildings', 'type': 'fill-extrusion', 'source': 'buildings-src',
+            'paint': { 'fill-extrusion-color': '#94a3b8', 'fill-extrusion-height': ['+', ['get', 'base_z'], ['get', 'height']], 'fill-extrusion-base': ['get', 'base_z'], 'fill-extrusion-opacity': 0.85 }
+        });
+
+        map.addSource('draw-src', { type: 'geojson', data: drawingGeoJSON });
+        map.addLayer({ 'id': 'draw-line', 'type': 'line', 'source': 'draw-src', 'paint': { 'line-color': '#f59e0b', 'line-width': 4 } });
+
+        map.addSource('local-coverage-src', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({ 'id': 'local-coverage', 'type': 'fill', 'source': 'local-coverage-src', 'paint': { 'fill-color': '#eab308', 'fill-opacity': 0.4, 'fill-outline-color': '#fef08a' } });
+
+        map.addSource('rbn-hull-a', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({ 'id': 'layer-hull-a', 'type': 'fill', 'source': 'rbn-hull-a', 'paint': { 'fill-color': '#ef4444', 'fill-opacity': 0.25, 'fill-outline-color': '#ef4444' } });
+
+        map.addSource('rbn-hull-b', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({ 'id': 'layer-hull-b', 'type': 'fill', 'source': 'rbn-hull-b', 'paint': { 'fill-color': '#3b82f6', 'fill-opacity': 0.25, 'fill-outline-color': '#3b82f6' } });
+        
+        map.addSource('rbn-lines', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({ 'id': 'layer-lines', 'type': 'line', 'source': 'rbn-lines', 'layout': { 'line-join': 'round', 'line-cap': 'round' }, 'paint': { 'line-color': ['get', 'color'], 'line-width': 2, 'line-opacity': 0.7 } });
+
+        // Draggable Antenna
+        antennaMarker = new maplibregl.Marker({ draggable: true, color: "#eab308" }).setLngLat(homeLngLat).addTo(map);
+        antennaMarker.on('dragend', () => { updateLocation([antennaMarker.getLngLat().lng, antennaMarker.getLngLat().lat]); });
+
+        updateLocationUI();
+
+        // Mouse Events
+        map.on('click', (e) => {
+            if (isDrawing) {
+                currentPolygon.push([e.lngLat.lng, e.lngLat.lat]);
+                drawingGeoJSON.features[0].geometry.coordinates = currentPolygon;
+                map.getSource('draw-src').setData(drawingGeoJSON);
+            }
+        });
+        map.on('dblclick', (e) => {
+            if (isDrawing) { e.preventDefault(); finishDrawing(); }
+        });
+    });
+
+    window.zoomLocal = function() { map.flyTo({ center: homeLngLat, zoom: 15, pitch: 65, duration: 1500 }); };
+    window.zoomGlobal = function() { map.flyTo({ pitch: 0, zoom: 3, duration: 2000 }); };
+
+    function maidenheadToLngLat(grid) {
+        grid = grid.toUpperCase().trim();
+        if (grid.length < 4) return null;
+        let lng = (grid.charCodeAt(0) - 65) * 20 - 180 + (grid.charCodeAt(2) - 48) * 2 + 1;
+        let lat = (grid.charCodeAt(1) - 65) * 10 - 90 + (grid.charCodeAt(3) - 48) * 1 + 0.5;
+        return [lng, lat];
+    }
+    function lngLatToMaidenhead(lng, lat) {
+        lng += 180; lat += 90;
+        return String.fromCharCode(65 + Math.floor(lng / 20)) + String.fromCharCode(65 + Math.floor(lat / 10)) + 
+               String.fromCharCode(48 + Math.floor((lng % 20) / 2)) + String.fromCharCode(48 + Math.floor(lat % 10));
+    }
+
+    function updateLocationUI() {
+        document.getElementById('inp-locator').value = lngLatToMaidenhead(homeLngLat[0], homeLngLat[1]);
+        document.getElementById('inp-lat').value = homeLngLat[1].toFixed(4);
+        document.getElementById('inp-lon').value = homeLngLat[0].toFixed(4);
+    }
+
+    function updateLocation(coords) {
+        homeLngLat = coords;
+        updateLocationUI();
+        if (antennaMarker) antennaMarker.setLngLat(homeLngLat);
+        map.getSource('local-coverage-src').setData({ type: 'FeatureCollection', features: [] });
+    }
+
+    window.syncFromLocator = function() { const c = maidenheadToLngLat(document.getElementById('inp-locator').value); if(c) { updateLocation(c); map.flyTo({center: c}); } };
+    window.syncFromCoords = function() { const lat = parseFloat(document.getElementById('inp-lat').value), lon = parseFloat(document.getElementById('inp-lon').value); if(!isNaN(lat) && !isNaN(lon)) { updateLocation([lon, lat]); map.flyTo({center: [lon, lat]}); } };
+
+    window.startDrawingBuilding = function() {
+        isDrawing = true;
+        currentPolygon = [];
+        drawingGeoJSON.features[0].geometry.coordinates = [];
+        map.getSource('draw-src').setData(drawingGeoJSON);
+        document.getElementById('map').classList.add('drawing-active');
+        document.getElementById('log-local').innerText = "Disegna vertici in mappa. Doppio click per finire.";
+    };
+
+    function finishDrawing() {
+        isDrawing = false;
+        document.getElementById('map').classList.remove('drawing-active');
+        
+        if (currentPolygon.length >= 3) {
+            currentPolygon.push([...currentPolygon[0]]); 
+            let h = prompt("Inserisci l'altezza dell'edificio in metri (es: 15):", "15");
+            h = parseFloat(h) || 15;
+            
+            let bz = map.queryTerrainElevation(currentPolygon[0]) || map.queryTerrainElevation(homeLngLat) || 0;
+            let id = Date.now();
+            
+            let newBldg = { type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: { type: 'Polygon', coordinates: [currentPolygon] } };
+            
+            let bGeo = map.getSource('buildings-src')._data;
+            bGeo.features.push(newBldg);
+            map.getSource('buildings-src').setData(bGeo);
+            
+            physicsBuildings.push({ id: id, poly: turf.polygon([currentPolygon]), height: h, base_z: bz });
+            document.getElementById('log-local').innerText = `Edificio di ${h}m salvato in memoria fisica.`;
+        }
+        
+        currentPolygon = [];
+        drawingGeoJSON.features[0].geometry.coordinates = [];
+        map.getSource('draw-src').setData(drawingGeoJSON);
+    }
+
+    window.fetchBuildings = async function() {
+        if (!homeLngLat) return;
+        const btn = document.getElementById('btn-fetch');
+        const rad = parseFloat(document.getElementById('inp-osm-rad').value) || 500;
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Dwnld...';
+        
+        const query = `[out:json][timeout:25];(way["building"](around:${rad},${homeLngLat[1]},${homeLngLat[0]});relation["building"](around:${rad},${homeLngLat[1]},${homeLngLat[0]}););out body; >; out skel qt;`;
+        
+        try {
+            const res = await fetch('https://overpass-api.de/api/interpreter', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'data=' + encodeURIComponent(query)
+            });
+            if(!res.ok) throw new Error("API Failed");
+            const data = await res.json();
+            
+            let nodes = {};
+            data.elements.forEach(el => { if (el.type === 'node') nodes[el.id] = [el.lon, el.lat]; });
+            
+            let bGeo = map.getSource('buildings-src')._data; 
+            let addedCount = 0;
+            
+            data.elements.forEach((el, idx) => {
+                if (el.type === 'way' && el.tags && el.tags.building) {
+                    let c = el.nodes.map(n => nodes[n]).filter(x => x);
+                    if (c.length > 2) {
+                        if (c[0][0] !== c[c.length-1][0] || c[0][1] !== c[c.length-1][1]) c.push([...c[0]]);
+                        let h = el.tags.height ? parseFloat(el.tags.height) : (el.tags['building:levels'] ? parseInt(el.tags['building:levels']) * 3.5 : 8);
+                        let id = Date.now() + idx; 
+                        let bz = map.queryTerrainElevation(c[0]) || map.queryTerrainElevation(homeLngLat) || 0;
+                        
+                        bGeo.features.push({ type: 'Feature', properties: { id: id, height: h, base_z: bz }, geometry: { type: 'Polygon', coordinates: [c] } });
+                        physicsBuildings.push({ id: id, poly: turf.polygon([c]), height: h, base_z: bz });
+                        addedCount++;
+                    }
+                }
+            });
+            map.getSource('buildings-src').setData(bGeo);
+            document.getElementById('log-local').innerText = `Estratti ${addedCount} edifici OSM.`;
+        } catch(e) { 
+            console.error(e);
+            document.getElementById('log-local').innerText = "Errore OSM API. Riprova più tardi.";
+        }
+        btn.innerHTML = '<i class="fa-solid fa-download"></i> Edifici OSM';
+    };
+
+    window.calcViewshed = function() {
+        if (!homeLngLat) return;
+        const btn = document.getElementById('btn-calc');
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Preparazione...';
+        btn.disabled = true;
+
+        const maxDist = parseFloat(document.getElementById('inp-dist').value) || 15000; 
+
+        // 1. Auto Zoom-out to force DEM tile fetch before calculating
+        const ptHome = turf.point(homeLngLat);
+        const buffered = turf.buffer(ptHome, maxDist / 1000, {units: 'kilometers'});
+        map.fitBounds(turf.bbox(buffered), { padding: 50, pitch: 0, duration: 1500 });
+
+        // 2. Wait 2 seconds for DEM to render
+        setTimeout(() => {
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch loading-spin"></i> Calcolo in corso...';
+            
+            const zBase = map.queryTerrainElevation(homeLngLat);
+            if (zBase === null) {
+                document.getElementById('log-local').innerText = "Terreno non caricato in tempo. Riprova.";
+                btn.innerHTML = '<i class="fa-solid fa-radar"></i> Fisica 3D';
+                btn.disabled = false;
+                return;
+            }
+
+            const hAnt = parseFloat(document.getElementById('inp-h-ant').value) || 0;
+            const angleRad = (parseFloat(document.getElementById('inp-angle').value) || 0) * Math.PI / 180;
+            const startZ = zBase + hAnt;
+            const R_eff = 6371000 * (4/3); // 4/3 Earth Refraction
+            
+            let covPoly = [];
+            let origin = turf.point(homeLngLat);
+
+            // Sweep 360 degrees (Resolution: 1.5 deg for performance/accuracy balance)
+            for (let az = 0; az < 360; az += 1.5) {
+                let hitDist = maxDist;
+                
+                // DYNAMIC STEPPING ALGORITHM:
+                // 1m precision near antenna to catch close buildings/walls!
+                // Progressively larger steps at distance to save CPU.
+                for (let d = 1; d <= maxDist; ) {
+                    let pt = turf.destination(origin, d, az);
+                    let coords = pt.geometry.coordinates;
+                    
+                    let terrElev = map.queryTerrainElevation(coords);
+                    if (terrElev === null) { hitDist = d; break; } // Edge of loaded DEM map
+                    
+                    // Ray Physics: Origin Height + Angle Trajectory - Earth Curvature Drop
+                    let rayZ = startZ + (d * Math.tan(angleRad)) - ((d * d) / (2 * R_eff));
+                    
+                    // Building collision check
+                    let bldgH = 0;
+                    for(let b of physicsBuildings) {
+                        if(turf.booleanPointInPolygon(pt, b.poly)) { bldgH = b.height; break; }
+                    }
+                    
+                    // Collision logic
+                    if (rayZ <= (terrElev + bldgH)) { 
+                        hitDist = d; 
+                        break; 
+                    }
+
+                    // Increment dynamically
+                    if (d < 50) d += 1;          // 1m steps for first 50m
+                    else if (d < 500) d += 5;    // 5m steps up to 500m
+                    else if (d < 2000) d += 10;  // 10m steps up to 2km
+                    else d += 25;                // 25m steps beyond 2km
+                }
+                
+                covPoly.push(turf.destination(origin, hitDist, az).geometry.coordinates);
+            }
+            covPoly.push([...covPoly[0]]);
+
+            map.getSource('local-coverage-src').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [covPoly] } }] });
+            document.getElementById('log-local').innerText = "Fisica 3D (Passo Dinamico 1m) Applicata.";
+            btn.innerHTML = '<i class="fa-solid fa-radar"></i> Fisica 3D';
+            btn.disabled = false;
+        }, 2000); 
+    };
+
+    function getQuad(bearing) {
+        let b = (bearing + 360) % 360;
+        if (b >= 315 || b < 45) return 'N';
+        if (b >= 45 && b < 135) return 'E';
+        if (b >= 135 && b < 225) return 'S';
+        return 'W';
+    }
+
+    function getDxccCoords(call) {
+        let c = call.split('-')[0].toUpperCase();
+        let prefixes = Object.keys(dxccDb).sort((a,b)=>b.length - a.length);
+        for (let p of prefixes) { if (c.startsWith(p)) return dxccDb[p]; }
+        return null;
+    }
+
+    function createDOMMarker(coords, htmlText, color, type) {
+        const el = document.createElement('div');
+        el.className = 'custom-map-label';
+        el.innerHTML = htmlText;
+        el.style.borderColor = color;
+        const m = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -6] }).setLngLat(coords).addTo(map);
+        domLabels.push({ marker: m, type: type });
+    }
+
+    window.toggleLayers = function() {
+        const showA = document.getElementById('chk-a').checked;
+        const showB = document.getElementById('chk-b') ? document.getElementById('chk-b').checked : false;
+        
+        map.setLayoutProperty('layer-hull-a', 'visibility', showA ? 'visible' : 'none');
+        map.setLayoutProperty('layer-hull-b', 'visibility', showB ? 'visible' : 'none');
+
+        // Toggle safe DOM labels
+        domLabels.forEach(lbl => {
+            let isVis = false;
+            if(lbl.type === 'AB' && (showA || showB)) isVis = true;
+            else if(lbl.type === 'A' && showA) isVis = true;
+            else if(lbl.type === 'B' && showB) isVis = true;
+            lbl.marker.getElement().style.display = isVis ? 'block' : 'none';
+        });
+
+        let allowedTypes = [];
+        if (showA) allowedTypes.push('A');
+        if (showB) allowedTypes.push('B');
+        if (showA || showB) allowedTypes.push('AB');
+        if(allowedTypes.length === 0) map.setFilter('layer-lines', ['in', 'type', 'NONE']);
+        else map.setFilter('layer-lines', ['in', 'type', ...allowedTypes]);
+    }
+
+    window.analyzeRBN = function() {
+        const targetCall = document.getElementById('inp-call').value.trim().toUpperCase();
+        const rawText = document.getElementById('inp-rbn').value;
+        if (!targetCall || !rawText) return;
+
+        // Clear UI
+        domLabels.forEach(m => m.marker.remove()); domLabels = [];
+
+        // Parse Text
+        const splitText = rawText.replace(/ago/gi, 'ago\n').replace(/z\s/gi, 'z\n').replace(/minutes/gi, 'minutes\n');
+        const lines = splitText.split('\n');
+        let freqClusters = {}; 
+        
+        lines.forEach(line => {
+            let uLine = line.toUpperCase().replace(/\s+/g, ' ').trim();
+            if (!uLine.includes(targetCall)) return;
+            
+            let spotterMatch = uLine.match(/^[ \t]*([A-Z0-9\/]+)/);
+            let freqMatch = uLine.match(/(\d{3,5}\.\d)/);
+            let dbMatch = uLine.match(/(-?\d+)\s*DB/);
+            
+            if (spotterMatch && freqMatch && dbMatch) {
+                let spotter = spotterMatch[1].split('-')[0];
+                let freq = freqMatch[1]; 
+                let snr = parseInt(dbMatch[1], 10);
+                if (!freqClusters[freq]) freqClusters[freq] = {};
+                // Track highest SNR
+                if (freqClusters[freq][spotter] === undefined || snr > freqClusters[freq][spotter]) freqClusters[freq][spotter] = snr;
+            }
+        });
+
+        let sortedFreqs = [];
+        for (let f in freqClusters) sortedFreqs.push({ freq: f, spots: freqClusters[f] });
+        sortedFreqs.sort((a, b) => Object.keys(b.spots).length - Object.keys(a.spots).length);
+
+        if (sortedFreqs.length === 0) { 
+            document.getElementById('log-global').innerText = "Nessun dato valido estratto. Verifica i log."; return; 
+        }
+
+        let rbnLines = { type: 'FeatureCollection', features: [] };
+        let mapBounds = new maplibregl.LngLatBounds();
+        mapBounds.extend(homeLngLat);
+        const ptHome = turf.point(homeLngLat);
+
+        let fA = sortedFreqs[0], fB = sortedFreqs.length > 1 ? sortedFreqs[1] : null;
+
+        document.getElementById('lbl-fa').innerText = `A: ${fA.freq} kHz`;
+        document.getElementById('lbl-fb').innerText = fB ? `B: ${fB.freq} kHz` : `B: N/A`;
+
+        let ptsA = [], ptsB = [];
+        let maxDxA = 0, maxDxB = 0;
+        let stats = { 'N': {a:0, b:0, c:0}, 'S': {a:0, b:0, c:0}, 'E': {a:0, b:0, c:0}, 'W': {a:0, b:0, c:0} };
+        let maxQuadA = { 'N': 0, 'S': 0, 'E': 0, 'W': 0 };
+        let maxQuadB = { 'N': 0, 'S': 0, 'E': 0, 'W': 0 };
+
+        let allSkims = new Set(Object.keys(fA.spots));
+        if(fB) Object.keys(fB.spots).forEach(s => allSkims.add(s));
+
+        allSkims.forEach(skim => {
+            let coords = getDxccCoords(skim);
+            if (coords) {
+                // Strict validation to avoid Turf crashes
+                if(isNaN(coords[0]) || isNaN(coords[1])) return;
+                
+                let ptSpot = turf.point(coords);
+                let distKm = 0;
+                try { distKm = Math.round(turf.distance(ptHome, ptSpot, {units: 'kilometers'})); } catch(e){}
+                
+                if (distKm === 0) return; // Prevent greatCircle math crash on identical points
+
+                mapBounds.extend(coords);
+                let quad = getQuad(turf.bearing(ptHome, ptSpot));
+                
+                let sA = fA.spots[skim], sB = fB ? fB.spots[skim] : undefined;
+
+                if (sA !== undefined) { ptsA.push(coords); if(distKm > maxDxA) maxDxA = distKm; if(distKm > maxQuadA[quad]) maxQuadA[quad] = distKm; }
+                if (sB !== undefined) { ptsB.push(coords); if(distKm > maxDxB) maxDxB = distKm; if(distKm > maxQuadB[quad]) maxQuadB[quad] = distKm; }
+
+                let color = '#ef4444', htmlText = '', fType = 'A';
+                
+                if (sA !== undefined && sB !== undefined) {
+                    fType = 'AB';
+                    stats[quad].a += sA; stats[quad].b += sB; stats[quad].c++;
+                    let diff = sA - sB; 
+                    color = (diff > 0) ? '#ef4444' : (diff < 0 ? '#3b82f6' : '#eab308'); 
+                    htmlText = (diff > 0) ? `${skim}<br><span style="color:#f87171">A +${diff}dB</span>` : 
+                               (diff < 0 ? `${skim}<br><span style="color:#60a5fa">B +${Math.abs(diff)}dB</span>` : `${skim}<br><span style="color:#fde047">Pari</span>`);
+                } else {
+                    fType = sA !== undefined ? 'A' : 'B';
+                    color = sA !== undefined ? '#ef4444' : '#3b82f6';
+                    htmlText = sA !== undefined ? `${skim}<br>A: ${sA}dB` : `${skim}<br>B: ${sB}dB`;
+                    if(!fB) htmlText = `${skim}<br>${sA}dB`; 
+                }
+
+                try { rbnLines.features.push(turf.greatCircle(ptHome, ptSpot, {properties: { color: color, type: fType }})); } catch(e){}
+                createDOMMarker(coords, htmlText, color, fType);
+            }
+        });
+
+        // Convex Hulls Safety
+        let hullA = { type: 'FeatureCollection', features: [] }, hullB = { type: 'FeatureCollection', features: [] };
+        if (ptsA.length >= 3) { try { hullA = turf.convex(turf.featureCollection(ptsA.map(p => turf.point(p)))); } catch(e){} }
+        if (ptsB.length >= 3) { try { hullB = turf.convex(turf.featureCollection(ptsB.map(p => turf.point(p)))); } catch(e){} }
+        
+        map.getSource('rbn-hull-a').setData(hullA || { type: 'FeatureCollection', features: [] });
+        map.getSource('rbn-hull-b').setData(hullB || { type: 'FeatureCollection', features: [] });
+        map.getSource('rbn-lines').setData(rbnLines);
+        
+        map.fitBounds(mapBounds, { padding: 100, pitch: 0, duration: 2500 });
+        
+        document.getElementById('chk-a').checked = true;
+        if(document.getElementById('chk-b')) document.getElementById('chk-b').checked = true;
+        toggleLayers();
+
+        // UI Stats
+        document.getElementById('dx-a').innerText = `${maxDxA} km`;
+        document.getElementById('dx-b').innerText = fB ? `${maxDxB} km` : `-`;
+
+        // Quadrant Winner Math
+        ['N','S','E','W'].forEach(d => {
+            let s = stats[d];
+            if(s.c > 0) {
+                let avgA = s.a / s.c; let avgB = s.b / s.c;
+                if(avgA > avgB) document.getElementById(`dir-${d}-winner`).innerHTML = `<span class="text-red-400">A domina (+${(avgA-avgB).toFixed(1)}dB)</span>`;
+                else if(avgB > avgA) document.getElementById(`dir-${d}-winner`).innerHTML = `<span class="text-blue-400">B domina (+${(avgB-avgA).toFixed(1)}dB)</span>`;
+                else document.getElementById(`dir-${d}-winner`).innerHTML = `<span class="text-yellow-400">Parità</span>`;
+            } else {
+                document.getElementById(`dir-${d}-winner`).innerHTML = `<span class="text-slate-600">--</span>`;
+            }
+        });
+
+        // Best Distance Execution
+        let bestDirA = Object.keys(maxQuadA).reduce((a, b) => maxQuadA[a] > maxQuadA[b] ? a : b);
+        document.getElementById('best-dist-A').innerText = maxQuadA[bestDirA] > 0 ? `${bestDirA} (${maxQuadA[bestDirA]} km)` : 'N/A';
+        
+        if (fB) {
+            let bestDirB = Object.keys(maxQuadB).reduce((a, b) => maxQuadB[a] > maxQuadB[b] ? a : b);
+            document.getElementById('chk-container-b').style.display = 'flex';
+            document.getElementById('panel-fb').classList.remove('hidden');
+            document.getElementById('panel-advantage').classList.remove('hidden');
+            document.getElementById('best-dist-B-container').classList.remove('hidden');
+            document.getElementById('best-dist-B').innerText = maxQuadB[bestDirB] > 0 ? `${bestDirB} (${maxQuadB[bestDirB]} km)` : 'N/A';
+        } else {
+            document.getElementById('chk-container-b').style.display = 'none';
+            document.getElementById('panel-fb').classList.add('hidden');
+            document.getElementById('panel-advantage').classList.add('hidden'); 
+            document.getElementById('best-dist-B-container').classList.add('hidden');
+        }
+
+        document.getElementById('panel-results').classList.remove('hidden');
+        document.getElementById('log-global').innerText = "Analisi Globale Completata.";
+    }
+</script>
+</body>
+</html>
