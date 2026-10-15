@@ -1134,7 +1134,7 @@ window.playNextWord = function() {
             }
         }
     } else {
-        if (wordIndex >= requestedWordCount) return window.finishGame();
+        if (wordIndex >= requestedWordCount || (gameWords && wordIndex >= gameWords.length)) return window.finishGame();
     }
 
     if (window.currentMode === 'callsign') currentTone = Math.floor(Math.random() * (700 - 400 + 1)) + 400;
@@ -1151,6 +1151,10 @@ window.playNextWord = function() {
     } else {
         // Attesa caricamento parole se necessario
         if (!gameWords || !gameWords[wordIndex]) {
+            if (gameWords && wordIndex >= gameWords.length) {
+                console.log("GameCore: Parole della partita terminate (" + wordIndex + "/" + gameWords.length + "). Concludo partita.");
+                return window.finishGame();
+            }
             console.log("GameCore: Parole non pronte, attendo...");
             setTimeout(window.playNextWord, 200);
             return;

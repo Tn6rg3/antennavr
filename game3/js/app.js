@@ -2652,6 +2652,15 @@ if (els.createRoomBtn) {
                 stats: stats
             });
 
+            // Se il filtro di lunghezza parole ha prodotto meno parole di quelle richieste, adeguiamo il conteggio
+            if (window.gameWords && window.gameWords.length > 0 && window.gameWords.length < window.requestedWordCount) {
+                console.log(`WordLength: Adjusting requestedWordCount from ${window.requestedWordCount} to ${window.gameWords.length}`);
+                window.requestedWordCount = window.gameWords.length;
+                if (typeof showToast === 'function') {
+                    showToast(`ℹ️ Trovate ${window.gameWords.length} parole di lunghezza ${window.requestedWordLength}. La partita durerà ${window.gameWords.length} parole.`);
+                }
+            }
+
             const expires = window.isSinglePlayer ? null : Date.now() + ((parseInt(els.roomTimerInput?.value) || 5) * 60000);
 
             // --- FIX COLLISIONE ID STANZA (Robust ID) ---

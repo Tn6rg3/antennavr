@@ -31,8 +31,14 @@ window.GAME_MODES = {
             const targetLen = parseInt(options?.wordLength) || 0;
             if (targetLen > 0) {
                 const filtered = list.filter(w => w.length === targetLen);
-                if (filtered.length > 0) list = filtered;
-                else console.warn(`Nessuna parola di lunghezza ${targetLen} trovata.`);
+                if (filtered.length > 0) {
+                    list = filtered;
+                } else {
+                    console.warn(`Nessuna parola di lunghezza ${targetLen} trovata.`);
+                    if (typeof showToast === 'function') {
+                        showToast(`⚠️ Nessuna parola di lunghezza ${targetLen} nel dizionario!`);
+                    }
+                }
             }
 
             return fisherYatesShuffle(list).slice(0, num).map(w => String(w).toUpperCase());
@@ -57,8 +63,14 @@ window.GAME_MODES = {
             const targetLen = parseInt(options?.wordLength) || 0;
             if (targetLen > 0) {
                 const filtered = list.filter(w => w.length === targetLen);
-                if (filtered.length > 0) list = filtered;
-                else console.warn(`Nessuna parola di lunghezza ${targetLen} trovata (Plus).`);
+                if (filtered.length > 0) {
+                    list = filtered;
+                } else {
+                    console.warn(`Nessuna parola di lunghezza ${targetLen} trovata (Plus).`);
+                    if (typeof showToast === 'function') {
+                        showToast(`⚠️ Nessuna parola di lunghezza ${targetLen} nel dizionario!`);
+                    }
+                }
             }
 
             const groupSize = parseInt(options?.groupSize) || 2;
