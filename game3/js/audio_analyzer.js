@@ -37,6 +37,9 @@ window.audioAnalyzerState = {
     // LIVELLI DI DIFFICOLTÀ (Solo per il Report finale)
     difficulty: 'amateur',
 
+    // AUTO-CLEAR
+    autoClear: true,
+
     // SESSIONE D'ESAME
     sessionActive: false,
     sessionTimer: null,
@@ -46,13 +49,6 @@ window.audioAnalyzerState = {
         characters: [],
         startTime: 0
     },
-
-    // DECODIFICA IA ONNX E CONTROLLI
-    aiEnabled: false,
-    aiDecodedText: "",
-    autoClear: true,
-    ortSession: null,
-    selectedAiModel: 'addestra/morse_model.onnx',
 
     // Statistiche generali
     dotAccs: [],
@@ -102,39 +98,7 @@ window.initAudioAnalyzer = function() {
         els.autoWpm.onchange = (e) => { window.audioAnalyzerState.autoWpm = e.target.checked; };
     }
 
-    // CONTROLLI IA ONNX E AUTO-CLEAR
-    const aiToggle = document.getElementById('realTxAiToggle');
-    const aiModelBox = document.getElementById('realTxAiModelSelectBox');
-    const aiModelSelect = document.getElementById('realTxAiModelSelect');
-    const aiBoxPanel = document.getElementById('realTxAiBoxPanel');
     const autoClearToggle = document.getElementById('realTxAutoClearToggle');
-
-    if (aiToggle) {
-        aiToggle.onchange = async (e) => {
-            const enabled = e.target.checked;
-            window.audioAnalyzerState.aiEnabled = enabled;
-            if (aiModelBox) aiModelBox.style.display = enabled ? 'flex' : 'none';
-            if (aiBoxPanel) aiBoxPanel.style.display = enabled ? 'block' : 'none';
-
-            if (enabled) {
-                if (!window.audioAnalyzerState.ortSession) {
-                    await window.loadRealTxAiModel();
-                } else {
-                    if (typeof showToast === 'function') showToast("🤖 Confronto Neurale IA Attivato");
-                }
-            } else {
-                if (typeof showToast === 'function') showToast("📻 Solo Decodifica Algoritmica (DSP)");
-            }
-        };
-    }
-
-    if (aiModelSelect) {
-        aiModelSelect.onchange = async (e) => {
-            window.audioAnalyzerState.selectedAiModel = e.target.value;
-            await window.loadRealTxAiModel(e.target.value);
-        };
-    }
-
     if (autoClearToggle) {
         window.audioAnalyzerState.autoClear = autoClearToggle.checked;
         autoClearToggle.onchange = (e) => {
@@ -146,7 +110,6 @@ window.initAudioAnalyzer = function() {
     if (els.resetBtn) {
         els.resetBtn.onclick = () => {
             window.audioAnalyzerState.decodedText = "";
-            window.audioAnalyzerState.aiDecodedText = "";
             window.audioAnalyzerState.currentCode = "";
             window.updateDecodedDisplay();
             window.updateAnalyzerStats(true);
@@ -209,17 +172,6 @@ window.startStabilizedAnalysis = function() {
         if (ctx.state === 'suspended') ctx.resume();
 
         const samples = e.inputBuffer.getChannelData(0);
-
-        // Salva i campioni PCM audio reali nel buffer circolare per la rete neurale IA ONNX
-        if (!state.micPcmRingBuffer) {
-            state.micPcmRingBuffer = new Float32Array(96000); // Buffer circolare audio a 48kHz
-            state.pcmWritePos = 0;
-        }
-        for (let i = 0; i < samples.length; i++) {
-            state.micPcmRingBuffer[state.pcmWritePos] = samples[i];
-            state.pcmWritePos = (state.pcmWritePos + 1) % state.micPcmRingBuffer.length;
-        }
-
         const mag = getMagnitude(samples, state.targetFreq, state.sampleRate);
 
         if (mag < state.noiseFloor * 2) state.noiseFloor = (state.noiseFloor * 0.98) + (mag * 0.02);
@@ -247,7 +199,6 @@ window.processStabilizedBit = function(isMark) {
 
     if (isMark) {
         state.marksCount++;
-        // LOGICA STABILE: Chiusura anticipata se silenzio > 2.0 unità
         if (state.spacesCount > currentUnitBits * 2.0 && state.currentCode.length > 0) {
             window.decodeCurrentCode();
         }
@@ -265,17 +216,12 @@ window.processStabilizedBit = function(isMark) {
             state.marksCount = 0;
         }
 
-        // LOGICA STABILE: Chiusura per timeout > 3.0 unità
         if (state.spacesCount > currentUnitBits * 3.0 && state.currentCode.length > 0) {
             window.decodeCurrentCode();
         }
-        // SPAZIO PAROLA: Scatta a 7 unità (Standard PARIS)
         if (state.spacesCount === Math.round(currentUnitBits * 7.0)) {
             if (state.decodedText.length > 0 && !state.decodedText.endsWith(" ")) {
                 state.decodedText += " ";
-                if (state.aiEnabled && !state.aiDecodedText.endsWith(" ")) {
-                    state.aiDecodedText += " ";
-                }
                 window.updateDecodedDisplay();
             }
         }
@@ -285,32 +231,12 @@ window.processStabilizedBit = function(isMark) {
     if (led) led.style.background = isMark ? "var(--link-color)" : "#333";
 };
 
-window.loadRealTxAiModel = async function(modelPath) {
-    if (typeof ort === 'undefined') {
-        if (typeof showToast === 'function') showToast("⚠️ Libreria ONNX Web non pronta.");
-        return false;
-    }
-    const path = modelPath || window.audioAnalyzerState.selectedAiModel || 'addestra/morse_model.onnx';
-    try {
-        console.log("RealTx: Loading ONNX model from:", path);
-        window.audioAnalyzerState.ortSession = await ort.InferenceSession.create(path, { executionProviders: ['wasm'] });
-        if (typeof showToast === 'function') showToast("🤖 Modello ONNX Caricato con successo!");
-        console.log("RealTx: ONNX model ready.");
-        return true;
-    } catch (e) {
-        console.warn("RealTx: ONNX load error:", e);
-        if (typeof showToast === 'function') showToast("⚠️ Errore caricamento modello ONNX.");
-        return false;
-    }
-};
-
 window.handleTransition = function(markCount) {
     const state = window.audioAnalyzerState;
     const currentUnitBits = Math.max(4, Math.round(1200 / state.wpm / 5));
 
     if (markCount < 2) return;
 
-    // LOGICA STABILE: Dash ratio fisso a 2.0 per massima tolleranza
     const isDash = (markCount > currentUnitBits * 2.0);
     state.currentCode += isDash ? "-" : ".";
 
@@ -319,7 +245,7 @@ window.handleTransition = function(markCount) {
     if (isDash) state.dashAccs.push(acc); else state.dotAccs.push(acc);
 
     if (state.autoWpm && !isDash && markCount > 2) {
-        let newUnitBits = (currentUnitBits * 0.95) + (markCount * 0.05); // Molto più lenta e stabile
+        let newUnitBits = (currentUnitBits * 0.95) + (markCount * 0.05);
         let newWpm = Math.round(1200 / (newUnitBits * 5));
         newWpm = Math.max(10, Math.min(50, newWpm));
 
@@ -332,61 +258,6 @@ window.handleTransition = function(markCount) {
     window.updateAnalyzerStats();
 };
 
-window.runOnnxInferenceOnPcmBuffer = async function() {
-    const state = window.audioAnalyzerState;
-    if (!state.aiEnabled || !state.ortSession) return;
-    if (typeof window.computeMelSpectrogramJS !== 'function' || typeof window.ctcGreedyDecodeJS !== 'function') return;
-
-    try {
-        const session = state.ortSession;
-        let audio3200 = new Float32Array(3200);
-        if (state.micPcmRingBuffer && state.micPcmRingBuffer.length > 0) {
-            const bufLen = state.micPcmRingBuffer.length;
-            const srcSr = state.sampleRate || 48000;
-            const step = srcSr / 3200;
-            for (let i = 0; i < 3200; i++) {
-                const readIdx = Math.floor((state.pcmWritePos - Math.floor((3200 - i) * step) + bufLen) % bufLen);
-                audio3200[i] = state.micPcmRingBuffer[readIdx] || 0;
-            }
-        }
-
-        // Normalizzazione di picco a 0.95 (Identica al dataset PyTorch di addestramento)
-        let maxAmp = 0.0;
-        for (let i = 0; i < 3200; i++) {
-            const absVal = Math.abs(audio3200[i]);
-            if (absVal > maxAmp) maxAmp = absVal;
-        }
-        if (maxAmp > 0.0001) {
-            for (let i = 0; i < 3200; i++) {
-                audio3200[i] = (audio3200[i] / maxAmp) * 0.95;
-            }
-        }
-
-        // Calcolo dello Spettrogramma Mel (64 mels) 100% Neurale per la rete ONNX
-        const melSpec = window.computeMelSpectrogramJS(audio3200, 3200, 64);
-        const inputTensor = new ort.Tensor('float32', melSpec.data, [1, 1, 64, melSpec.timeSteps]);
-
-        const inputName = (session.inputNames && session.inputNames.length > 0) ? session.inputNames[0] : 'input_spectrogram';
-        const feeds = {};
-        feeds[inputName] = inputTensor;
-        const results = await session.run(feeds);
-
-        const outputKeys = Object.keys(results);
-        const outKey = outputKeys.find(k => k.includes('log') || k.includes('prob') || k.includes('out')) || outputKeys[0];
-        const outTensor = results[outKey];
-
-        const aiRawResult = window.ctcGreedyDecodeJS(outTensor.data, outTensor.dims) || "";
-        let cleanAiResult = aiRawResult.replace(/[*():;=.,\s]+/g, "").trim();
-
-        if (cleanAiResult) {
-            state.aiDecodedText += cleanAiResult.substring(0, 1);
-            window.updateDecodedDisplay();
-        }
-    } catch (e) {
-        console.warn("RealTx ONNX Inference error:", e);
-    }
-};
-
 window.decodeCurrentCode = function() {
     const state = window.audioAnalyzerState;
     if (!state.currentCode) return;
@@ -397,7 +268,6 @@ window.decodeCurrentCode = function() {
 
     const charToStore = foundChar || "?";
 
-    // SALVATAGGIO PERMANENTE PER IL REPORT D'ESAME
     if (state.sessionActive) {
         const lastAcc = state.dotAccs.length > 0 || state.dashAccs.length > 0
             ? Math.round(((state.dotAccs[state.dotAccs.length-1] || 100) + (state.dashAccs[state.dashAccs.length-1] || 100)) / 2)
@@ -405,14 +275,7 @@ window.decodeCurrentCode = function() {
         state.sessionData.characters.push({ char: charToStore, code: state.currentCode, acc: lastAcc, wpm: state.wpm });
     }
 
-    // DECODIFICA DSP (TEXTBOX 1 - Algoritmica con WPM)
     state.decodedText += charToStore;
-
-    // DECODIFICA IA ONNX (TEXTBOX 2 - 100% Neurale senza WPM)
-    if (state.aiEnabled) {
-        window.runOnnxInferenceOnPcmBuffer();
-    }
-
     state.currentCode = "";
     window.updateDecodedDisplay();
 };
@@ -421,14 +284,9 @@ window.updateDecodedDisplay = function() {
     const state = window.audioAnalyzerState;
     const MAX_DISPLAY_CHARS = 100;
 
-    // LOGICA AUTO-CLEAR / SCORRIMENTO PER AZZERARE IL TESTO ARRIVATO ALLA FINE
     if (state.autoClear) {
         if (state.decodedText.length >= MAX_DISPLAY_CHARS) {
-            // Mantiene solo gli ultimi 15 caratteri per ripartire in modo fluido dall'inizio della box
             state.decodedText = state.decodedText.substring(state.decodedText.length - 15);
-        }
-        if (state.aiDecodedText && state.aiDecodedText.length >= MAX_DISPLAY_CHARS) {
-            state.aiDecodedText = state.aiDecodedText.substring(state.aiDecodedText.length - 15);
         }
     }
 
@@ -436,17 +294,6 @@ window.updateDecodedDisplay = function() {
     if (el) {
         el.textContent = state.decodedText || "...";
         el.scrollTop = el.scrollHeight;
-    }
-
-    const aiEl = document.getElementById('realTxAiDecodedText');
-    if (aiEl) {
-        aiEl.textContent = state.aiDecodedText || "...";
-        aiEl.scrollTop = aiEl.scrollHeight;
-    }
-
-    const aiLed = document.getElementById('realTxAiStatusLed');
-    if (aiLed) {
-        aiLed.style.background = state.aiEnabled ? "#9c27b0" : "#333";
     }
 };
 
@@ -468,7 +315,6 @@ window.startRealTxSession = function() {
     state.timeLeft = duration;
     state.sessionData = { pulses: [], characters: [], startTime: Date.now() };
     state.decodedText = "";
-    state.aiDecodedText = "";
     state.currentCode = "";
     window.updateDecodedDisplay();
     window.updateAnalyzerStats(true);
@@ -518,7 +364,6 @@ window.generateDetailedReport = function() {
     const marks = data.pulses.filter(p => p.type === 'MARK');
     const spaces = data.pulses.filter(p => p.type === 'SPACE');
 
-    // Per il report usiamo soglie fisse professionali
     const dots = marks.filter(m => m.duration < unitBits * 1.8);
     const dashes = marks.filter(m => m.duration >= unitBits * 1.8);
     const avgDot = dots.length ? dots.reduce((a,b)=>a+b.duration,0)/dots.length : 0;
@@ -571,7 +416,6 @@ window.generateDetailedReport = function() {
     html += `<br><div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border:1px solid #444;">`;
     html += `<b style="display:block; margin-bottom:6px; color:#ffeb3b;">💡 VALUTAZIONE ISTRUTTORE:</b>`;
 
-    // Giudizio in base alla difficoltà scelta
     const isElite = (state.difficulty === 'elite');
     if (ratioDiff < (isElite?0.2:0.4) && spaceDiff < (isElite?0.3:0.6)) {
         html += "Eccellente! Stai mantenendo un ritmo solido e professionale. La tua manipolazione è molto chiara.";

@@ -2643,11 +2643,6 @@ if (els.createRoomBtn) {
                 if (typeof window.initQsoAudioModule === 'function') window.initQsoAudioModule();
                 return;
             }
-            if (gMode === 'addestra_ia') {
-                window.showScreen('aiTrainingScreen');
-                if (typeof window.initAiTrainingModule === 'function') window.initAiTrainingModule();
-                return;
-            }
             window.startTransmissionFree(gMode);
             return;
         }
