@@ -2059,16 +2059,6 @@ window.updateAdminBadge = async function() {
     }
 };
 
-    if (badge) {
-        if (unreadBugsCount > 0) {
-            badge.textContent = unreadBugsCount;
-            badge.style.display = 'flex';
-        } else {
-            badge.style.display = 'none';
-        }
-    }
-};
-
 window.loadAdminBugs = function() {
     const list = document.getElementById('adminBugList');
     if (!list) return;
