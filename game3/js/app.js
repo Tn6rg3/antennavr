@@ -1403,14 +1403,16 @@ window.setupBugSystem = function() {
     const badge = document.getElementById('bugsBadge');
     if (!db) return;
 
-    // Rilevamento Admin basato esclusivamente su Permessi Firebase
-    // Tentiamo di leggere bugReports: se le regole Firebase lo permettono, l'utente e admin.
+    const isTutor = window.courseData && window.courseData.role === 'tutor';
+
+    // Rilevamento Admin basato su Permessi Firebase
     db.ref('bugReports').limitToLast(1).once('value').then(snap => {
         window.isAdmin = true;
         if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
+        if (els.btnReadAllBugs) els.btnReadAllBugs.style.display = 'block';
         window.updateAdminBadge();
 
-        // 2. Tutor Requests Listener (Attivo solo se siamo effettivamente admin)
+        // Listener per Richieste Tutor
         db.ref('tutorRequests').off('value');
         db.ref('tutorRequests').on('value', () => {
             window.updateAdminBadge();
@@ -1418,8 +1420,20 @@ window.setupBugSystem = function() {
     }).catch((error) => {
         if (error.code === 'PERMISSION_DENIED') {
             window.isAdmin = false;
-            if (els.adminBugPanel) els.adminBugPanel.style.display = 'none';
-            if (badge) badge.style.display = 'none';
+            // Se l'utente è un Tutor, mostriamo il pannello per accedere alle richieste Tutor
+            if (isTutor) {
+                if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
+                if (els.btnReadAllBugs) els.btnReadAllBugs.style.display = 'none'; // Nasconde i Bug riservati al Dev
+                window.updateAdminBadge();
+
+                db.ref('tutorRequests').off('value');
+                db.ref('tutorRequests').on('value', () => {
+                    window.updateAdminBadge();
+                });
+            } else {
+                if (els.adminBugPanel) els.adminBugPanel.style.display = 'none';
+                if (badge) badge.style.display = 'none';
+            }
         }
     });
 
@@ -1997,7 +2011,6 @@ window.setupBugSystem = function() {
 
 window.updateAdminBadge = async function() {
     const badge = document.getElementById('bugsBadge');
-    const courseBadge = document.getElementById('courseEnrollmentBadgeGlobal');
     if (!db) return;
 
     let unreadBugsCount = 0;
@@ -2007,11 +2020,13 @@ window.updateAdminBadge = async function() {
 
     // 1. Lettura Bug Reports (Solo se Admin)
     try {
-        const bugsSnap = await db.ref('bugReports').once('value');
-        if (bugsSnap && bugsSnap.exists()) {
-            bugsSnap.forEach(c => {
-                if (c.val() && c.val().ts > lastSeenBugTs) unreadBugsCount++;
-            });
+        if (window.isAdmin) {
+            const bugsSnap = await db.ref('bugReports').once('value');
+            if (bugsSnap && bugsSnap.exists()) {
+                bugsSnap.forEach(c => {
+                    if (c.val() && c.val().ts > lastSeenBugTs) unreadBugsCount++;
+                });
+            }
         }
     } catch(e) {}
 
@@ -2029,6 +2044,20 @@ window.updateAdminBadge = async function() {
             });
         }
     } catch(e) {}
+
+    const totalBadgeCount = unreadBugsCount + pendingTutorRequestsCount;
+
+    if (badge) {
+        if (totalBadgeCount > 0) {
+            badge.textContent = totalBadgeCount;
+            badge.style.display = 'flex';
+            badge.classList.add('badge-active');
+        } else {
+            badge.style.display = 'none';
+            badge.classList.remove('badge-active');
+        }
+    }
+};
 
     if (badge) {
         if (unreadBugsCount > 0) {
