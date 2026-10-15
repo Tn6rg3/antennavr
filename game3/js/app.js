@@ -2346,8 +2346,8 @@ if (els.btnPlayDailyNow) {
 }
 if (els.btnShareDaily) {
     els.btnShareDaily.onclick = () => {
-        const text = `🏆 Ho completato la Sfida Giornaliera Morse!\n🎯 Punteggio: ${totalScore} pt\n🚀 Velocità di picco: ${peakWpm} WPM\n\nProva anche tu su Sfida Telegrafia! 📻`;
-        const url = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`)}&text=${encodeURIComponent(text)}`;
+        const text = `🏆 Ho completato la Sfida Giornaliera Morse!\n🎯 Punteggio: ${totalScore} pt\n🚀 Velocità di picco: ${peakWpm} WPM\n\nProva anche tu su Sfida Telegrafia! 📻\n@${BOT_USERNAME}`;
+        const url = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}`)}&text=${encodeURIComponent(text)}`;
         if (tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
     };
 }
@@ -2426,7 +2426,7 @@ window.reopenDailyChallenge = function() {
 
 // --- CONDIVISIONE ---
 window.shareAppToFriends = function() {
-    const url = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`)}&text=${encodeURIComponent("📻 Unisciti a me su Sfida Telegrafia!")}`;
+    const url = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}`)}&text=${encodeURIComponent("📻 Unisciti a me su Sfida Telegrafia!\n@" + BOT_USERNAME)}`;
     if (tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
 };
 

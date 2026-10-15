@@ -1581,12 +1581,12 @@ window.showMatchShareButtons = function() {
     btn.textContent = currentLang === 'it' ? "📢 Condividi Risultato" : "📢 Share Result";
 
     btn.onclick = () => {
-        const appUrl = encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}`);
+        const botUrl = encodeURIComponent(`https://t.me/${BOT_USERNAME}`);
         let modeName = (window.currentMode || "Match").toUpperCase();
         if (window.currentMode === 'daily_challenge') modeName = "Sfida Giornaliera";
 
-        const textMsg = encodeURIComponent(`📻 ${modeName} CW!\nHo totalizzato ${totalScore} pt (Velocità: ${currentWpm} WPM).\nRiesci a fare di meglio?`);
-        const shareUrl = `https://t.me/share/url?url=${appUrl}&text=${textMsg}`;
+        const textMsg = encodeURIComponent(`📻 ${modeName} CW!\nHo totalizzato ${totalScore} pt (Velocità: ${currentWpm} WPM).\nRiesci a fare di meglio?\n@${BOT_USERNAME}`);
+        const shareUrl = `https://t.me/share/url?url=${botUrl}&text=${textMsg}`;
         try {
             if (tg && tg.openTelegramLink) tg.openTelegramLink(shareUrl); else window.open(shareUrl, '_blank');
         } catch (e) {
