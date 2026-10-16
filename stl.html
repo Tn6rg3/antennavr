@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>STL AR Viewer Mobile</title>
+    
+    <!-- Google Model Viewer -->
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+
+    <!-- Import Map per Three.js -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #1e1e24;
+        }
+
+        /* Visualizzatore a tutto schermo */
+        model-viewer {
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, #3a3a48 0%, #1e1e24 100%);
+            --poster-color: transparent;
+        }
+
+        /* Pulsante Apri/Chiudi Menu */
+        .menu-toggle {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            z-index: 30;
+            background: rgba(255, 255, 255, 0.95);
+            border: none;
+            border-radius: 50px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #222;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.2s;
+        }
+        .menu-toggle:active {
+            transform: scale(0.95);
+        }
+
+        /* Pannello Menu Richiudibile */
+        .drawer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            max-width: 400px;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(10px);
+            z-index: 25;
+            padding: 72px 20px 24px 20px;
+            border-bottom-right-radius: 20px;
+            border-bottom-left-radius: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateY(0);
+        }
+        .drawer.closed {
+            transform: translateY(-105%);
+        }
+
+        .control-group {
+            margin-bottom: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .control-group label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+        }
+        .row > * {
+            flex: 1;
+        }
+
+        /* Bottone Caricamento File */
+        .upload-btn {
+            background-color: #0066ff;
+            color: white;
+            padding: 14px;
+            border-radius: 12px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            display: block;
+            box-shadow: 0 4px 10px rgba(0, 102, 255, 0.3);
+        }
+        input[type="file"] {
+            display: none;
+        }
+
+        select, input[type="color"] {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid #d0d0d5;
+            background: #fff;
+            font-size: 14px;
+            color: #222;
+            height: 42px;
+        }
+
+        /* Box Dimensioni e Stato */
+        .info-box {
+            background: #f0f2f5;
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-size: 13px;
+            color: #333;
+            line-height: 1.4;
+            margin-top: 6px;
+            border-left: 4px solid #0066ff;
+        }
+
+        /* Pulsante AR in basso */
+        .ar-button {
+            background-color: #00c853;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 16px 28px;
+            font-size: 16px;
+            font-weight: 700;
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 6px 20px rgba(0, 200, 83, 0.4);
+            cursor: pointer;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 20;
+        }
+        .ar-button:active {
+            transform: translateX(-50%) scale(0.96);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Bottone per aprire/chiudere il menu -->
+    <button id="menuToggle" class="menu-toggle">
+        <span id="menuIcon">✕</span> <span id="menuText">Chiudi Menu</span>
+    </button>
+
+    <!-- Menu Richiudibile -->
+    <div id="drawer" class="drawer">
+        <div class="control-group">
+            <label class="upload-btn">
+                📂 Importa file .STL o .STO
+                <!-- Accetta sia .stl che .sto ed file generici per compatibilità file manager mobile -->
+                <input type="file" id="fileInput" accept=".stl,.sto,*/*" />
+            </label>
+        </div>
+
+        <div class="row">
+            <div class="control-group">
+                <label>Unità del file (Scala 1:1)</label>
+                <select id="scaleSelect">
+                    <option value="0.001" selected>Millimetri (mm)</option>
+                    <option value="0.01">Centimetri (cm)</option>
+                    <option value="1">Metri (m)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Modalità Scala AR</label>
+                <select id="arScaleSelect">
+                    <option value="fixed" selected>1:1 Reale (Bloccata)</option>
+                    <option value="auto">Libera (Zoom con dita)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="control-group">
+                <label>Posizionamento AR</label>
+                <select id="placementSelect">
+                    <option value="floor" selected>Pavimento / Tavolo</option>
+                    <option value="wall">Parete (Verticale)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Orientamento</label>
+                <select id="upAxisSelect">
+                    <option value="zUp" selected>Z-Up (Da CAD/Stampa 3D)</option>
+                    <option value="yUp">Y-Up (Standard 3D)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Colore Modello</label>
+            <input type="color" id="colorPicker" value="#0088ff">
+        </div>
+
+        <div id="status" class="info-box">
+            Carica un file STL dal tuo telefono per iniziare.
+        </div>
+    </div>
+
+    <!-- Visualizzatore 3D e AR -->
+    <model-viewer id="viewer" 
+        ar 
+        ar-modes="webxr scene-viewer quick-look" 
+        ar-scale="fixed"
+        ar-placement="floor"
+        camera-controls 
+        touch-action="pan-y"
+        shadow-intensity="1.2" 
+        shadow-softness="0.8">
+        
+        <button slot="ar-button" class="ar-button">
+            📷 Posiziona nell'ambiente (AR)
+        </button>
+    </model-viewer>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+        import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+        const menuToggle = document.getElementById('menuToggle');
+        const menuIcon = document.getElementById('menuIcon');
+        const menuText = document.getElementById('menuText');
+        const drawer = document.getElementById('drawer');
+
+        const fileInput = document.getElementById('fileInput');
+        const scaleSelect = document.getElementById('scaleSelect');
+        const arScaleSelect = document.getElementById('arScaleSelect');
+        const placementSelect = document.getElementById('placementSelect');
+        const upAxisSelect = document.getElementById('upAxisSelect');
+        const colorPicker = document.getElementById('colorPicker');
+        const status = document.getElementById('status');
+        const viewer = document.getElementById('viewer');
+
+        let currentBuffer = null;
+        let currentObjectUrl = null;
+        let isMenuOpen = true;
+
+        // Gestione apertura/chiusura menu
+        function toggleMenu(forceState) {
+            isMenuOpen = forceState !== undefined ? forceState : !isMenuOpen;
+            if (isMenuOpen) {
+                drawer.classList.remove('closed');
+                menuIcon.textContent = '✕';
+                menuText.textContent = 'Chiudi Menu';
+            } else {
+                drawer.classList.add('closed');
+                menuIcon.textContent = '⚙️';
+                menuText.textContent = 'Opzioni / File';
+            }
+        }
+
+        menuToggle.addEventListener('click', () => toggleMenu());
+
+        // Aggiorna impostazioni AR di <model-viewer> in tempo reale
+        arScaleSelect.addEventListener('change', () => {
+            viewer.setAttribute('ar-scale', arScaleSelect.value);
+        });
+
+        placementSelect.addEventListener('change', () => {
+            viewer.setAttribute('ar-placement', placementSelect.value);
+        });
+
+        // Lettura del file da smartphone
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            status.innerHTML = "⏳ Lettura del file in corso...";
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                currentBuffer = event.target.result;
+                processSTL(true); // Processa e chiudi il menu automaticamente
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        // Ricalcola il modello se si cambiano unità, asse o colore
+        scaleSelect.addEventListener('change', () => { if (currentBuffer) processSTL(false); });
+        upAxisSelect.addEventListener('change', () => { if (currentBuffer) processSTL(false); });
+        colorPicker.addEventListener('change', () => { if (currentBuffer) processSTL(false); });
+
+        function processSTL(autoCloseMenu = false) {
+            status.innerHTML = "⚙️ Conversione in corso per AR...";
+
+            try {
+                const loader = new STLLoader();
+                const geometry = loader.parse(currentBuffer);
+
+                // I software CAD esportano gli STL con Z verso l'alto, ma l'AR usa Y verso l'alto
+                if (upAxisSelect.value === 'zUp') {
+                    geometry.rotateX(-Math.PI / 2);
+                }
+
+                // Scala direttamente i vertici per garantire il 1:1 reale su qualsiasi piattaforma
+                const scale = parseFloat(scaleSelect.value);
+                geometry.scale(scale, scale, scale);
+
+                // Calcola le dimensioni reali (in metri) e appoggia la base sul pavimento (Y = 0)
+                geometry.computeBoundingBox();
+                const box = geometry.boundingBox;
+                const center = new THREE.Vector3();
+                const size = new THREE.Vector3();
+                box.getCenter(center);
+                box.getSize(size);
+
+                // Centra X e Z, ma metti il fondo dell'oggetto esattamente a Y = 0
+                geometry.translate(-center.x, -box.min.y, -center.z);
+
+                // Materiale opaco/satinato ben visibile sotto le luci AR
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: new THREE.Color(colorPicker.value), 
+                    roughness: 0.45, 
+                    metalness: 0.15 
+                });
+
+                const mesh = new THREE.Mesh(geometry, material);
+
+                // Esporta in formato binario GLB per Model Viewer
+                const exporter = new GLTFExporter();
+                exporter.parse(
+                    mesh,
+                    (glbBuffer) => {
+                        if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+                        
+                        const blob = new Blob([glbBuffer], { type: 'model/gltf-binary' });
+                        currentObjectUrl = URL.createObjectURL(blob);
+                        
+                        viewer.src = currentObjectUrl;
+
+                        // Mostra le dimensioni reali in centimetri per conferma visiva
+                        const wCm = (size.x * 100).toFixed(1);
+                        const dCm = (size.z * 100).toFixed(1);
+                        const hCm = (size.y * 100).toFixed(1);
+
+                        status.innerHTML = `✅ <b>Modello pronto!</b><br>Dimensioni reali: <b>${wCm} × ${dCm} × ${hCm} cm</b> (L×P×A)<br><small>Tocca il pulsante verde in basso per l'AR. In AR trascina con un dito per spostarlo e ruota con due dita.</small>`;
+
+                        if (autoCloseMenu) {
+                            setTimeout(() => toggleMenu(false), 1200);
+                        }
+                    },
+                    (error) => {
+                        console.error(error);
+                        status.innerHTML = "❌ Errore durante la preparazione AR.";
+                    },
+                    { binary: true }
+                );
+            } catch (err) {
+                console.error(err);
+                status.innerHTML = "❌ Il file selezionato non sembra essere un STL valido.";
+            }
+        }
+    </script>
+</body>
+</html>
