@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.229";
+const APP_VERSION = "20260807.231";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -2469,37 +2469,64 @@ window.renderTriDailyHubCards = function() {
             const card = document.createElement('div');
             card.style.cssText = "background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; border: 1px solid rgba(255,255,255,0.1); text-align: left;";
 
-            let statusBadge = "";
-            let actionBtnHtml = "";
+            const topRow = document.createElement('div');
+            topRow.style.cssText = "display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;";
 
+            const nameB = document.createElement('b');
+            nameB.style.cssText = "color:var(--text-color); font-size:0.9em;";
+            nameB.textContent = s.name;
+            topRow.appendChild(nameB);
+
+            const badgeSpan = document.createElement('span');
+            badgeSpan.style.cssText = "font-weight:bold; font-size:0.8em; float:right;";
             if (isWithdrawn) {
-                statusBadge = '<span style="color:#f44336; font-weight:bold; font-size:0.8em; float:right;">🏃 Rinunciata</span>';
+                badgeSpan.style.color = "#f44336";
+                badgeSpan.textContent = "🏃 Rinunciata";
             } else if (isCompleted) {
-                statusBadge = `<span style="color:#4caf50; font-weight:bold; font-size:0.8em; float:right;">✅ ${score} pt (${finalWpm} WPM)</span>`;
+                badgeSpan.style.color = "#4caf50";
+                badgeSpan.textContent = `✅ ${score} pt (${finalWpm} WPM)`;
             } else if (isPlayed) {
-                statusBadge = `<span style="color:#ff9800; font-weight:bold; font-size:0.8em; float:right;">⏹️ Giocata (${score} pt)</span>`;
+                badgeSpan.style.color = "#ff9800";
+                badgeSpan.textContent = `⏹️ Giocata (${score} pt)`;
             } else if (currentSlot.id === s.id) {
-                statusBadge = '<span style="color:#ff9800; font-weight:bold; font-size:0.8em; float:right; animation:pulse 1.5s infinite;">🚀 IN CORSO</span>';
-                actionBtnHtml = `
-                    <div style="display:flex; gap:8px; margin-top:10px;">
-                        <button onclick="window.showTriDailyPreview('${s.id}')" class="btn-success" style="flex:2; padding:8px; font-size:0.85em; margin:0;">INIZIA SESSIONE (${s.words} PAROLE) 🚀</button>
-                        <button onclick="window.withdrawTriDailySession('${s.id}')" class="btn-danger" style="flex:1; padding:8px; font-size:0.8em; margin:0;">🏃 Ritirati</button>
-                    </div>
-                `;
+                badgeSpan.style.color = "#ff9800";
+                badgeSpan.style.animation = "pulse 1.5s infinite";
+                badgeSpan.textContent = "🚀 IN CORSO";
             } else if (currentSlot.id === 'night') {
-                statusBadge = '<span style="color:#9e9e9e; font-size:0.8em; float:right;">🌌 Riposo</span>';
+                badgeSpan.style.color = "#9e9e9e";
+                badgeSpan.textContent = "🌌 Riposo";
             } else {
-                statusBadge = '<span style="color:#9e9e9e; font-size:0.8em; float:right;">🔒 Non Attiva</span>';
+                badgeSpan.style.color = "#9e9e9e";
+                badgeSpan.textContent = "🔒 Non Attiva";
             }
+            topRow.appendChild(badgeSpan);
+            card.appendChild(topRow);
 
-            card.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                    <b style="color:var(--text-color); font-size:0.9em;">${window.escapeHtml(s.name)}</b>
-                    ${statusBadge}
-                </div>
-                <div style="font-size:0.75em; color:var(--hint-color);">${s.words} Parole | Incremento WPM: ${window.escapeHtml(s.step)}</div>
-                ${actionBtnHtml}
-            `;
+            const infoDiv = document.createElement('div');
+            infoDiv.style.cssText = "font-size:0.75em; color:var(--hint-color);";
+            infoDiv.textContent = `${s.words} Parole | Incremento WPM: ${s.step}`;
+            card.appendChild(infoDiv);
+
+            if (currentSlot.id === s.id && !isPlayed && !isWithdrawn) {
+                const btnDiv = document.createElement('div');
+                btnDiv.style.cssText = "display:flex; gap:8px; margin-top:10px;";
+
+                const startBtnEl = document.createElement('button');
+                startBtnEl.className = "btn-success";
+                startBtnEl.style.cssText = "flex:2; padding:8px; font-size:0.85em; margin:0;";
+                startBtnEl.textContent = `INIZIA SESSIONE (${s.words} PAROLE) 🚀`;
+                startBtnEl.onclick = () => window.showTriDailyPreview(s.id);
+
+                const withdrawBtnEl = document.createElement('button');
+                withdrawBtnEl.className = "btn-danger";
+                withdrawBtnEl.style.cssText = "flex:1; padding:8px; font-size:0.8em; margin:0;";
+                withdrawBtnEl.textContent = "🏃 Ritirati";
+                withdrawBtnEl.onclick = () => window.withdrawTriDailySession(s.id);
+
+                btnDiv.appendChild(startBtnEl);
+                btnDiv.appendChild(withdrawBtnEl);
+                card.appendChild(btnDiv);
+            }
 
             cardsContainer.appendChild(card);
         });
@@ -2545,11 +2572,19 @@ window.showTriDailyPreview = function(slotId) {
                 const name = item.name || 'Telegrafista';
                 const score = item.totalScore || 0;
                 const isMe = (item.id === window.myId);
-                const safeName = window.escapeHtml(name);
 
                 const row = document.createElement('div');
                 row.style.cssText = `display:flex; justify-content:space-between; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); ${isMe ? 'background:rgba(255,152,0,0.2); font-weight:bold;' : ''}`;
-                row.innerHTML = `<span>${medal} ${safeName}</span><b style="color:#ff9800;">${score} pt</b>`;
+
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = `${medal} ${name}`;
+
+                const scoreB = document.createElement('b');
+                scoreB.style.color = "#ff9800";
+                scoreB.textContent = `${score} pt`;
+
+                row.appendChild(nameSpan);
+                row.appendChild(scoreB);
                 previewList.appendChild(row);
             });
         }
@@ -2692,25 +2727,64 @@ window.checkTriDailyNextDayResults = function() {
             const top3 = list.slice(0, 3);
             top3.forEach((item, idx) => {
                 const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
-                const safeName = window.escapeHtml(item.name || 'Anonimo');
                 const div = document.createElement('div');
                 div.style.cssText = 'text-align:center; flex:1;';
-                div.innerHTML = `<span style="font-size:1.5em; display:block;">${medal}</span><b style="font-size:0.8em; color:var(--text-color); display:block; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${safeName}</b><small style="color:#ff9800; font-size:0.75em;">${item.totalScore || 0} pt</small>`;
+
+                const medalSpan = document.createElement('span');
+                medalSpan.style.cssText = "font-size:1.5em; display:block;";
+                medalSpan.textContent = medal;
+
+                const nameB = document.createElement('b');
+                nameB.style.cssText = "font-size:0.8em; color:var(--text-color); display:block; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;";
+                nameB.textContent = item.name || 'Anonimo';
+
+                const scoreSmall = document.createElement('small');
+                scoreSmall.style.cssText = "color:#ff9800; font-size:0.75em;";
+                scoreSmall.textContent = `${item.totalScore || 0} pt`;
+
+                div.appendChild(medalSpan);
+                div.appendChild(nameB);
+                div.appendChild(scoreSmall);
                 podiumContainer.appendChild(div);
             });
 
             const myRankIndex = list.findIndex(x => x.id === window.myId);
             const myRankStr = myRankIndex >= 0 ? `${myRankIndex + 1}° su ${list.length}` : 'In Classifica';
-            const safeRankStr = window.escapeHtml(myRankStr);
 
             if (resultBox) {
-                resultBox.innerHTML = `
-                    <p style="margin:0 0 5px 0;">Piazzamento di Ieri: <b style="color:var(--champ-color); font-size:1.1em;">${safeRankStr}</b></p>
-                    <div style="display:flex; justify-content:space-around; font-size:0.85em; color:var(--hint-color);">
-                        <span>Punti Totali: <b style="color:#ff9800;">${myTotal} pt</b></span>
-                        <span>Sessioni: <b style="color:#2e7d32;">${slotsCount}/3</b></span>
-                    </div>
-                `;
+                resultBox.textContent = ''; // clear
+
+                const pRank = document.createElement('p');
+                pRank.style.cssText = "margin:0 0 5px 0;";
+                pRank.appendChild(document.createTextNode("Piazzamento di Ieri: "));
+
+                const bRank = document.createElement('b');
+                bRank.style.cssText = "color:var(--champ-color); font-size:1.1em;";
+                bRank.textContent = myRankStr;
+                pRank.appendChild(bRank);
+
+                const statsDiv = document.createElement('div');
+                statsDiv.style.cssText = "display:flex; justify-content:space-around; font-size:0.85em; color:var(--hint-color);";
+
+                const spanPts = document.createElement('span');
+                spanPts.appendChild(document.createTextNode("Punti Totali: "));
+                const bPts = document.createElement('b');
+                bPts.style.color = "#ff9800";
+                bPts.textContent = `${myTotal} pt`;
+                spanPts.appendChild(bPts);
+
+                const spanSess = document.createElement('span');
+                spanSess.appendChild(document.createTextNode("Sessioni: "));
+                const bSess = document.createElement('b');
+                bSess.style.color = "#2e7d32";
+                bSess.textContent = `${slotsCount}/3`;
+                spanSess.appendChild(bSess);
+
+                statsDiv.appendChild(spanPts);
+                statsDiv.appendChild(spanSess);
+
+                resultBox.appendChild(pRank);
+                resultBox.appendChild(statsDiv);
             }
 
             modal.style.display = 'flex';
