@@ -1291,6 +1291,7 @@ window.finishGame = function() {
                     'callsign': 'callsign/global',
                     'quiz': 'quiz',
                     'chars': 'chars',
+                    'code_groups': 'code_groups',
                     'pingpong': 'pingpong',
                     'standard_plus': 'standard_plus',
                     'target_training': 'target_training'
@@ -1700,6 +1701,7 @@ function finishGameNavigation(mode, wordCount, isSingle, code) {
     // Determiniamo il sotto-modo (select) per la navigazione
     let subMode = isSingle ? 'std_single' : 'std_multi';
     if (mode === 'standard_plus') subMode = isSingle ? 'std_plus_single' : 'std_plus_multi';
+    else if (mode === 'code_groups') subMode = isSingle ? 'code_groups_single' : 'code_groups_multi';
     else if (mode === 'callsign') subMode = 'cwfreak';
     else if (mode === 'quiz') subMode = isSingle ? 'quiz_single' : 'quiz_multi';
     else if (mode === 'chars') subMode = isSingle ? 'chars_single' : 'chars_multi';

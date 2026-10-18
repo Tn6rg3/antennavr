@@ -612,7 +612,38 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
 
     let sessions = [];
 
-    if (period === 'last_match') {
+    if (period === 'daily_challenge') {
+        // Modalita Sfida Giornaliera: andamento delle Sfide Giornaliere giocate nel tempo
+        let dailyMatches = rawMatches.filter(m => {
+            if (!m) return false;
+            const mode = (m.mode || '').toLowerCase();
+            return mode === 'daily_challenge';
+        }).sort((a,b) => getMatchTs(a) - getMatchTs(b));
+
+        if (dailyMatches.length > 0) {
+            dailyMatches.forEach((m, idx) => {
+                let acc = -1;
+                const detailsArr = m.details || m.matchDetails || [];
+                if (detailsArr.length > 0) {
+                    const correctCount = detailsArr.filter(d => (d.real || "").toUpperCase() === (d.typed || "").toUpperCase() && !d.usedReplay).length;
+                    acc = Math.round((correctCount / detailsArr.length) * 100);
+                } else if (typeof m.accuracy === 'number') {
+                    acc = m.accuracy;
+                } else if (typeof m.score === 'number' && m.score > 0) {
+                    acc = 85;
+                } else {
+                    acc = 0;
+                }
+
+                const wpm = m.wpm || (detailsArr[0] ? detailsArr[0].wpm : 20);
+                const ts = getMatchTs(m) || (Date.now() + idx);
+
+                if (wpm > 0) {
+                    sessions.push({ acc, wpm, ts, score: m.score || 0 });
+                }
+            });
+        }
+    } else if (period === 'last_match') {
         // Modalita Ultima Partita: parola per parola dell'ultima partita giocata
         if (allMatches.length > 0) {
             const lastMatch = allMatches[allMatches.length - 1]; // L'ULTIMA PARTITA PIU' RECENTE
@@ -701,12 +732,27 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
     const badgeAvgAcc = document.getElementById('badgeAvgAcc');
     const badgeWpmGrowth = document.getElementById('badgeWpmGrowth');
 
+    const legLeft = document.getElementById('chartLegendLeft');
+    const legRight = document.getElementById('chartLegendRight');
+    if (legLeft && legRight) {
+        if (period === 'daily_challenge') {
+            legLeft.textContent = "🔵 Accuratezza Sfida (%) [Asse SX]";
+            legRight.textContent = "🟠 Picco WPM Sfida [Asse DX]";
+        } else {
+            legLeft.textContent = "🔵 Accuratezza (%) [Asse SX]";
+            legRight.textContent = "🟠 Velocità (WPM) [Asse DX]";
+        }
+    }
+
     if (sessions.length === 0) {
         ctx.clearRect(0, 0, width, height);
         ctx.fillStyle = "#999";
         ctx.font = "12px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("Gioca più partite per vedere la progressione WPM ed accuratezza", width/2, height/2);
+        const emptyMsg = period === 'daily_challenge'
+            ? "Nessuna Sfida Giornaliera trovata nello storico. Gioca la Sfida per tracciare il tuo andamento!"
+            : "Gioca più partite per vedere la progressione WPM ed accuratezza";
+        ctx.fillText(emptyMsg, width/2, height/2);
 
         if (badgeAvgWpm) badgeAvgWpm.textContent = "-- WPM";
         if (badgePeakWpm) badgePeakWpm.textContent = "-- WPM";
@@ -742,7 +788,10 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
         ctx.fillStyle = "#999";
         ctx.font = "12px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("Completa almeno 2 partite per tracciare il grafico", width/2, height/2);
+        const msg = period === 'daily_challenge'
+            ? "Completa almeno 2 Sfide Giornaliere per tracciare il grafico"
+            : "Completa almeno 2 partite per tracciare il grafico";
+        ctx.fillText(msg, width/2, height/2);
         return;
     }
 
@@ -815,7 +864,7 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
     });
     ctx.stroke();
 
-    // DENTI / PUNTI SUL GRAFICO
+    // DENTI / PUNTI SUL GRAFICO & ETICHETTE DATA
     sessions.forEach((s, i) => {
         const x = paddingLeft + (chartW / (sessions.length - 1)) * i;
 
@@ -833,6 +882,21 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
         ctx.beginPath();
         ctx.arc(x, yWpm, 3.5, 0, Math.PI * 2);
         ctx.fill();
+
+        // Etichetta Data (Giorno/Mese) sull'Asse X
+        if (sessions.length <= 12 || i === 0 || i === sessions.length - 1 || i % Math.ceil(sessions.length / 6) === 0) {
+            ctx.fillStyle = "#64748b";
+            ctx.font = "8px sans-serif";
+            ctx.textAlign = "center";
+            let label = "";
+            if (s.ts && typeof s.ts === 'number') {
+                const d = new Date(s.ts);
+                label = `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}`;
+            } else {
+                label = `#${i+1}`;
+            }
+            ctx.fillText(label, x, paddingTop + chartH + 12);
+        }
     });
 };
 
@@ -1124,7 +1188,7 @@ window.updateUserInAllLeaderboards = async function(newName, newUsername, privLb
         }).catch(()=> {});
     }
 
-    const categories = ['standard', 'chars', 'quiz', 'pingpong'];
+    const categories = ['standard', 'standard_plus', 'code_groups', 'chars', 'quiz', 'pingpong'];
     for (const cat of categories) {
         db.ref(`leaderboard/${cat}`).once('value').then(catSnap => {
             if (catSnap.exists()) {
@@ -1342,7 +1406,7 @@ if (els.deleteDataBtn) {
             const safeRemove = (ref) => ref.remove().catch(e => console.warn("Safe remove note:", e));
 
             // FASE 1: Pulizia Classifiche e Leaderboard (Mentre uid_mapping e attivo al 100%)
-            const categories = ['standard', 'chars', 'quiz', 'pingpong', 'callsign', 'arcade', 'la_torre'];
+            const categories = ['standard', 'standard_plus', 'code_groups', 'chars', 'quiz', 'pingpong', 'callsign', 'arcade', 'la_torre'];
             for (const cat of categories) {
                 try {
                     const catSnap = await db.ref(`leaderboard/${cat}`).once('value');

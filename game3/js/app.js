@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.225";
+const APP_VERSION = "20260807.226";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -509,6 +509,9 @@ if(document.getElementById('gameModeInput')) document.getElementById('gameModeIn
 if(document.getElementById('gameTypeInput')) document.getElementById('gameTypeInput').addEventListener('change', () => {
     window.checkGameTypeUI?.();
     if (typeof window.displayGlobalRatings === 'function') window.displayGlobalRatings();
+});
+if(document.getElementById('groupCharSetInput')) document.getElementById('groupCharSetInput').addEventListener('change', () => {
+    window.checkGameTypeUI?.();
 });
 
 // --- STARTUP ---
@@ -2619,7 +2622,7 @@ if (els.createRoomBtn) {
         window.incomingChallengeId = null;
         window.currentMode = gMode || 'standard';
         console.log("Create Room: Initial Mode selection ->", gMode, "Global window.currentMode ->", window.currentMode);
-        window.isSinglePlayer = (gType === 'single');
+        window.isSinglePlayer = (gType === 'single') || (gType === 'transmission' && (gMode === 'code_groups' || gMode === 'standard'));
         window.currentWpm = window.baseWpm = (window.currentMode === 'callsign' ? 25 : (parseInt(els.startWpmInput?.value) || 20));
         window.requestedWordCount = (window.currentMode === 'callsign' ? 25 : (parseInt(els.wordCountInput?.value) || 10));
         window.requestedWordLength = parseInt(document.getElementById('wordLengthInput')?.value) || 0;
@@ -2633,8 +2636,10 @@ if (els.createRoomBtn) {
                 if (typeof window.initQsoAudioModule === 'function') window.initQsoAudioModule();
                 return;
             }
-            window.startTransmissionFree(gMode);
-            return;
+            if (gMode === 'groups_tx' || gMode === 'real_tx') {
+                window.startTransmissionFree(gMode);
+                return;
+            }
         }
 
         const isFixed = window.isSinglePlayer && els.fixedSpeedCheckbox?.checked;
@@ -2663,6 +2668,7 @@ if (els.createRoomBtn) {
             window.gameWords = window.getGameWords(window.requestedWordCount, window.currentMode, {
                 groupSize: window.wordsPerGroup,
                 wordLength: window.requestedWordLength,
+                charSetType: document.getElementById('groupCharSetInput')?.value || 'letters',
                 stats: stats
             });
 

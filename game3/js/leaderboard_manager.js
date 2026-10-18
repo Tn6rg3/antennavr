@@ -9,6 +9,7 @@ window.lbGroups = {
     single: [
         { val: 'std_single', it: '👤 Record Parole', en: '👤 Words Records' },
         { val: 'std_plus_single', it: '👤 Record Parole +', en: '👤 Words + Records' },
+        { val: 'code_groups_single', it: '👤 Record Gruppi (5 Chars)', en: '👤 Code Groups Records' },
         { val: 'target_training_single', it: '👤 Record Mirato (Radar)', en: '👤 Targeted Records (Radar)' },
         { val: 'chars_single', it: '👤 Record Caratteri', en: '👤 Chars Records' },
         { val: 'quiz_single', it: '👤 Record Quiz', en: '👤 Quiz Records' },
@@ -17,6 +18,7 @@ window.lbGroups = {
     multi: [
         { val: 'std_multi', it: '⚔️ Match Parole (Multi)', en: '⚔️ Words Matches' },
         { val: 'std_plus_multi', it: '⚔️ Match Parole + (Multi)', en: '⚔️ Words + Matches' },
+        { val: 'code_groups_multi', it: '⚔️ Match Gruppi (5 Chars)', en: '⚔️ Code Groups Matches' },
         { val: 'target_training_multi', it: '⚔️ Match Mirato (Multi)', en: '⚔️ Targeted Matches' },
         { val: 'chars_multi', it: '⚔️ Match Caratteri (Multi)', en: '⚔️ Chars Matches' },
         { val: 'quiz_multi', it: '⚔️ Match Quiz (Multi)', en: '⚔️ Quiz Matches' },
@@ -112,6 +114,7 @@ window.showLeaderboardTab = function(modeValue) {
 
         let baseMode = 'standard';
         if (modeValue.includes('std_plus')) baseMode = 'standard_plus';
+        else if (modeValue.includes('code_groups')) baseMode = 'code_groups';
         else if (modeValue.includes('target_training')) baseMode = 'target_training';
         else if (modeValue.includes('chars')) baseMode = 'chars';
         else if (modeValue.includes('quiz')) baseMode = 'quiz';

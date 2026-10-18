@@ -346,6 +346,39 @@ window.GAME_MODES = {
         spacingConfigurable: false,
         generateWords: function(num, dicts) { return []; }
     },
+    "code_groups": {
+        id: "code_groups",
+        titleIt: "Gruppi di 5 Caratteri",
+        titleEn: "5-Character Code Groups",
+        icon: "🔤",
+        defaultWpm: 20,
+        defaultWordCount: 10,
+        wpmConfigurable: true,
+        wordCountConfigurable: true,
+        fixedSpeedAllowed: true,
+        spacingConfigurable: true,
+        generateWords: function(num, dicts, options) {
+            const charSetType = options?.charSetType || (document.getElementById('groupCharSetInput')?.value) || 'letters';
+            let pool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            if (charSetType === 'numbers') {
+                pool = "0123456789";
+            } else if (charSetType === 'alphanumeric') {
+                pool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            } else if (charSetType === 'mixed') {
+                pool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,/?=-:;()@+";
+            }
+
+            let groups = [];
+            for (let i = 0; i < num; i++) {
+                let grp = "";
+                for (let j = 0; j < 5; j++) {
+                    grp += pool[Math.floor(Math.random() * pool.length)];
+                }
+                groups.push(grp);
+            }
+            return groups;
+        }
+    },
     "groups_tx": {
         id: "groups_tx",
         titleIt: "Trasmissione Gruppi",

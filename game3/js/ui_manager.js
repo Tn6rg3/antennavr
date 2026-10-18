@@ -26,8 +26,8 @@ window.populateGameModesUI = function() {
         } else if (isCoop) {
             if (mode.id !== 'conquest') return;
         } else if (isTx) {
-            // Mostriamo Standard, Gruppi, Ricezione Audio e Ascolto QSO Reali
-            if (mode.id !== 'standard' && mode.id !== 'groups_tx' && mode.id !== 'real_tx' && mode.id !== 'qso_audio_search') return;
+            // Mostriamo Standard, Gruppi 5 Chars, Gruppi Tx, Ricezione Audio e Ascolto QSO Reali
+            if (mode.id !== 'standard' && mode.id !== 'code_groups' && mode.id !== 'groups_tx' && mode.id !== 'real_tx' && mode.id !== 'qso_audio_search') return;
         } else {
             if (mode.id === 'qso_audio_search' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'addestra_ia') return;
             if (typeInput.value === 'arcade' && mode.id !== 'arcade' && mode.id !== 'la_torre') return;
@@ -41,6 +41,7 @@ window.populateGameModesUI = function() {
         // Rinominazione etichette per modalità Trasmissione
         if (isTx) {
             if (mode.id === 'standard') opt.textContent = lang === 'it' ? "Esercizio Singolo (Koch)" : "Single Exercise (Koch)";
+            else if (mode.id === 'code_groups') opt.textContent = lang === 'it' ? "Esercizio Gruppi (5 Chars)" : "Code Groups Exercise (5 Chars)";
             else if (mode.id === 'groups_tx') opt.textContent = lang === 'it' ? "Trasmissione Gruppi" : "Groups Transmission";
             else if (mode.id === 'real_tx') opt.textContent = lang === 'it' ? "Ricezione Audio (Tasto Reale)" : "Audio Reception (Real Key)";
             else if (mode.id === 'qso_audio_search') opt.textContent = lang === 'it' ? "Ascolto QSO Reali 🎧" : "Listen Real QSOs 🎧";
@@ -55,7 +56,7 @@ window.populateGameModesUI = function() {
     // Ripristiniamo il valore se ancora valido, altrimenti standard
     if (window.GAME_MODES && window.GAME_MODES[currentVal]) {
         if (isSingle && currentVal === 'pingpong') select.value = 'standard';
-        else if (isTx && currentVal !== 'standard' && currentVal !== 'groups_tx' && currentVal !== 'real_tx' && currentVal !== 'qso_audio_search') select.value = 'standard';
+        else if (isTx && currentVal !== 'standard' && currentVal !== 'code_groups' && currentVal !== 'groups_tx' && currentVal !== 'real_tx' && currentVal !== 'qso_audio_search') select.value = 'standard';
         else select.value = currentVal;
     } else {
         select.value = 'standard';
@@ -136,19 +137,22 @@ window.checkGameTypeUI = function() {
         wordCount: document.getElementById('wordCountInput'),
         wordsPerGroup: document.getElementById('wordsPerGroupContainer'),
         wordLen: document.getElementById('wordLengthContainer'),
+        groupCharSet: document.getElementById('groupCharSetContainer'),
         koch: document.getElementById('setupKochLevelContainer'),
         keyer: document.getElementById('mainMenuKeyerConfig')
     };
 
     if (containers.timeout) containers.timeout.style.display = (isSingle || isTrn || isCoop || isArcadeType || isTx || selectedMode === 'qso') ? 'none' : 'block';
 
-    if (containers.fixed) containers.fixed.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
-    if (containers.easy) containers.easy.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
-    if (containers.spacing) containers.spacing.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
+    const isFixedAllowed = (isSingle || isTx) && selectedMode !== 'qso' && selectedMode !== 'real_tx' && selectedMode !== 'groups_tx' && selectedMode !== 'qso_audio_search';
+    if (containers.fixed) containers.fixed.style.display = isFixedAllowed ? 'flex' : 'none';
+    if (containers.easy) containers.easy.style.display = isFixedAllowed ? 'flex' : 'none';
+    if (containers.spacing) containers.spacing.style.display = isFixedAllowed ? 'flex' : 'none';
     if (containers.custom) containers.custom.style.display = (selectedMode === 'custom') ? 'flex' : 'none';
     if (containers.spectator) containers.spectator.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
     if (containers.wordsPerGroup) containers.wordsPerGroup.style.display = (selectedMode === 'standard_plus') ? 'block' : 'none';
     if (containers.wordLen) containers.wordLen.style.display = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection') ? 'block' : 'none';
+    if (containers.groupCharSet) containers.groupCharSet.style.display = (selectedMode === 'code_groups') ? 'block' : 'none';
 
     // --- NUOVA LOGICA ASCOLTO (TTS) + RISPOSTA VOCALE + AVANZAMENTO AUTO ---
     const isSpeakAvailable = isSingle && (selectedMode === 'standard');
@@ -216,8 +220,8 @@ window.checkGameTypeUI = function() {
             containers.btn.style.display = 'block';
             if (isCoop) containers.btn.textContent = currentLang === 'it' ? "Crea Stanza Co-op ⚔️" : "Create Co-op Room ⚔️";
             else if (isTrn) containers.btn.textContent = currentLang === 'it' ? "Vai all'Area Tornei" : "Go to Tournaments";
-            else if (isTx) containers.btn.textContent = currentLang === 'it' ? "ENTRA IN STAZIONE 📻" : "ENTER STATION 📻";
-            else containers.btn.textContent = isSingle ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
+            else if (isTx && selectedMode !== 'code_groups' && selectedMode !== 'standard') containers.btn.textContent = currentLang === 'it' ? "ENTRA IN STAZIONE 📻" : "ENTER STATION 📻";
+            else containers.btn.textContent = (isSingle || isTx) ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
         }
     }
 };
