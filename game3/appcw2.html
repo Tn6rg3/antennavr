@@ -114,6 +114,65 @@
     </div>
 </div>
 
+<!-- POPUP HUB SFIDA TRIPLA GIORNALIERA -->
+<div id="triDailyModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 450px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5200; border: 2px solid #ff9800; border-radius: 14px; padding: 18px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.6); text-align: center; max-height: 95vh; overflow-y: auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h3 style="color: #ff9800; margin: 0; font-size: 1.1em; display:flex; align-items:center; gap:6px;">🏆 Sfida Tripla Giornaliera</h3>
+        <button onclick="document.getElementById('triDailyModal').style.display='none'" class="btn-secondary" style="width:auto; padding:2px 8px; margin:0; font-size:0.8em;">✕</button>
+    </div>
+
+    <div style="background: rgba(255, 152, 0, 0.1); border: 1px solid #ff9800; border-radius: 8px; padding: 10px; margin-bottom: 12px; display:flex; justify-content:space-around; align-items:center;">
+        <div>
+            <span style="font-size:0.75em; color:var(--hint-color); display:block;">Punteggio Oggi</span>
+            <b id="triDailyHubTotalScore" style="font-size:1.2em; color:#ff9800;">0 pt</b>
+        </div>
+        <div style="border-left:1px solid rgba(255,255,255,0.2); padding-left:15px;">
+            <span style="font-size:0.75em; color:var(--hint-color); display:block;">Sessioni Giocate</span>
+            <b id="triDailyHubCompletedSlots" style="font-size:1.2em; color:#2e7d32;">0 / 3</b>
+        </div>
+    </div>
+
+    <div id="triDailyCardsContainer" style="display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
+        <!-- Card generate dinamicamente o popolate da JS -->
+    </div>
+
+    <button onclick="document.getElementById('triDailyModal').style.display='none'" class="btn-secondary" style="width:100%;">Chiudi</button>
+</div>
+
+<!-- POPUP PREVIEW "CHI STA PARTECIPANDO?" -->
+<div id="triDailyPreviewModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 420px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5300; border: 2px solid var(--link-color); border-radius: 14px; padding: 18px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.6); text-align: center; max-height: 95vh; overflow-y: auto;">
+    <h3 id="triDailyPreviewTitle" style="color: var(--link-color); margin: 0 0 10px 0; font-size: 1.1em;">🔥 Classifica Provvisoria</h3>
+    <p id="triDailyPreviewSub" style="font-size: 0.85em; color: var(--hint-color); margin-bottom: 10px;">Ecco chi sta partecipando e i punteggi attuali:</p>
+
+    <div id="triDailyPreviewList" style="max-height: 180px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 8px; margin-bottom: 12px; font-size: 0.85em;">
+        <!-- Elenco partecipanti -->
+    </div>
+
+    <p id="triDailyPreviewMsg" style="font-weight:bold; color:var(--champ-color); font-size:0.9em; margin-bottom:12px;"></p>
+
+    <div style="display:flex; gap:8px;">
+        <button id="btnTriDailyStartConfirm" class="btn-success" style="flex:2;">PRONTO! AVVIA SESSIONE 🚀</button>
+        <button id="btnTriDailyWithdraw" class="btn-danger" style="flex:1;">🏃 Ritirati</button>
+    </div>
+</div>
+
+<!-- POPUP RISULTATI DI IERI (CELEBRATIVO) -->
+<div id="triDailyResultsModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 420px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5400; border: 2px solid var(--champ-color); border-radius: 14px; padding: 18px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.6); text-align: center; max-height: 95vh; overflow-y: auto;">
+    <span style="font-size: 3em; margin-bottom: 5px;">🏆</span>
+    <h2 style="color: var(--champ-color); margin: 0 0 5px 0;">Risultati Sfida Tripla di Ieri</h2>
+    <p style="font-size: 0.85em; color: var(--hint-color); margin-bottom: 12px;">Ecco i telegrafisti vincitori della sfida precedente!</p>
+
+    <div id="triDailyPodiumContainer" style="display:flex; justify-content:space-around; align-items:flex-end; background:rgba(255,193,7,0.08); border:1px solid var(--champ-color); border-radius:10px; padding:10px 5px; margin-bottom:12px;">
+        <!-- Podio Top 3 -->
+    </div>
+
+    <div id="triDailyMyResultBox" style="background:rgba(255,255,255,0.05); border-radius:8px; padding:10px; margin-bottom:12px; font-size:0.9em;">
+        <!-- Tuo risultato personale -->
+    </div>
+
+    <button id="btnTriDailyAcceptToday" class="btn-success" style="width:100%;">ACCETTA LA SFIDA DI OGGI 🚀</button>
+</div>
+
 <!-- POPUP SESSIONE CORSO CW -->
 <div id="courseSessionModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5500; border: 2px solid var(--link-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
     <span style="font-size: 3em; margin-bottom: 10px;">📻</span>
@@ -570,7 +629,16 @@
             <h3 style="color:var(--link-color); margin-bottom:8px; font-size:0.95em;">🎯 Missioni Giornaliere</h3>
             <div id="missionsContainer">
                 <p style="text-align:center; color:var(--hint-color); font-size:0.8em;">Caricamento missioni...</p>
-s            </div>
+            </div>
+        </div>
+
+        <!-- HUB SFIDA TRIPLA GIORNALIERA -->
+        <div id="triDailyReopenBanner" class="box-panel" style="margin-bottom: 8px; border-color: #ff9800; background: rgba(255, 152, 0, 0.08);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <b style="color:#ff9800; font-size:0.95em;">🏆 Sfida Tripla Giornaliera</b>
+                <button onclick="window.openTriDailyHub()" class="action-btn-small btn-champ" style="width:auto; padding:6px 12px; font-weight:bold; background:#ff9800; border-color:#e65100;">HUB SFIDA 🚀</button>
+            </div>
+            <p id="triDailyStatusText" style="margin:6px 0 0 0; font-size:0.8em; color:var(--hint-color);">Partecipa alla sfida quotidiana divisa in 3 sessioni (Mattina, Pomeriggio, Sera)!</p>
         </div>
 
         <!-- RIATTIVAZIONE SFIDA GIORNALIERA -->
@@ -1711,6 +1779,10 @@ s            </div>
 
 <!-- AREA GIOCO PRINCIPALE -->
 <div id="gameArea" class="screen">
+    <!-- BADGE PUNTEGGIO LIVE IN TEMPO REALE -->
+    <div id="liveScoreDecayBadge" style="display:none; position:fixed; top:70px; right:15px; z-index:99; background:rgba(0,0,0,0.85); color:#00ff41; padding:6px 12px; border-radius:20px; border:2px solid #00ff41; font-weight:bold; font-size:0.9em; box-shadow:0 0 10px rgba(0,255,65,0.4);">
+        🏆 Max: <span id="liveScoreDecayValue">1000</span> pt
+    </div>
     <div class="header-stats">
         <div id="wpmDisplay">WPM: 20</div>
         <div id="scoreDisplay">Punti: 0</div>
