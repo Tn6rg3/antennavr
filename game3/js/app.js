@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.227";
+const APP_VERSION = "20260807.228";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -2556,10 +2556,19 @@ window.showTriDailyPreview = function(slotId) {
         if (previewMsg) previewMsg.textContent = `Sei pronto per affrontare lo slot ${slotInfo.labelIt} (${slotInfo.wordCount} Parole)?`;
     });
 
+    const laterBtn = document.getElementById('btnTriDailyLater');
+
     if (startBtn) {
         startBtn.onclick = () => {
             previewModal.style.display = 'none';
             window.startTriDailySession(slotId);
+        };
+    }
+
+    if (laterBtn) {
+        laterBtn.onclick = () => {
+            previewModal.style.display = 'none';
+            window.openTriDailyHub();
         };
     }
 
