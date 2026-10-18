@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.228";
+const APP_VERSION = "20260807.229";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -2494,10 +2494,10 @@ window.renderTriDailyHubCards = function() {
 
             card.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                    <b style="color:var(--text-color); font-size:0.9em;">${s.name}</b>
+                    <b style="color:var(--text-color); font-size:0.9em;">${window.escapeHtml(s.name)}</b>
                     ${statusBadge}
                 </div>
-                <div style="font-size:0.75em; color:var(--hint-color);">${s.words} Parole | Incremento WPM: ${s.step}</div>
+                <div style="font-size:0.75em; color:var(--hint-color);">${s.words} Parole | Incremento WPM: ${window.escapeHtml(s.step)}</div>
                 ${actionBtnHtml}
             `;
 
@@ -2545,10 +2545,11 @@ window.showTriDailyPreview = function(slotId) {
                 const name = item.name || 'Telegrafista';
                 const score = item.totalScore || 0;
                 const isMe = (item.id === window.myId);
+                const safeName = window.escapeHtml(name);
 
                 const row = document.createElement('div');
                 row.style.cssText = `display:flex; justify-content:space-between; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); ${isMe ? 'background:rgba(255,152,0,0.2); font-weight:bold;' : ''}`;
-                row.innerHTML = `<span>${medal} ${name}</span><b style="color:#ff9800;">${score} pt</b>`;
+                row.innerHTML = `<span>${medal} ${safeName}</span><b style="color:#ff9800;">${score} pt</b>`;
                 previewList.appendChild(row);
             });
         }
@@ -2691,18 +2692,20 @@ window.checkTriDailyNextDayResults = function() {
             const top3 = list.slice(0, 3);
             top3.forEach((item, idx) => {
                 const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
+                const safeName = window.escapeHtml(item.name || 'Anonimo');
                 const div = document.createElement('div');
                 div.style.cssText = 'text-align:center; flex:1;';
-                div.innerHTML = `<span style="font-size:1.5em; display:block;">${medal}</span><b style="font-size:0.8em; color:var(--text-color); display:block; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${item.name || 'Anonimo'}</b><small style="color:#ff9800; font-size:0.75em;">${item.totalScore || 0} pt</small>`;
+                div.innerHTML = `<span style="font-size:1.5em; display:block;">${medal}</span><b style="font-size:0.8em; color:var(--text-color); display:block; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${safeName}</b><small style="color:#ff9800; font-size:0.75em;">${item.totalScore || 0} pt</small>`;
                 podiumContainer.appendChild(div);
             });
 
             const myRankIndex = list.findIndex(x => x.id === window.myId);
             const myRankStr = myRankIndex >= 0 ? `${myRankIndex + 1}° su ${list.length}` : 'In Classifica';
+            const safeRankStr = window.escapeHtml(myRankStr);
 
             if (resultBox) {
                 resultBox.innerHTML = `
-                    <p style="margin:0 0 5px 0;">Piazzamento di Ieri: <b style="color:var(--champ-color); font-size:1.1em;">${myRankStr}</b></p>
+                    <p style="margin:0 0 5px 0;">Piazzamento di Ieri: <b style="color:var(--champ-color); font-size:1.1em;">${safeRankStr}</b></p>
                     <div style="display:flex; justify-content:space-around; font-size:0.85em; color:var(--hint-color);">
                         <span>Punti Totali: <b style="color:#ff9800;">${myTotal} pt</b></span>
                         <span>Sessioni: <b style="color:#2e7d32;">${slotsCount}/3</b></span>
