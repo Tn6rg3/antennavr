@@ -150,9 +150,12 @@
 
     <p id="triDailyPreviewMsg" style="font-weight:bold; color:var(--champ-color); font-size:0.9em; margin-bottom:12px;"></p>
 
-    <div style="display:flex; gap:8px;">
-        <button id="btnTriDailyStartConfirm" class="btn-success" style="flex:2;">PRONTO! AVVIA SESSIONE 🚀</button>
-        <button id="btnTriDailyWithdraw" class="btn-danger" style="flex:1;">🏃 Ritirati</button>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+        <button id="btnTriDailyStartConfirm" class="btn-success">PRONTO! AVVIA SESSIONE 🚀</button>
+        <div style="display:flex; gap:8px;">
+            <button id="btnTriDailyLater" class="btn-secondary" style="flex:1;">Più Tardi</button>
+            <button id="btnTriDailyWithdraw" class="btn-danger" style="flex:1;">🏃 Ritirati</button>
+        </div>
     </div>
 </div>
 
