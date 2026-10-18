@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.224";
+const APP_VERSION = "20260807.223";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -251,7 +251,7 @@ window.totalScore = 0;
 window.currentStreak = 0;
 window.usedReplay = false;
 window.matchDetailsArray = [];
-window.isSinglePlayer = false;
+window.isSinglePlayer = true;
 window.currentMode = "standard";
 window.requestedWordCount = 10;
 window.isFixedSpeed = false;
@@ -384,8 +384,8 @@ window.resetGameState = function() {
     if (typeof window.exitQsoMode === 'function' && window.currentMode === 'qso') {
         // Pulizia QSO se stavamo uscendo da lì
     }
-    window.isSinglePlayer = false;
-    window.currentMode = 'standard';
+    window.isSinglePlayer = (document.getElementById('gameTypeInput')?.value === 'single');
+    window.currentMode = document.getElementById('gameModeInput')?.value || 'standard';
     coopActiveFreqIndex = 0; // RESET INDICE FREQUENZA CO-OP
 
     // 2b. Reset specifico Perfezione
