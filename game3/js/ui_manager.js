@@ -16,6 +16,9 @@ window.populateGameModesUI = function() {
     select.innerHTML = '';
 
     Object.values(window.GAME_MODES || {}).forEach(mode => {
+        // Le sfide giornaliere (tri_daily e daily_challenge) sono avviabili solo via Popup/Hub
+        if (mode.id === 'tri_daily' || mode.id === 'daily_challenge') return;
+
         // --- LOGICA FILTRI ---
         if (isSingle) {
             // QSO, modalità Tx/Rx e Gruppi 5 Chars (riservato a Tx/Rx) non sono ammesse in Solo
