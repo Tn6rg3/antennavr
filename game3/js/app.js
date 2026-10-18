@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.231";
+const APP_VERSION = "20260807.232";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1335,6 +1335,9 @@ window.isValidTelegramId = function(id) {
     window.checkGameTypeUI?.();
     if (typeof window.checkTriDailyNextDayResults === 'function') {
         setTimeout(window.checkTriDailyNextDayResults, 1500);
+    }
+    if (typeof window.checkAndTriggerTriDailySlotNotifications === 'function') {
+        setTimeout(window.checkAndTriggerTriDailySlotNotifications, 3000);
     }
 
     // Attiviamo subito il gestore trasmissione per avere i tasti pronti ovunque
@@ -2796,6 +2799,53 @@ window.checkTriDailyNextDayResults = function() {
                     window.openTriDailyHub();
                 };
             }
+        });
+    });
+};
+
+window.checkAndTriggerTriDailySlotNotifications = function() {
+    if (!db || !window.myId) return;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { id: 'morning' };
+    const currentSlotId = slotInfo.id;
+
+    if (currentSlotId !== 'afternoon' && currentSlotId !== 'evening') return;
+
+    const notifRefPath = `appConfig/tri_daily_notifications/${todayStr}/${currentSlotId}`;
+
+    db.ref(notifRefPath).once('value', notifSnap => {
+        if (notifSnap.exists()) return;
+
+        db.ref(`leaderboard/tri_daily/${todayStr}`).once('value', lbSnap => {
+            if (!lbSnap.exists()) return;
+
+            const participants = [];
+            lbSnap.forEach(child => {
+                if (child.key) participants.push(child.key);
+            });
+
+            if (participants.length === 0) return;
+
+            db.ref(notifRefPath).set({
+                sentAt: firebase.database.ServerValue.TIMESTAMP,
+                sentBy: window.myId,
+                recipientCount: participants.length
+            }).then(() => {
+                const slotLabel = currentSlotId === 'afternoon' ? 'Pomeriggio 🌤️ (15 Parole)' : 'Sera 🌙 (20 Parole)';
+                const notifText = `🏆 Sfida Tripla: È aperta la Sessione ${slotLabel}! Entra in gioco ora per completare la sfida e scalare la classifica! 🚀`;
+
+                participants.forEach(pId => {
+                    if (pId !== window.myId) {
+                        db.ref(`users/${pId}/pushNotifications`).once('value', prefSnap => {
+                            if (prefSnap.val() !== false) {
+                                sendPushNotification(pId, notifText);
+                            }
+                        });
+                    }
+                });
+                console.log(`TriDaily: Notifiche dislocate a ${participants.length} partecipanti per lo slot ${currentSlotId}.`);
+            });
         });
     });
 };
