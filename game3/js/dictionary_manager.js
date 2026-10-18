@@ -75,6 +75,49 @@ window.getDailyWords = function(num) {
     return result;
 };
 
+window.getTriDailyWords = function(num) {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot(d) : { wordCount: 10, seedSuffix: '_01' };
+    const targetNum = num || slotInfo.wordCount || 10;
+
+    const seedStr = `${year}${month}${day}${slotInfo.seedSuffix}`;
+    let numericSeed = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+        numericSeed = ((numericSeed << 5) - numericSeed) + seedStr.charCodeAt(i);
+        numericSeed |= 0;
+    }
+    numericSeed = Math.abs(numericSeed);
+
+    const prng = mulberry32(numericSeed);
+
+    let baseDict = [];
+    if (window.itDictionary && window.itDictionary.length > 0) {
+        baseDict = [...window.itDictionary];
+    } else if (typeof FALLBACK_WORDS_IT !== 'undefined' && FALLBACK_WORDS_IT.length > 0) {
+        baseDict = [...FALLBACK_WORDS_IT].map(w => w.toLowerCase());
+    } else {
+        baseDict = ["radio", "morse", "telegrafia", "antenna", "frequenza", "stazione", "segnale", "ricevitore", "trasmettitore", "manipolatore"];
+    }
+
+    baseDict.sort();
+
+    for (let i = baseDict.length - 1; i > 0; i--) {
+        const j = Math.floor(prng() * (i + 1));
+        [baseDict[i], baseDict[j]] = [baseDict[j], baseDict[i]];
+    }
+
+    const result = [];
+    while (result.length < targetNum) {
+        for (let i = 0; i < baseDict.length && result.length < targetNum; i++) {
+            result.push(baseDict[i].toUpperCase());
+        }
+    }
+    return result;
+};
+
 window.getGameWords = function(num, mode, options = {}) {
     window.updateDictionary();
 
@@ -83,6 +126,7 @@ window.getGameWords = function(num, mode, options = {}) {
     }
 
     if (mode === 'daily_challenge') return window.getDailyWords(num);
+    if (mode === 'tri_daily') return window.getTriDailyWords(num);
 
     if (window.GAME_MODES && window.GAME_MODES[mode] && typeof window.GAME_MODES[mode].generateWords === 'function') {
         return window.GAME_MODES[mode].generateWords(num, { master: window.masterDictionary, custom: window.customDictionary }, options);

@@ -1333,6 +1333,9 @@ window.isValidTelegramId = function(id) {
 
     window.populateGameModesUI?.();
     window.checkGameTypeUI?.();
+    if (typeof window.checkTriDailyNextDayResults === 'function') {
+        setTimeout(window.checkTriDailyNextDayResults, 1500);
+    }
 
     // Attiviamo subito il gestore trasmissione per avere i tasti pronti ovunque
     if (typeof window.initTransmissionManager === 'function') {
@@ -2414,6 +2417,300 @@ window.reopenDailyChallenge = function() {
         db.ref(`users/${window.myId}/daily_attempt`).remove();
         const modal = document.getElementById('dailyChallengeModal');
         if (modal) modal.style.display = 'flex';
+    });
+};
+
+// --- SFIDA TRIPLA GIORNALIERA (MATTINA, POMERIGGIO, SERA) ---
+
+window.openTriDailyHub = function() {
+    const modal = document.getElementById('triDailyModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    window.renderTriDailyHubCards();
+};
+
+window.renderTriDailyHubCards = function() {
+    const cardsContainer = document.getElementById('triDailyCardsContainer');
+    const totalScoreEl = document.getElementById('triDailyHubTotalScore');
+    const completedSlotsEl = document.getElementById('triDailyHubCompletedSlots');
+    if (!cardsContainer) return;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const currentSlot = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { id: 'morning' };
+
+    cardsContainer.innerHTML = '<p style="font-size:0.85em; color:var(--hint-color);">Caricamento dati sfida...</p>';
+
+    db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}`).once('value', snap => {
+        const attemptData = snap.val() || {};
+        let totalScore = 0;
+        let completedCount = 0;
+
+        const slots = [
+            { id: 'morning', name: '☀️ Mattina (06:00 - 12:00)', words: 10, step: '+3 WPM' },
+            { id: 'afternoon', name: '🌤️ Pomeriggio (12:00 - 18:00)', words: 15, step: '+2 WPM' },
+            { id: 'evening', name: '🌙 Sera (18:00 - 24:00)', words: 20, step: '+1 WPM' }
+        ];
+
+        cardsContainer.innerHTML = '';
+
+        slots.forEach(s => {
+            const slotObj = attemptData[s.id] || {};
+            const isPlayed = !!slotObj.played;
+            const isCompleted = !!slotObj.completed;
+            const isWithdrawn = !!slotObj.withdrawn;
+            const score = slotObj.score || 0;
+            const finalWpm = slotObj.finalWpm || slotObj.peakWpm || 0;
+
+            if (isCompleted || isPlayed) {
+                totalScore += score;
+                completedCount++;
+            }
+
+            const card = document.createElement('div');
+            card.style.cssText = "background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; border: 1px solid rgba(255,255,255,0.1); text-align: left;";
+
+            let statusBadge = "";
+            let actionBtnHtml = "";
+
+            if (isWithdrawn) {
+                statusBadge = '<span style="color:#f44336; font-weight:bold; font-size:0.8em; float:right;">🏃 Rinunciata</span>';
+            } else if (isCompleted) {
+                statusBadge = `<span style="color:#4caf50; font-weight:bold; font-size:0.8em; float:right;">✅ ${score} pt (${finalWpm} WPM)</span>`;
+            } else if (isPlayed) {
+                statusBadge = `<span style="color:#ff9800; font-weight:bold; font-size:0.8em; float:right;">⏹️ Giocata (${score} pt)</span>`;
+            } else if (currentSlot.id === s.id) {
+                statusBadge = '<span style="color:#ff9800; font-weight:bold; font-size:0.8em; float:right; animation:pulse 1.5s infinite;">🚀 IN CORSO</span>';
+                actionBtnHtml = `
+                    <div style="display:flex; gap:8px; margin-top:10px;">
+                        <button onclick="window.showTriDailyPreview('${s.id}')" class="btn-success" style="flex:2; padding:8px; font-size:0.85em; margin:0;">INIZIA SESSIONE (${s.words} PAROLE) 🚀</button>
+                        <button onclick="window.withdrawTriDailySession('${s.id}')" class="btn-danger" style="flex:1; padding:8px; font-size:0.8em; margin:0;">🏃 Ritirati</button>
+                    </div>
+                `;
+            } else if (currentSlot.id === 'night') {
+                statusBadge = '<span style="color:#9e9e9e; font-size:0.8em; float:right;">🌌 Riposo</span>';
+            } else {
+                statusBadge = '<span style="color:#9e9e9e; font-size:0.8em; float:right;">🔒 Non Attiva</span>';
+            }
+
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <b style="color:var(--text-color); font-size:0.9em;">${s.name}</b>
+                    ${statusBadge}
+                </div>
+                <div style="font-size:0.75em; color:var(--hint-color);">${s.words} Parole | Incremento WPM: ${s.step}</div>
+                ${actionBtnHtml}
+            `;
+
+            cardsContainer.appendChild(card);
+        });
+
+        if (totalScoreEl) totalScoreEl.textContent = `${totalScore} pt`;
+        if (completedSlotsEl) completedSlotsEl.textContent = `${completedCount} / 3`;
+    });
+};
+
+window.showTriDailyPreview = function(slotId) {
+    const hub = document.getElementById('triDailyModal');
+    if (hub) hub.style.display = 'none';
+
+    const previewModal = document.getElementById('triDailyPreviewModal');
+    const previewList = document.getElementById('triDailyPreviewList');
+    const previewTitle = document.getElementById('triDailyPreviewTitle');
+    const previewMsg = document.getElementById('triDailyPreviewMsg');
+    const startBtn = document.getElementById('btnTriDailyStartConfirm');
+    const withdrawBtn = document.getElementById('btnTriDailyWithdraw');
+
+    if (!previewModal || !previewList) return;
+    previewModal.style.display = 'flex';
+    previewList.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Caricamento classifica provvisoria...</p>';
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { labelIt: 'Sessione', wordCount: 10 };
+
+    if (previewTitle) previewTitle.textContent = `🔥 Classifica Provvisoria (${slotInfo.labelIt})`;
+
+    db.ref(`leaderboard/tri_daily/${todayStr}`).orderByChild('totalScore').limitToLast(10).once('value', snap => {
+        previewList.innerHTML = '';
+        const list = [];
+        snap.forEach(c => {
+            list.unshift({ id: c.key, ...c.val() });
+        });
+
+        if (list.length === 0) {
+            previewList.innerHTML = '<p style="text-align:center; color:var(--hint-color); padding:10px;">Sei il primo a giocare in questo slot! Fai una grande prestazione per guidare la classifica! 🚀</p>';
+        } else {
+            list.forEach((item, idx) => {
+                const rank = idx + 1;
+                const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+                const name = item.name || 'Telegrafista';
+                const score = item.totalScore || 0;
+                const isMe = (item.id === window.myId);
+
+                const row = document.createElement('div');
+                row.style.cssText = `display:flex; justify-content:space-between; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); ${isMe ? 'background:rgba(255,152,0,0.2); font-weight:bold;' : ''}`;
+                row.innerHTML = `<span>${medal} ${name}</span><b style="color:#ff9800;">${score} pt</b>`;
+                previewList.appendChild(row);
+            });
+        }
+
+        if (previewMsg) previewMsg.textContent = `Sei pronto per affrontare lo slot ${slotInfo.labelIt} (${slotInfo.wordCount} Parole)?`;
+    });
+
+    if (startBtn) {
+        startBtn.onclick = () => {
+            previewModal.style.display = 'none';
+            window.startTriDailySession(slotId);
+        };
+    }
+
+    if (withdrawBtn) {
+        withdrawBtn.onclick = () => {
+            previewModal.style.display = 'none';
+            window.withdrawTriDailySession(slotId);
+        };
+    }
+};
+
+window.withdrawTriDailySession = function(slotId) {
+    if (!confirm("Sei sicuro di volerti ritirare da questa sessione della Sfida Tripla? Potrai comunque partecipare alle sessioni successive.")) return;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}/${slotId}`).set({
+        played: true,
+        withdrawn: true,
+        score: 0,
+        timestamp: Date.now()
+    }).then(() => {
+        showToast("🏃 Ti sei ritirato da questa sessione.");
+        window.openTriDailyHub();
+    });
+};
+
+window.startTriDailySession = function(slotId) {
+    window.resetGameState();
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { wordCount: 10, defaultWpm: 15 };
+
+    db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}`).once('value', snap => {
+        const attemptData = snap.val() || {};
+        let inheritedWpm = 15;
+
+        if (slotId === 'afternoon') {
+            inheritedWpm = attemptData.morning?.finalWpm || attemptData.morning?.peakWpm || 15;
+        } else if (slotId === 'evening') {
+            inheritedWpm = attemptData.afternoon?.finalWpm || attemptData.afternoon?.peakWpm || attemptData.morning?.finalWpm || 15;
+        }
+
+        window.currentMode = 'tri_daily';
+        window.isSinglePlayer = true;
+        window.currentWpm = window.baseWpm = inheritedWpm;
+        window.requestedWordCount = slotInfo.wordCount || 10;
+        window.currentTone = parseInt(localStorage.getItem(STORAGE_PREF_TONE)) || 600;
+
+        roomCode = "SOLO_TRI_" + window.myId;
+        gameWords = window.getTriDailyWords(window.requestedWordCount);
+
+        db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}/${slotId}`).update({
+            played: true,
+            score: 0,
+            startWpm: inheritedWpm,
+            timestamp: Date.now()
+        });
+
+        const dailyData = {
+            status: 'countdown',
+            type: 'single',
+            mode: window.currentMode,
+            wpm: currentWpm,
+            tone: currentTone,
+            wordCount: window.requestedWordCount,
+            createdAt: firebase.database.ServerValue.TIMESTAMP,
+            hostId: window.myId,
+            fixedSpeed: false,
+            easyMode: false,
+            game_words: gameWords
+        };
+
+        db.ref('rooms/' + roomCode).set(dailyData).then(() => {
+            window.joinRoomLogic?.(false);
+        }).catch(err => {
+            console.error("TriDaily Start Error:", err);
+            showToast("Errore avvio sessione. Riprova tra poco.");
+        });
+    });
+};
+
+window.checkTriDailyNextDayResults = function() {
+    if (!window.myId) return;
+
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    const ackKey = `cwgame_tri_ack_${yesterdayStr}`;
+    if (localStorage.getItem(ackKey)) return;
+
+    db.ref(`users/${window.myId}/tri_daily_attempt/${yesterdayStr}`).once('value', snap => {
+        if (!snap.exists()) return;
+
+        const attempt = snap.val() || {};
+        let myTotal = 0;
+        let slotsCount = 0;
+        ['morning', 'afternoon', 'evening'].forEach(s => {
+            if (attempt[s] && attempt[s].score) {
+                myTotal += attempt[s].score;
+                slotsCount++;
+            }
+        });
+
+        if (myTotal <= 0) return;
+
+        db.ref(`leaderboard/tri_daily/${yesterdayStr}`).orderByChild('totalScore').once('value', lbSnap => {
+            const list = [];
+            lbSnap.forEach(c => list.unshift({ id: c.key, ...c.val() }));
+
+            const modal = document.getElementById('triDailyResultsModal');
+            const podiumContainer = document.getElementById('triDailyPodiumContainer');
+            const resultBox = document.getElementById('triDailyMyResultBox');
+            const acceptTodayBtn = document.getElementById('btnTriDailyAcceptToday');
+
+            if (!modal || !podiumContainer) return;
+
+            podiumContainer.innerHTML = '';
+            const top3 = list.slice(0, 3);
+            top3.forEach((item, idx) => {
+                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
+                const div = document.createElement('div');
+                div.style.cssText = 'text-align:center; flex:1;';
+                div.innerHTML = `<span style="font-size:1.5em; display:block;">${medal}</span><b style="font-size:0.8em; color:var(--text-color); display:block; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${item.name || 'Anonimo'}</b><small style="color:#ff9800; font-size:0.75em;">${item.totalScore || 0} pt</small>`;
+                podiumContainer.appendChild(div);
+            });
+
+            const myRankIndex = list.findIndex(x => x.id === window.myId);
+            const myRankStr = myRankIndex >= 0 ? `${myRankIndex + 1}° su ${list.length}` : 'In Classifica';
+
+            if (resultBox) {
+                resultBox.innerHTML = `
+                    <p style="margin:0 0 5px 0;">Piazzamento di Ieri: <b style="color:var(--champ-color); font-size:1.1em;">${myRankStr}</b></p>
+                    <div style="display:flex; justify-content:space-around; font-size:0.85em; color:var(--hint-color);">
+                        <span>Punti Totali: <b style="color:#ff9800;">${myTotal} pt</b></span>
+                        <span>Sessioni: <b style="color:#2e7d32;">${slotsCount}/3</b></span>
+                    </div>
+                `;
+            }
+
+            modal.style.display = 'flex';
+
+            if (acceptTodayBtn) {
+                acceptTodayBtn.onclick = () => {
+                    localStorage.setItem(ackKey, "true");
+                    modal.style.display = 'none';
+                    window.openTriDailyHub();
+                };
+            }
+        });
     });
 };
 

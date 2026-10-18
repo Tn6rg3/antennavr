@@ -13,6 +13,50 @@ window.initDOMCache = function() {
     });
 };
 
+// --- ANIMAZIONE LIVE SCORE DECAY (SFIDA TRIPLA) ---
+window.liveScoreInterval = null;
+window.currentLiveMaxPoints = 0;
+
+window.startLiveScoreDecayAnimation = function(initialMaxPoints) {
+    window.stopLiveScoreDecayAnimation();
+    const badge = document.getElementById('liveScoreDecayBadge');
+    const valEl = document.getElementById('liveScoreDecayValue');
+    if (!badge || !valEl) return;
+
+    window.currentLiveMaxPoints = Math.max(10, Math.round(initialMaxPoints));
+    valEl.textContent = window.currentLiveMaxPoints;
+    badge.style.borderColor = "#00ff41";
+    badge.style.color = "#00ff41";
+    badge.style.display = "block";
+
+    const startTime = Date.now();
+    const startVal = window.currentLiveMaxPoints;
+
+    window.liveScoreInterval = setInterval(() => {
+        const elapsedMs = Date.now() - startTime;
+        const factor = Math.max(0.5, 1.0 - (elapsedMs / 10000));
+        window.currentLiveMaxPoints = Math.max(10, Math.round(startVal * factor));
+        valEl.textContent = window.currentLiveMaxPoints;
+
+        if (factor < 0.7 && factor >= 0.55) {
+            badge.style.borderColor = "#ff9800";
+            badge.style.color = "#ff9800";
+        } else if (factor < 0.55) {
+            badge.style.borderColor = "#f44336";
+            badge.style.color = "#f44336";
+        }
+    }, 50);
+};
+
+window.stopLiveScoreDecayAnimation = function() {
+    if (window.liveScoreInterval) {
+        clearInterval(window.liveScoreInterval);
+        window.liveScoreInterval = null;
+    }
+    const badge = document.getElementById('liveScoreDecayBadge');
+    if (badge) badge.style.display = "none";
+};
+
 window.showScreen = function(screenId) {
     clearAllTimers();
 
@@ -1133,6 +1177,13 @@ window.playNextWord = function() {
                 }
             }
         }
+    } else if (window.currentMode === 'tri_daily') {
+        const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { wordCount: 10 };
+        const limit = slotInfo.wordCount || 10;
+        if (wordIndex >= limit) {
+            console.log(`TriDaily: Limite parole della sessione raggiunto (${wordIndex}/${limit}). Concludo partita.`);
+            return window.finishGame();
+        }
     } else {
         if (wordIndex >= requestedWordCount || (gameWords && wordIndex >= gameWords.length)) return window.finishGame();
     }
@@ -1175,6 +1226,18 @@ window.playNextWord = function() {
 
     if (typeof playMorseAudio === 'function') {
         playMorseAudio(currentWord, activeWpm).then(() => {
+            // Live Score Decay per la Sfida Tripla
+            if (window.currentMode === 'tri_daily' && gameRunning) {
+                let initPoints = 1000;
+                if (typeof window.calculateGamePoints === 'function') {
+                    const res = window.calculateGamePoints('tri_daily', currentWord, currentWord, activeWpm, 0, 0, false);
+                    initPoints = res.points || 1000;
+                }
+                if (typeof window.startLiveScoreDecayAnimation === 'function') {
+                    window.startLiveScoreDecayAnimation(initPoints);
+                }
+            }
+
             // Se la risposta vocale è attiva (solo in Singolo, Parole Comuni e con Ascolto attivo), avviamo il riconoscimento dopo l'audio
             if (window.isSinglePlayer && window.currentMode === 'standard' && window.isSpeakMode && window.isVoiceInputMode) {
                 if (typeof window.startVoiceInput === 'function') {
@@ -1286,6 +1349,47 @@ window.finishGame = function() {
             if (window.currentMode === 'daily_challenge') {
                 let todayStr = new Date().toISOString().split('T')[0];
                 dbPath = `leaderboard/daily_challenge/${todayStr}/${window.myId}`;
+            } else if (window.currentMode === 'tri_daily') {
+                let todayStr = new Date().toISOString().split('T')[0];
+                const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { id: 'morning' };
+                const slotId = slotInfo.id;
+
+                db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}/${slotId}`).update({
+                    played: true,
+                    completed: true,
+                    score: window.totalScore,
+                    finalWpm: window.currentWpm,
+                    peakWpm: window.peakWpm,
+                    timestamp: Date.now()
+                }).then(() => {
+                    db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}`).once('value', attemptSnap => {
+                        const attempt = attemptSnap.val() || {};
+                        let totalScoreSum = 0;
+                        let completedSlotsCount = 0;
+                        let bestPeakWpm = 0;
+
+                        ['morning', 'afternoon', 'evening'].forEach(s => {
+                            if (attempt[s] && attempt[s].score) {
+                                totalScoreSum += Number(attempt[s].score) || 0;
+                                completedSlotsCount++;
+                                if (attempt[s].peakWpm > bestPeakWpm) bestPeakWpm = attempt[s].peakWpm;
+                            }
+                        });
+
+                        db.ref(`leaderboard/tri_daily/${todayStr}/${window.myId}`).set({
+                            name: window.myName,
+                            username: window.myPrivacy ? "" : tgUsername,
+                            totalScore: totalScoreSum,
+                            completedSlots: completedSlotsCount,
+                            peakWpm: bestPeakWpm || window.peakWpm,
+                            morningScore: attempt.morning?.score || 0,
+                            afternoonScore: attempt.afternoon?.score || 0,
+                            eveningScore: attempt.evening?.score || 0,
+                            date: new Date().toLocaleDateString('it-IT')
+                        });
+                    });
+                });
+                dbPath = null;
             } else {
                 const modeMap = {
                     'callsign': 'callsign/global',
@@ -2032,8 +2136,10 @@ window.handleWordSubmission = function(userWord) {
         return;
     }
 
-    // 3. ALTRE MODALITÀ (Standard, Perfection, Chars, Callsign, PingPong)
+    // 3. ALTRE MODALITÀ (Standard, Perfection, Chars, Callsign, PingPong, TriDaily)
     inputActive = false;
+    if (typeof window.stopLiveScoreDecayAnimation === 'function') window.stopLiveScoreDecayAnimation();
+
     let currentWord;
     let activeWpmForThisWord = currentWpm;
 
@@ -2074,6 +2180,9 @@ window.handleWordSubmission = function(userWord) {
             const res = window.calculateGamePoints(window.currentMode, currentWord, userWord, activeWpmForThisWord, reactionMs, levDist, usedReplay);
             points = res.points; scoreColor = res.scoreColor;
         }
+        if (window.currentMode === 'tri_daily' && levDist === 0 && !usedReplay && window.currentLiveMaxPoints > 0) {
+            points = window.currentLiveMaxPoints;
+        }
     }
 
     // --- TRACCIAMENTO STATISTICO AVANZATO (Escluso se Avanzamento Auto è attivo) ---
@@ -2106,7 +2215,12 @@ window.handleWordSubmission = function(userWord) {
     if (levDist === 0 && !usedReplay) {
         if (!window.isPerfectionRetry) {
             if (!isFixedSpeed && window.currentMode !== 'chars') {
-                currentWpm += 2;
+                let step = 2;
+                if (window.currentMode === 'tri_daily' && typeof window.getTriDailySlot === 'function') {
+                    const slotInfo = window.getTriDailySlot();
+                    step = slotInfo.wpmStep || 2;
+                }
+                currentWpm += step;
                 if (currentWpm > peakWpm) peakWpm = currentWpm;
             }
             // AGGIORNAMENTO STREAK E MISSIONI

@@ -11,7 +11,72 @@ function fisherYatesShuffle(array) {
     return arr;
 }
 
+// --- GESTIONE SLOT SFIDA TRIPLA GIORNALIERA ---
+window.getTriDailySlot = function(dateObj = new Date()) {
+    const hour = dateObj.getHours();
+    if (hour >= 6 && hour < 12) {
+        return {
+            id: 'morning',
+            labelIt: 'Mattina',
+            labelEn: 'Morning',
+            icon: '☀️',
+            wordCount: 10,
+            wpmStep: 3,
+            defaultWpm: 15,
+            seedSuffix: '_01'
+        };
+    } else if (hour >= 12 && hour < 18) {
+        return {
+            id: 'afternoon',
+            labelIt: 'Pomeriggio',
+            labelEn: 'Afternoon',
+            icon: '🌤️',
+            wordCount: 15,
+            wpmStep: 2,
+            defaultWpm: 15,
+            seedSuffix: '_02'
+        };
+    } else if (hour >= 18 && hour < 24) {
+        return {
+            id: 'evening',
+            labelIt: 'Sera',
+            labelEn: 'Evening',
+            icon: '🌙',
+            wordCount: 20,
+            wpmStep: 1,
+            defaultWpm: 15,
+            seedSuffix: '_03'
+        };
+    } else {
+        return {
+            id: 'night',
+            labelIt: 'Notte (Riposo)',
+            labelEn: 'Night (Rest)',
+            icon: '🌌',
+            wordCount: 0,
+            wpmStep: 0,
+            defaultWpm: 15,
+            seedSuffix: '_00'
+        };
+    }
+};
+
 window.GAME_MODES = {
+    "tri_daily": {
+        id: "tri_daily",
+        titleIt: "Sfida Tripla Giornaliera",
+        titleEn: "Triple Daily Challenge",
+        icon: "🏆",
+        defaultWpm: 15,
+        defaultWordCount: 10,
+        wpmConfigurable: false,
+        wordCountConfigurable: false,
+        fixedSpeedAllowed: false,
+        spacingConfigurable: false,
+        generateWords: function(num, dicts, options) {
+            return window.getTriDailyWords ? window.getTriDailyWords(num) : [];
+        }
+    },
     "standard": {
         id: "standard",
         titleIt: "Parole Comuni",

@@ -2,7 +2,8 @@
 
 window.lbGroups = {
     daily: [
-        { val: 'daily_challenge', it: '📅 Sfida Giornaliera', en: '📅 Daily Challenge' },
+        { val: 'tri_daily', it: '🏆 Sfida Tripla Giornaliera', en: '🏆 Triple Daily Challenge' },
+        { val: 'daily_challenge', it: '📅 Sfida Giornaliera Classica', en: '📅 Classic Daily Challenge' },
         { val: 'my_history', it: '📜 I Miei Match Recenti', en: '📜 My Recent Matches' },
         { val: 'room', it: '🏁 Ultima Partita (Sessione)', en: '🏁 Last Match (Session)' }
     ],
@@ -91,11 +92,12 @@ window.showLeaderboardTab = function(modeValue) {
         }
     } else if (modeValue === 'my_history') {
         window.fetchAndRenderMyHistory();
+    } else if (modeValue === 'tri_daily') {
+        window.fetchAndRenderTriDailyLeaderboard();
     } else if (modeValue === 'daily_challenge') {
         if (els.btnShareDaily && totalScore > 0 && currentMode === 'daily_challenge') {
             els.btnShareDaily.style.display = 'block';
         }
-        window.fetchAndRenderGlobalLeaderboard('daily_challenge', null);
         window.fetchAndRenderGlobalLeaderboard('daily_challenge', null);
     } else if (modeValue === 'trn_global') {
         if (els.trnSubTabs) els.trnSubTabs.style.display = 'flex';
@@ -259,6 +261,69 @@ window.populateDynamicFilters = function(modePath, subTypeFilter = "") {
         counts.sort((a,b) => parseInt(a) - parseInt(b)).forEach(c => options.push(`<option value="${c}">${c} ${currentLang==='it'?'Stringhe':'Strings'}</option>`));
         els.lbWordFilter.innerHTML = options.join('');
         if (counts.includes(currentValue) || currentValue === 'all') els.lbWordFilter.value = currentValue;
+    });
+};
+
+window.fetchAndRenderTriDailyLeaderboard = function() {
+    const container = els.leaderboardContainer;
+    if (!container) return;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Caricamento Classifica Tripla del ${todayStr}...</p>`;
+
+    db.ref(`leaderboard/tri_daily/${todayStr}`).orderByChild('totalScore').limitToLast(100).once('value', snapshot => {
+        if (!snapshot.exists()) {
+            container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Nessun partecipante nella Sfida Tripla di oggi (${todayStr}). Gioca la prima sessione per guidare la classifica! 🚀</p>`;
+            return;
+        }
+
+        const players = [];
+        snapshot.forEach(child => {
+            players.push({ id: child.key, ...child.val() });
+        });
+
+        players.sort((a, b) => (Number(b.totalScore) - Number(a.totalScore)) || (Number(b.peakWpm) - Number(a.peakWpm)));
+
+        let html = `
+            <div style="background:rgba(255,152,0,0.1); padding:10px; border-radius:8px; border:1px solid #ff9800; margin-bottom:12px; text-align:center;">
+                <b style="color:#ff9800;">🏆 Sfida Tripla Giornaliera (${todayStr})</b>
+                <div style="font-size:0.8em; color:var(--hint-color); margin-top:4px;">Punteggio cumulativo delle 3 sessioni (Mattina, Pomeriggio, Sera)</div>
+            </div>
+            <table class="leaderboard-table" style="width:100%; border-collapse:collapse; font-size:0.85em;">
+                <thead>
+                    <tr style="border-bottom:2px solid var(--link-color); text-align:left;">
+                        <th style="padding:6px;">#</th>
+                        <th style="padding:6px;">Telegrafista</th>
+                        <th style="padding:6px; text-align:center;">Sessioni</th>
+                        <th style="padding:6px; text-align:right;">Punti Totali</th>
+                        <th style="padding:6px; text-align:right;">Picco WPM</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        players.forEach((p, idx) => {
+            const rank = idx + 1;
+            const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+            const isMe = (p.id === window.myId);
+            const name = p.name || 'Telegrafista';
+            const slots = `${p.completedSlots || 1}/3`;
+            const score = p.totalScore || 0;
+            const wpm = p.peakWpm || 20;
+
+            html += `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05); ${isMe ? 'background:rgba(255,152,0,0.15); font-weight:bold;' : ''}">
+                    <td style="padding:8px 6px;">${medal}</td>
+                    <td style="padding:8px 6px;">${name}</td>
+                    <td style="padding:8px 6px; text-align:center; color:#2e7d32;"><b>${slots}</b></td>
+                    <td style="padding:8px 6px; text-align:right; color:#ff9800;"><b>${score} pt</b></td>
+                    <td style="padding:8px 6px; text-align:right;">${wpm} WPM</td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table>`;
+        container.innerHTML = html;
     });
 };
 

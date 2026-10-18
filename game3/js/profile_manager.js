@@ -602,7 +602,7 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
         return 0;
     };
 
-    const allowedModes = new Set(['standard', 'callsign', 'daily_challenge']);
+    const allowedModes = new Set(['standard', 'callsign', 'daily_challenge', 'tri_daily']);
 
     let allMatches = rawMatches.filter(m => {
         if (!m) return false;
