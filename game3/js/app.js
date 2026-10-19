@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.233";
+const APP_VERSION = "20260807.234";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -2895,8 +2895,9 @@ window.checkTodayStartupModals = function(skipYesterdayCheck = false) {
 window.checkAndTriggerTriDailySlotNotifications = function() {
     if (!db || !window.myId) return;
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { id: 'morning' };
+    const d = new Date();
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot(d) : { id: 'morning' };
     const currentSlotId = slotInfo.id;
 
     if (currentSlotId !== 'afternoon' && currentSlotId !== 'evening') return;
@@ -2922,8 +2923,13 @@ window.checkAndTriggerTriDailySlotNotifications = function() {
                 recipientCount: participants.length
             }).then(() => {
                 const slotLabel = currentSlotId === 'afternoon' ? 'Pomeriggio 🌤️ (15 Parole)' : 'Sera 🌙 (20 Parole)';
-                const notifText = `🏆 Sfida Tripla: È aperta la Sessione ${slotLabel}! Entra in gioco ora per completare la sfida e scalare la classifica! 🚀`;
 
+                if (VALIDATION_SERVER_URL && VALIDATION_SERVER_URL.startsWith('http')) {
+                    const gasUrl = `${VALIDATION_SERVER_URL}?action=notify_tri_daily&slotLabel=${encodeURIComponent(slotLabel)}&participants=${encodeURIComponent(participants.join(','))}`;
+                    try { fetch(gasUrl, { mode: 'no-cors' }); } catch(e) {}
+                }
+
+                const notifText = `🏆 Sfida Tripla: È aperta la Sessione ${slotLabel}! Entra in gioco ora per completare la sfida e scalare la classifica! 🚀`;
                 participants.forEach(pId => {
                     if (pId !== window.myId) {
                         db.ref(`users/${pId}/pushNotifications`).once('value', prefSnap => {
