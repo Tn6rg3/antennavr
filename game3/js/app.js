@@ -1430,7 +1430,10 @@ window.setupBugSystem = function() {
     const badge = document.getElementById('bugsBadge');
     if (!db) return;
 
-    const isTutor = window.courseData && window.courseData.role === 'tutor';
+    const isTutorRole = (window.courseData && window.courseData.role === 'tutor') || (localStorage.getItem('cwgame_role') === 'tutor');
+    if (window.courseData && window.courseData.role === 'tutor') {
+        localStorage.setItem('cwgame_role', 'tutor');
+    }
 
     // Rilevamento Admin basato su Permessi Firebase
     db.ref('bugReports').limitToLast(1).once('value').then(snap => {
@@ -1448,7 +1451,7 @@ window.setupBugSystem = function() {
         if (error.code === 'PERMISSION_DENIED') {
             window.isAdmin = false;
             // Se l'utente è un Tutor, mostriamo il pannello per accedere alle richieste Tutor
-            if (isTutor) {
+            if (isTutorRole) {
                 if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
                 if (els.btnReadAllBugs) els.btnReadAllBugs.style.display = 'none'; // Nasconde i Bug riservati al Dev
                 window.updateAdminBadge();
@@ -2224,30 +2227,44 @@ window.checkBugFeedback = function() {
 window.loadAdminTutorRequests = function() {
     const list = document.getElementById('adminBugList');
     if (!list) return;
-    list.innerHTML = "Caricamento richieste...";
+    list.innerHTML = "<p style='text-align:center; padding:10px; color:var(--hint-color);'>Caricamento richieste...</p>";
 
     db.ref('tutorRequests').once('value', snap => {
         list.innerHTML = "";
         if (!snap.exists()) {
-            list.innerHTML = "Nessuna richiesta pendente.";
+            list.innerHTML = "<p style='text-align:center; padding:10px; color:var(--hint-color);'>Nessuna richiesta pendente.</p>";
             return;
         }
+
+        let count = 0;
         snap.forEach(child => {
             const req = child.val();
+            if (!req) return;
+
+            const isStudentReq = (req.type === 'student_assignment' || !!req.tutorId);
+            const isForMe = (req.tutorId === window.myId) || (!req.tutorId && window.isAdmin) || window.isAdmin;
+
+            if (!isForMe) return;
+
+            count++;
             const item = document.createElement('div');
             item.style.padding = "10px";
             item.style.borderBottom = "1px solid #673ab7";
             item.style.background = "rgba(103, 58, 183, 0.05)";
+            item.style.marginBottom = "6px";
+            item.style.borderRadius = "8px";
 
             const title = document.createElement('div');
             title.style.fontWeight = "bold";
             title.style.color = "#9575cd";
-            title.textContent = `🎓 Richiesta da: ${req.name || "Anonimo"}`;
+            title.textContent = isStudentReq ? `🎓 Scelta Tutor da: ${req.name || "Anonimo"}` : `🎓 Richiesta Ruolo Tutor: ${req.name || "Anonimo"}`;
 
             const info = document.createElement('div');
             info.style.fontSize = "0.75em";
             info.style.color = "var(--hint-color)";
-            info.textContent = `ID: ${req.uid || ""} | @${req.username || "N/A"}`;
+            info.textContent = isStudentReq
+                ? `L'operatore ${req.name || "Corsista"} (@${req.username || "N/A"}) ti ha scelto come Tutor per il Corso CW.`
+                : `ID: ${req.uid || ""} | @${req.username || "N/A"}`;
 
             const btnArea = document.createElement('div');
             btnArea.style.display = "flex";
@@ -2255,18 +2272,26 @@ window.loadAdminTutorRequests = function() {
             btnArea.style.marginTop = "8px";
 
             const approveBtn = document.createElement('button');
-            approveBtn.style.cssText = "flex:1; background:#4caf50; color:white; border:none; border-radius:4px; padding:5px; cursor:pointer; font-size:0.8em;";
-            approveBtn.textContent = "APPROVA ✅";
-            approveBtn.onclick = () => window.approveTutor(child.key, req.uid, req.name);
+            approveBtn.style.cssText = "flex:1; background:#4caf50; color:white; border:none; border-radius:4px; padding:6px; cursor:pointer; font-size:0.8em; font-weight:bold;";
+            approveBtn.textContent = isStudentReq ? "ACCETTA CORSISTA ✅" : "APPROVA TUTOR ✅";
+
+            approveBtn.onclick = () => {
+                if (isStudentReq) {
+                    window.acceptStudentAssignment(child.key, req.uid, req.name, req.tutorId);
+                } else {
+                    window.approveTutor(child.key, req.uid, req.name);
+                }
+            };
 
             const rejectBtn = document.createElement('button');
-            rejectBtn.style.cssText = "flex:1; background:#d32f2f; color:white; border:none; border-radius:4px; padding:5px; cursor:pointer; font-size:0.8em;";
+            rejectBtn.style.cssText = "flex:1; background:#d32f2f; color:white; border:none; border-radius:4px; padding:6px; cursor:pointer; font-size:0.8em; font-weight:bold;";
             rejectBtn.textContent = "RIFIUTA ❌";
             rejectBtn.onclick = () => {
                 if (confirm('Rifiutare questa richiesta?')) {
                     db.ref(`tutorRequests/${child.key}`).remove().then(() => {
                         window.updateAdminBadge();
                         item.remove();
+                        if (list.children.length === 0) list.innerHTML = "<p style='text-align:center; padding:10px; color:var(--hint-color);'>Nessuna richiesta pendente.</p>";
                     });
                 }
             };
@@ -2278,6 +2303,31 @@ window.loadAdminTutorRequests = function() {
             item.appendChild(btnArea);
             list.prepend(item);
         });
+
+        if (count === 0) {
+            list.innerHTML = "<p style='text-align:center; padding:10px; color:var(--hint-color);'>Nessuna richiesta pendente per te.</p>";
+        }
+    });
+};
+
+window.acceptStudentAssignment = function(reqId, studentUid, studentName, tutorId) {
+    if (!confirm(`Accettare ${studentName} come tuo corsista?`)) return;
+
+    db.ref(`users/${studentUid}/course`).update({
+        tutor_id: window.myId
+    }).then(() => {
+        db.ref(`tutorRequests/${reqId}`).remove();
+        showToast(`✅ Corsista ${studentName} assegnato a te!`);
+
+        if (typeof sendPushNotification === 'function') {
+            const notifMsg = `🎓 Il Tutor ${window.myName} ha accettato la tua richiesta! Ora sei seguito direttamente.`;
+            sendPushNotification(studentUid, notifMsg);
+        }
+
+        window.updateAdminBadge();
+        window.loadAdminTutorRequests();
+    }).catch(e => {
+        showToast("Errore durante l'assegnazione.");
     });
 };
 

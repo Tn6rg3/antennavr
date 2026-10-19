@@ -721,9 +721,27 @@ window.renderTutorSelectionList = function(containerId = null) {
                 select.appendChild(o);
             });
             select.onchange = () => {
-                window.courseData.tutor_id = select.value || null;
+                const chosenTutorId = select.value || null;
+                window.courseData.tutor_id = chosenTutorId;
                 window.saveCourseState();
                 window.initCourseChat();
+
+                if (chosenTutorId) {
+                    db.ref('tutorRequests').push({
+                        type: 'student_assignment',
+                        tutorId: chosenTutorId,
+                        uid: window.myId,
+                        name: window.myName,
+                        username: window.tgUsername || "N/A",
+                        ts: firebase.database.ServerValue.TIMESTAMP
+                    }).then(() => {
+                        if (typeof sendPushNotification === 'function') {
+                            const notifMsg = `🎓 Nuova richiesta Corsista! ${window.myName} ti ha scelto come Tutor per il Corso CW.`;
+                            sendPushNotification(chosenTutorId, notifMsg);
+                        }
+                    });
+                }
+
                 showToast("Aula aggiornata!");
             };
         }
@@ -743,7 +761,8 @@ window.finishWizard = function() {
     window.courseData.enrollment_date = new Date().toISOString();
 
     if (role === 'corsista') {
-        window.courseData.tutor_id = window.tempSelectedTutorId || null;
+        const chosenTutorId = window.tempSelectedTutorId || null;
+        window.courseData.tutor_id = chosenTutorId;
         window.courseData.elite_mode = isElite;
         window.courseData.progress.current_lesson = parseInt(els.wizardStartLesson?.value) || 2;
         window.courseData.settings = {
@@ -758,6 +777,22 @@ window.finishWizard = function() {
             minutes_long: Math.round(z2 * 1.66)
         };
         window.generateWeeklySchedule();
+
+        if (chosenTutorId) {
+            db.ref('tutorRequests').push({
+                type: 'student_assignment',
+                tutorId: chosenTutorId,
+                uid: window.myId,
+                name: window.myName,
+                username: window.tgUsername || "N/A",
+                ts: firebase.database.ServerValue.TIMESTAMP
+            }).then(() => {
+                if (typeof sendPushNotification === 'function') {
+                    const notifMsg = `🎓 Nuova richiesta Corsista! ${window.myName} ti ha scelto come Tutor per il Corso CW.`;
+                    sendPushNotification(chosenTutorId, notifMsg);
+                }
+            });
+        }
     }
 
     window.updateGlobalEnrollmentRecord(true);
