@@ -2981,13 +2981,11 @@ window.checkAndTriggerTriDailySlotNotifications = function() {
 
                 const notifText = `🏆 Sfida Tripla: È aperta la Sessione ${slotLabel}! Entra in gioco ora per completare la sfida e scalare la classifica! 🚀`;
                 participants.forEach(pId => {
-                    if (pId !== window.myId) {
-                        db.ref(`users/${pId}/pushNotifications`).once('value', prefSnap => {
-                            if (prefSnap.val() !== false) {
-                                sendPushNotification(pId, notifText);
-                            }
-                        });
-                    }
+                    db.ref(`users/${pId}/pushNotifications`).once('value', prefSnap => {
+                        if (prefSnap.val() !== false) {
+                            sendPushNotification(pId, notifText);
+                        }
+                    });
                 });
                 console.log(`TriDaily: Notifiche dislocate a ${participants.length} partecipanti per lo slot ${currentSlotId}.`);
             });
