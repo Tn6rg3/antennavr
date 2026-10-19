@@ -136,7 +136,10 @@
         <!-- Card generate dinamicamente o popolate da JS -->
     </div>
 
-    <button onclick="document.getElementById('triDailyModal').style.display='none'" class="btn-secondary" style="width:100%;">Chiudi</button>
+    <div style="display:flex; gap:8px;">
+        <button onclick="window.closeTriDailyModalLater()" class="btn-secondary" style="flex:1;">Più Tardi</button>
+        <button onclick="window.declineTriDailyToday()" class="btn-danger" style="flex:1;">Rifiuta per Oggi</button>
+    </div>
 </div>
 
 <!-- POPUP PREVIEW "CHI STA PARTECIPANDO?" -->
