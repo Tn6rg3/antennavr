@@ -367,8 +367,26 @@ function clearAllTimers() {
  * RESET RIGOROSO DELLO STATO DI GIOCO
  * Da chiamare PRIMA di inizializzare i parametri di una nuova sessione
  */
+window.closeAllModals = function() {
+    const modalIds = [
+        'dailyChallengeModal',
+        'triDailyModal',
+        'triDailyPreviewModal',
+        'triDailyResultsModal',
+        'courseSessionModal',
+        'mandatoryAliasModal',
+        'statInfoModal',
+        'courseReminderModal'
+    ];
+    modalIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+};
+
 window.resetGameState = function() {
     console.log("Game Core: Full state reset...");
+    if (typeof window.closeAllModals === 'function') window.closeAllModals();
 
     // 1. Ferma tutto ciò che è in esecuzione
     gameRunning = false;
@@ -1333,8 +1351,8 @@ window.isValidTelegramId = function(id) {
 
     window.populateGameModesUI?.();
     window.checkGameTypeUI?.();
-    if (typeof window.checkTriDailyNextDayResults === 'function') {
-        setTimeout(window.checkTriDailyNextDayResults, 1500);
+    if (typeof window.checkTodayStartupModals === 'function') {
+        setTimeout(window.checkTodayStartupModals, 1500);
     }
     if (typeof window.checkAndTriggerTriDailySlotNotifications === 'function') {
         setTimeout(window.checkAndTriggerTriDailySlotNotifications, 3000);
@@ -2351,12 +2369,17 @@ if (els.btnShareDaily) {
     };
 }
 
-if (els.btnPlayDailyLater) els.btnPlayDailyLater.onclick = () => { if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none'; };
-if (els.btnDeclineDaily) els.btnDeclineDaily.onclick = () => {
-    const today = new Date().toISOString().split('T')[0];
-    localStorage.setItem(STORAGE_DAILY_STATUS_KEY, today);
-    db.ref(`users/${myId}/daily_attempt`).set(today); // Sincronizziamo il rifiuto
+if (els.btnPlayDailyLater) els.btnPlayDailyLater.onclick = () => {
     if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none';
+    if (typeof window.checkTodayStartupModals === 'function') window.checkTodayStartupModals(true);
+};
+if (els.btnDeclineDaily) els.btnDeclineDaily.onclick = () => {
+    const d = new Date();
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    localStorage.setItem(STORAGE_DAILY_STATUS_KEY, todayStr);
+    db.ref(`users/${myId}/daily_attempt`).set(todayStr);
+    if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none';
+    if (typeof window.checkTodayStartupModals === 'function') window.checkTodayStartupModals(true);
 };
 
 window.allowReplayDailyChallenge = function() {
@@ -2424,6 +2447,23 @@ window.reopenDailyChallenge = function() {
 };
 
 // --- SFIDA TRIPLA GIORNALIERA (MATTINA, POMERIGGIO, SERA) ---
+
+window.closeTriDailyModalLater = function() {
+    const modal = document.getElementById('triDailyModal');
+    if (modal) modal.style.display = 'none';
+};
+
+window.declineTriDailyToday = function() {
+    const d = new Date();
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    localStorage.setItem("cwgame_tri_daily_decline", todayStr);
+    localStorage.setItem("cwgame_tri_daily_shown", todayStr);
+    const modal = document.getElementById('triDailyModal');
+    if (modal) modal.style.display = 'none';
+    if (typeof showToast === 'function') {
+        showToast("Sfida Tripla rimandata per oggi. Puoi riaprirla quando vuoi dal menu!");
+    }
+};
 
 window.openTriDailyHub = function() {
     const modal = document.getElementById('triDailyModal');
@@ -2692,10 +2732,9 @@ window.startTriDailySession = function(slotId) {
 window.checkTriDailyNextDayResults = function() {
     if (!window.myId) return;
 
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const yesterdayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     const ackKey = `cwgame_tri_ack_${yesterdayStr}`;
     if (localStorage.getItem(ackKey)) return;
@@ -2708,16 +2747,22 @@ window.checkTriDailyNextDayResults = function() {
         let slotsCount = 0;
         ['morning', 'afternoon', 'evening'].forEach(s => {
             if (attempt[s] && attempt[s].score) {
-                myTotal += attempt[s].score;
+                myTotal += Number(attempt[s].score) || 0;
                 slotsCount++;
             }
         });
 
         if (myTotal <= 0) return;
 
-        db.ref(`leaderboard/tri_daily/${yesterdayStr}`).orderByChild('totalScore').once('value', lbSnap => {
+        db.ref(`leaderboard/tri_daily/${yesterdayStr}`).once('value', lbSnap => {
+            if (!lbSnap.exists()) return;
+
             const list = [];
-            lbSnap.forEach(c => list.unshift({ id: c.key, ...c.val() }));
+            lbSnap.forEach(c => {
+                if (c.exists()) list.push({ id: c.key, ...c.val() });
+            });
+
+            list.sort((a, b) => (Number(b.totalScore || 0) - Number(a.totalScore || 0)) || (Number(b.peakWpm || 0) - Number(a.peakWpm || 0)));
 
             const modal = document.getElementById('triDailyResultsModal');
             const podiumContainer = document.getElementById('triDailyPodiumContainer');
@@ -2796,11 +2841,55 @@ window.checkTriDailyNextDayResults = function() {
                 acceptTodayBtn.onclick = () => {
                     localStorage.setItem(ackKey, "true");
                     modal.style.display = 'none';
-                    window.openTriDailyHub();
+                    if (typeof window.checkTodayStartupModals === 'function') {
+                        window.checkTodayStartupModals(true);
+                    }
                 };
             }
         });
     });
+};
+
+window.checkTodayStartupModals = function(skipYesterdayCheck = false) {
+    if (typeof window.closeAllModals === 'function') window.closeAllModals();
+
+    const d = new Date();
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    // Step 1: Risultati di ieri se non ancora visti
+    if (!skipYesterdayCheck) {
+        const yesterdayDate = new Date();
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const yesterdayStr = `${yesterdayDate.getFullYear()}-${String(yesterdayDate.getMonth() + 1).padStart(2, '0')}-${String(yesterdayDate.getDate()).padStart(2, '0')}`;
+        const ackKey = `cwgame_tri_ack_${yesterdayStr}`;
+
+        if (!localStorage.getItem(ackKey)) {
+            if (typeof window.checkTriDailyNextDayResults === 'function') {
+                window.checkTriDailyNextDayResults();
+                return;
+            }
+        }
+    }
+
+    // Step 2: Sfida Giornaliera Classica
+    const dailyPlayed = (localStorage.getItem(STORAGE_DAILY_STATUS_KEY) === todayStr);
+    if (!dailyPlayed && els.dailyChallengeModal) {
+        if (!window.isNewUserWaitingWelcome) {
+            els.dailyChallengeModal.style.display = 'flex';
+            return;
+        }
+    }
+
+    // Step 3: Sfida Tripla Giornaliera (Hub)
+    const triDeclined = (localStorage.getItem("cwgame_tri_daily_decline") === todayStr);
+    const triShown = (localStorage.getItem("cwgame_tri_daily_shown") === todayStr);
+    if (!triDeclined && !triShown) {
+        const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { id: 'night' };
+        if (slotInfo.id !== 'night') {
+            localStorage.setItem("cwgame_tri_daily_shown", todayStr);
+            window.openTriDailyHub();
+        }
+    }
 };
 
 window.checkAndTriggerTriDailySlotNotifications = function() {
