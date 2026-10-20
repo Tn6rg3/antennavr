@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.236";
+const APP_VERSION = "20260807.237";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -2741,6 +2741,7 @@ window.startTriDailySession = function(slotId) {
         }
 
         window.currentMode = 'tri_daily';
+        window.currentTriDailySlotId = slotId;
         window.isSinglePlayer = true;
         window.currentWpm = window.baseWpm = inheritedWpm;
         window.requestedWordCount = slotInfo.wordCount || 10;

@@ -1351,8 +1351,7 @@ window.finishGame = function() {
                 dbPath = `leaderboard/daily_challenge/${todayStr}/${window.myId}`;
             } else if (window.currentMode === 'tri_daily') {
                 let todayStr = new Date().toISOString().split('T')[0];
-                const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { id: 'morning' };
-                const slotId = slotInfo.id;
+                const slotId = window.currentTriDailySlotId || (typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot().id : 'morning');
 
                 db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}/${slotId}`).update({
                     played: true,
