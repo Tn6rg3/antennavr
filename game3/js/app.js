@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.237";
+const APP_VERSION = "20260807.238";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -2420,6 +2420,7 @@ if (els.btnShareDaily) {
 }
 
 if (els.btnPlayDailyLater) els.btnPlayDailyLater.onclick = () => {
+    sessionStorage.setItem("cwgame_daily_later_session", "true");
     if(els.dailyChallengeModal) els.dailyChallengeModal.style.display = 'none';
     if (typeof window.checkTodayStartupModals === 'function') window.checkTodayStartupModals(true);
 };
@@ -2455,6 +2456,7 @@ window.allowReplayDailyChallenge = function() {
 };
 
 window.reopenDailyChallenge = function() {
+    localStorage.removeItem("cwgame_daily_later");
     if (!db || !window.myId) {
         showToast("⚠️ Connessione in corso, riprova tra poco.");
         return;
@@ -2499,6 +2501,8 @@ window.reopenDailyChallenge = function() {
 // --- SFIDA TRIPLA GIORNALIERA (MATTINA, POMERIGGIO, SERA) ---
 
 window.closeTriDailyModalLater = function() {
+    const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { id: 'morning' };
+    sessionStorage.setItem(`cwgame_tri_later_session_${slotInfo.id}`, "true");
     const modal = document.getElementById('triDailyModal');
     if (modal) modal.style.display = 'none';
 };
@@ -2924,7 +2928,8 @@ window.checkTodayStartupModals = function(skipYesterdayCheck = false) {
 
     // Step 2: Sfida Giornaliera Classica
     const dailyPlayed = (localStorage.getItem(STORAGE_DAILY_STATUS_KEY) === todayStr);
-    if (!dailyPlayed && els.dailyChallengeModal) {
+    const dailyLaterInThisSession = (sessionStorage.getItem("cwgame_daily_later_session") === "true");
+    if (!dailyPlayed && !dailyLaterInThisSession && els.dailyChallengeModal) {
         if (!window.isNewUserWaitingWelcome) {
             els.dailyChallengeModal.style.display = 'flex';
             return;
@@ -2934,11 +2939,9 @@ window.checkTodayStartupModals = function(skipYesterdayCheck = false) {
     // Step 3: Sfida Tripla Giornaliera (Hub)
     const triDeclined = (localStorage.getItem("cwgame_tri_daily_decline") === todayStr);
     const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { id: 'night' };
-    const triShownSlotKey = `cwgame_tri_shown_${todayStr}_${slotInfo.id}`;
-    const triShownThisSlot = (localStorage.getItem(triShownSlotKey) === "true");
+    const triLaterInThisSession = (sessionStorage.getItem(`cwgame_tri_later_session_${slotInfo.id}`) === "true");
 
-    if (!triDeclined && slotInfo.id !== 'night' && !triShownThisSlot) {
-        localStorage.setItem(triShownSlotKey, "true");
+    if (!triDeclined && slotInfo.id !== 'night' && !triLaterInThisSession) {
         window.openTriDailyHub();
     }
 };
