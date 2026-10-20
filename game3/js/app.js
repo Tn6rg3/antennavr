@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.235";
+const APP_VERSION = "20260807.236";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -2932,13 +2932,13 @@ window.checkTodayStartupModals = function(skipYesterdayCheck = false) {
 
     // Step 3: Sfida Tripla Giornaliera (Hub)
     const triDeclined = (localStorage.getItem("cwgame_tri_daily_decline") === todayStr);
-    const triShown = (localStorage.getItem("cwgame_tri_daily_shown") === todayStr);
-    if (!triDeclined && !triShown) {
-        const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { id: 'night' };
-        if (slotInfo.id !== 'night') {
-            localStorage.setItem("cwgame_tri_daily_shown", todayStr);
-            window.openTriDailyHub();
-        }
+    const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { id: 'night' };
+    const triShownSlotKey = `cwgame_tri_shown_${todayStr}_${slotInfo.id}`;
+    const triShownThisSlot = (localStorage.getItem(triShownSlotKey) === "true");
+
+    if (!triDeclined && slotInfo.id !== 'night' && !triShownThisSlot) {
+        localStorage.setItem(triShownSlotKey, "true");
+        window.openTriDailyHub();
     }
 };
 
@@ -2952,7 +2952,8 @@ window.checkAndTriggerTriDailySlotNotifications = function() {
 
     if (currentSlotId !== 'afternoon' && currentSlotId !== 'evening') return;
 
-    const notifRefPath = `appConfig/tri_daily_notifications/${todayStr}/${currentSlotId}`;
+    // Usiamo il nodo 'activity' (con permessi .write aperti agli utenti autenticati)
+    const notifRefPath = `activity/tri_daily_notifications/${todayStr}/${currentSlotId}`;
 
     db.ref(notifRefPath).once('value', notifSnap => {
         if (notifSnap.exists()) return;
