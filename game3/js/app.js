@@ -545,6 +545,12 @@ window.ensureUidMapping = async function() {
     } catch(e) { console.warn("Ensure Mapping Note:", e); }
 };
 
+window.isValidTelegramId = function(id) {
+    if (!id) return false;
+    const strId = String(id).trim();
+    return strId !== "" && strId !== "undefined" && strId !== "null" && strId !== "0" && strId.length >= 3;
+};
+
 // --- STARTUP ---
 // --- STARTUP ---
 async function startApp() {
@@ -1065,12 +1071,6 @@ window.initMandatoryAliasHandlers = function() {
             }
         };
     }
-};
-
-window.isValidTelegramId = function(id) {
-    if (!id) return false;
-    const strId = String(id).trim();
-    return strId !== "" && strId !== "undefined" && strId !== "null" && strId !== "0" && strId.length >= 3;
 };
 
         // --- CARICAMENTO PROFILO UTENTE ---
