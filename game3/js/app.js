@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.245";
+const APP_VERSION = "20260807.246";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -595,7 +595,12 @@ async function startApp() {
     auth = window.auth;
 
     // ESEGUIAMO AUTH & CONTROLLO BAN SOLTANTO ORA CHE window.myId E' DEFINITO AL 100%!
-    window.auth.signInAnonymously().then(async () => {
+    try {
+        await window.auth.signInAnonymously();
+    } catch(authErr) {
+        console.warn("Auth Note:", authErr);
+    }
+    await window.ensureUidMapping();
         if (!window.isValidTelegramId(window.myId)) {
             console.warn("CW Game: Invalid Telegram ID.");
             return;
@@ -713,7 +718,7 @@ async function startApp() {
         }
     }
 
-    initGame();
+    await initGame();
 }
 
 window.fetchValidationUrlFromFirebase = async function() {
