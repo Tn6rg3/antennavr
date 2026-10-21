@@ -1405,6 +1405,18 @@ if (els.deleteDataBtn) {
 
             const safeRemove = (ref) => ref.remove().catch(e => console.warn("Safe remove note:", e));
 
+            // Spegniamo tutti i listener attivi in tempo reale per evitare 'permission_denied' alla cancellazione
+            try {
+                if (window.myId && db) {
+                    db.ref(`users/${window.myId}`).off();
+                    db.ref(`users/${window.myId}/course`).off();
+                    db.ref(`users/${window.myId}/progression`).off();
+                    db.ref(`appConfig/bannedUsers/${window.myId}`).off();
+                    db.ref(`presence/${window.myId}`).off();
+                    db.ref('.info/connected').off();
+                }
+            } catch(e) {}
+
             // FASE 1: Pulizia Classifiche e Leaderboard (Mentre uid_mapping e attivo al 100%)
             const categories = ['standard', 'standard_plus', 'code_groups', 'chars', 'quiz', 'pingpong', 'callsign', 'arcade', 'la_torre'];
             for (const cat of categories) {
