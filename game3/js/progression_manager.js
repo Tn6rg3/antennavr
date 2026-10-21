@@ -45,7 +45,7 @@ window.initProgression = function() {
 
         if (changed) {
             console.log("RPG: Auto-leveling user to:", level, "with remainder XP:", xp);
-            db.ref(`users/${myId}/progression`).update({ level: level, xp: xp });
+            db.ref(`users/${myId}/progression`).update({ level: level, xp: xp }).catch(err => console.warn(err));
             window.showLevelUpOverlay(level);
             return;
         }
@@ -126,9 +126,12 @@ window.generateDailyMissions = function() {
         { id: 'm3', type: 'streak', target: 10, current: 0, xp: 200, it: "Fai una striscia di 10 parole", en: "Get a 10 word streak" }
     ];
 
-    db.ref(`users/${myId}/progression/dailyMissions`).once('value', snap => {
+    db.ref(`users/${myId}/progression/dailyMissions`).once('value', async snap => {
         const data = snap.val() || {};
         if (data.date !== today) {
+            if (typeof window.ensureUidMapping === 'function') {
+                await window.ensureUidMapping();
+            }
             db.ref(`users/${myId}/progression/dailyMissions`).set({
                 date: today,
                 list: missions
@@ -137,9 +140,9 @@ window.generateDailyMissions = function() {
                     window.userProgression.dailyMissions = { date: today, list: missions };
                     window.renderMissionsUI();
                 }
-            });
+            }).catch(err => console.warn("Daily missions set warning:", err));
         }
-    });
+    }).catch(err => console.warn("Daily missions fetch warning:", err));
 };
 
 window.updateMissionProgress = function(type, value = 1) {

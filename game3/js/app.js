@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.243";
+const APP_VERSION = "20260807.244";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1336,6 +1336,10 @@ window.isValidTelegramId = function(id) {
         // --- ATTIVAZIONE SISTEMA SFIDE (Fix Avvio Simultaneo) ---
         if (typeof window.listenToInviteAccepted === 'function') {
             window.listenToInviteAccepted();
+        }
+
+        if (typeof window.ensureUidMapping === 'function') {
+            await window.ensureUidMapping();
         }
 
         window.initBattleRoyaleScheduler?.();
