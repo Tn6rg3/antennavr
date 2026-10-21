@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.239";
+const APP_VERSION = "20260807.241";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -2964,12 +2964,13 @@ window.checkAndTriggerTriDailySlotNotifications = function() {
     db.ref(notifRefPath).once('value', notifSnap => {
         if (notifSnap.exists()) return;
 
+        // Invia la notifica SOLO ai partecipanti della Sfida Tripla di oggi
         db.ref(`leaderboard/tri_daily/${todayStr}`).once('value', lbSnap => {
             if (!lbSnap.exists()) return;
 
             const participants = [];
             lbSnap.forEach(child => {
-                if (child.key) participants.push(child.key);
+                if (child.key && !isNaN(child.key)) participants.push(child.key);
             });
 
             if (participants.length === 0) return;
@@ -2994,7 +2995,7 @@ window.checkAndTriggerTriDailySlotNotifications = function() {
                         }
                     });
                 });
-                console.log(`TriDaily: Notifiche dislocate a ${participants.length} partecipanti per lo slot ${currentSlotId}.`);
+                console.log(`TriDaily: Notifiche inviate a ${participants.length} partecipanti per lo slot ${currentSlotId}.`);
             });
         });
     });
