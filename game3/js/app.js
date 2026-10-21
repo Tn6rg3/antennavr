@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.242";
+const APP_VERSION = "20260807.243";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -641,11 +641,17 @@ async function startApp() {
         db.ref('.info/connected').on('value', async (s) => {
             if (s.val() === true && window.isValidTelegramId(window.myId) && !window.isUserBanned) {
 
-                // Ripristina il mapping di sicurezza
+                // Ripristina il mapping di sicurezza (solo se non gia impostato)
                 try {
-                    const mappingRef = db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`);
-                    await mappingRef.set(window.myId);
-                } catch (e) { console.error("Mapping Error:", e); }
+                    const cUid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
+                    if (cUid) {
+                        const mappingRef = db.ref(`uid_mapping/${cUid}`);
+                        const mapSnap = await mappingRef.once('value');
+                        if (!mapSnap.exists() || mapSnap.val() !== window.myId) {
+                            await mappingRef.set(window.myId);
+                        }
+                    }
+                } catch (e) { console.warn("Mapping Note:", e.message || e); }
 
                 // BLOCCO PRESENZA SE L'ALIAS NON E' ANCORA STATO CONFERMATO O SE E' BANNATO
                 if (window.isMandatoryAliasPending || window.isUserBanned) {
@@ -955,6 +961,19 @@ async function initGame() {
         };
     }
 
+window.ensureUidMapping = async function() {
+    try {
+        const cUid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
+        if (cUid && window.myId && db) {
+            const mappingRef = db.ref(`uid_mapping/${cUid}`);
+            const mapSnap = await mappingRef.once('value');
+            if (!mapSnap.exists() || mapSnap.val() !== window.myId) {
+                await mappingRef.set(window.myId);
+            }
+        }
+    } catch(e) { console.warn("Ensure Mapping Note:", e); }
+};
+
 window.initMandatoryAliasHandlers = function() {
     const btnSave = document.getElementById('btnSaveMandatoryAlias');
     const btnExit = document.getElementById('btnExitMandatoryAlias');
@@ -975,11 +994,12 @@ window.initMandatoryAliasHandlers = function() {
                 window.myName = rawAlias;
 
                 if (window.myId && window.db) {
+                    await window.ensureUidMapping();
                     await db.ref(`users/${window.myId}`).update({
                         alias: rawAlias,
                         assignedDefaultName: rawAlias,
                         hasSetCustomAlias: true
-                    });
+                    }).catch(err => console.warn("Update alias warning:", err));
                 }
 
                 window.isMandatoryAliasPending = false;
@@ -1129,7 +1149,8 @@ window.isValidTelegramId = function(id) {
         }
 
         if (needsUpdate && !window.isMandatoryAliasPending && !window.isUserBanned) {
-            await userRef.update(updates);
+            await window.ensureUidMapping();
+            await userRef.update(updates).catch(err => console.warn("Update settings note:", err));
             console.log("Privacy: Applied default settings (Privacy ON, Alias set).");
         }
 
@@ -1151,7 +1172,8 @@ window.isValidTelegramId = function(id) {
                 }
             }, 400);
         } else if ((!snap.exists() || !data.welcomed) && !window.isUserBanned) {
-            await userRef.update({ welcomed: true, createdAt: firebase.database.ServerValue.TIMESTAMP });
+            await window.ensureUidMapping();
+            await userRef.update({ welcomed: true, createdAt: firebase.database.ServerValue.TIMESTAMP }).catch(err => console.warn("Welcome update note:", err));
             window.isNewUserWaitingWelcome = true;
             if (els.welcomeNewUserModal) els.welcomeNewUserModal.style.display = 'flex';
         }
@@ -1297,14 +1319,7 @@ window.isValidTelegramId = function(id) {
 
                 const alreadyShownToday = localStorage.getItem(STORAGE_DAILY_STATUS_KEY) === today;
 
-                if (!alreadyPlayedToday && !alreadyShownToday && els.dailyChallengeModal) {
-                    // Se l'utente è nuovo, aspettiamo che chiuda il benvenuto
-                    if (window.isNewUserWaitingWelcome) {
-                        window.pendingDailyChallengeShow = true;
-                    } else {
-                        els.dailyChallengeModal.style.display = 'flex';
-                    }
-                } else if (alreadyPlayedToday) {
+                if (alreadyPlayedToday) {
                     // Aggiorniamo il cache locale se Firebase dice che abbiamo giocato
                     localStorage.setItem(STORAGE_DAILY_STATUS_KEY, today);
                 }
