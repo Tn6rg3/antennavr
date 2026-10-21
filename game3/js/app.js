@@ -707,7 +707,6 @@ async function startApp() {
         }, error => {
             console.error("Realtime ban listener error:", error);
         });
-    });
 
     // --- TELEGRAM TTS FIX: Svegliamo il motore vocale ---
     const synth = window.speechSynthesis || window.webkitSpeechSynthesis;
