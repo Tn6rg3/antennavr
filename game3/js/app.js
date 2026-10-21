@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.241";
+const APP_VERSION = "20260807.242";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -2559,9 +2559,12 @@ window.renderTriDailyHubCards = function() {
             const score = slotObj.score || 0;
             const finalWpm = slotObj.finalWpm || slotObj.peakWpm || 0;
 
-            if (isCompleted || isPlayed) {
-                totalScore += score;
-                completedCount++;
+            if (isCompleted || isPlayed || isWithdrawn) {
+                localStorage.setItem(`cwgame_tri_played_${todayStr}_${s.id}`, "true");
+                if (isCompleted || isPlayed) {
+                    totalScore += score;
+                    completedCount++;
+                }
             }
 
             const card = document.createElement('div');
@@ -2718,6 +2721,7 @@ window.withdrawTriDailySession = function(slotId) {
     if (!confirm("Sei sicuro di volerti ritirare da questa sessione della Sfida Tripla? Potrai comunque partecipare alle sessioni successive.")) return;
 
     const todayStr = new Date().toISOString().split('T')[0];
+    localStorage.setItem(`cwgame_tri_played_${todayStr}_${slotId}`, "true");
     db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}/${slotId}`).set({
         played: true,
         withdrawn: true,
@@ -2733,6 +2737,7 @@ window.startTriDailySession = function(slotId) {
     window.resetGameState();
 
     const todayStr = new Date().toISOString().split('T')[0];
+    localStorage.setItem(`cwgame_tri_played_${todayStr}_${slotId}`, "true");
     const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { wordCount: 10, defaultWpm: 15 };
 
     db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}`).once('value', snap => {
@@ -2941,9 +2946,10 @@ window.checkTodayStartupModals = function(skipYesterdayCheck = false) {
     // Step 3: Sfida Tripla Giornaliera (Hub)
     const triDeclined = (localStorage.getItem("cwgame_tri_daily_decline") === todayStr);
     const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { id: 'night' };
+    const triSlotPlayed = (localStorage.getItem(`cwgame_tri_played_${todayStr}_${slotInfo.id}`) === "true");
     const triLaterInThisSession = (sessionStorage.getItem(`cwgame_tri_later_session_${slotInfo.id}`) === "true");
 
-    if (!triDeclined && slotInfo.id !== 'night' && !triLaterInThisSession) {
+    if (!triDeclined && slotInfo.id !== 'night' && !triSlotPlayed && !triLaterInThisSession) {
         window.openTriDailyHub();
     }
 };
