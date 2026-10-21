@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.244";
+const APP_VERSION = "20260807.245";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -995,11 +995,17 @@ window.initMandatoryAliasHandlers = function() {
 
                 if (window.myId && window.db) {
                     await window.ensureUidMapping();
-                    await db.ref(`users/${window.myId}`).update({
+                    await db.ref(`users/${window.myId}`).set({
                         alias: rawAlias,
                         assignedDefaultName: rawAlias,
-                        hasSetCustomAlias: true
-                    }).catch(err => console.warn("Update alias warning:", err));
+                        hasSetCustomAlias: true,
+                        privacyUsername: window.myPrivacy !== undefined ? window.myPrivacy : true,
+                        privacyOnline: window.myPrivacyOnline !== undefined ? window.myPrivacyOnline : false,
+                        privacyLeaderboard: window.myPrivacyLeaderboard !== undefined ? window.myPrivacyLeaderboard : false,
+                        pushNotifications: window.myPushNotifs !== undefined ? window.myPushNotifs : true,
+                        welcomed: true,
+                        createdAt: firebase.database.ServerValue.TIMESTAMP
+                    }).catch(err => console.warn("Set alias warning:", err));
                 }
 
                 window.isMandatoryAliasPending = false;
@@ -1031,7 +1037,9 @@ window.initMandatoryAliasHandlers = function() {
                 if (els && els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
                 if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
 
-                if (typeof window.checkTodayStartupModals === 'function') {
+                if (window.isNewUserWaitingWelcome && els.welcomeNewUserModal) {
+                    els.welcomeNewUserModal.style.display = 'flex';
+                } else if (typeof window.checkTodayStartupModals === 'function') {
                     setTimeout(window.checkTodayStartupModals, 400);
                 }
 
@@ -1148,12 +1156,6 @@ window.isValidTelegramId = function(id) {
             window.myPushNotifs = data.pushNotifications;
         }
 
-        if (needsUpdate && !window.isMandatoryAliasPending && !window.isUserBanned) {
-            await window.ensureUidMapping();
-            await userRef.update(updates).catch(err => console.warn("Update settings note:", err));
-            console.log("Privacy: Applied default settings (Privacy ON, Alias set).");
-        }
-
         if (els.playerName) els.playerName.textContent = window.myName;
 
         // --- GESTIONE ALIAS OBBLIGATORIO PRIMO INGRESSO ---
@@ -1161,6 +1163,7 @@ window.isValidTelegramId = function(id) {
 
         if (!hasSetCustomAlias) {
             window.isMandatoryAliasPending = true;
+            window.isNewUserWaitingWelcome = true;
             if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
             setTimeout(() => {
                 if (typeof window.showProfileScreen === 'function') window.showProfileScreen();
@@ -1170,12 +1173,20 @@ window.isValidTelegramId = function(id) {
                     if (input) input.value = window.myName || (tgUser ? tgUser.first_name : "") || "";
                     modal.style.display = 'flex';
                 }
-            }, 400);
-        } else if ((!snap.exists() || !data.welcomed) && !window.isUserBanned) {
-            await window.ensureUidMapping();
-            await userRef.update({ welcomed: true, createdAt: firebase.database.ServerValue.TIMESTAMP }).catch(err => console.warn("Welcome update note:", err));
-            window.isNewUserWaitingWelcome = true;
-            if (els.welcomeNewUserModal) els.welcomeNewUserModal.style.display = 'flex';
+            }, 300);
+        } else {
+            // Utente già registrato in passato
+            if (needsUpdate && !window.isUserBanned) {
+                await window.ensureUidMapping();
+                await userRef.update(updates).catch(err => console.warn("Update settings note:", err));
+                console.log("Privacy: Applied default settings (Privacy ON, Alias set).");
+            }
+            if ((!snap.exists() || !data.welcomed) && !window.isUserBanned) {
+                await window.ensureUidMapping();
+                await userRef.update({ welcomed: true, createdAt: firebase.database.ServerValue.TIMESTAMP }).catch(err => console.warn("Welcome update note:", err));
+                window.isNewUserWaitingWelcome = true;
+                if (els.welcomeNewUserModal) els.welcomeNewUserModal.style.display = 'flex';
+            }
         }
 
         if (typeof window.initMandatoryAliasHandlers === 'function') {
