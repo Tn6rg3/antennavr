@@ -532,6 +532,19 @@ if(document.getElementById('groupCharSetInput')) document.getElementById('groupC
     window.checkGameTypeUI?.();
 });
 
+window.ensureUidMapping = async function() {
+    try {
+        const cUid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
+        if (cUid && window.myId && db) {
+            const mappingRef = db.ref(`uid_mapping/${cUid}`);
+            const mapSnap = await mappingRef.once('value');
+            if (!mapSnap.exists() || mapSnap.val() !== window.myId) {
+                await mappingRef.set(window.myId);
+            }
+        }
+    } catch(e) { console.warn("Ensure Mapping Note:", e); }
+};
+
 // --- STARTUP ---
 // --- STARTUP ---
 async function startApp() {
@@ -964,19 +977,6 @@ async function initGame() {
             if (typeof listenToChat === 'function') listenToChat();
         };
     }
-
-window.ensureUidMapping = async function() {
-    try {
-        const cUid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
-        if (cUid && window.myId && db) {
-            const mappingRef = db.ref(`uid_mapping/${cUid}`);
-            const mapSnap = await mappingRef.once('value');
-            if (!mapSnap.exists() || mapSnap.val() !== window.myId) {
-                await mappingRef.set(window.myId);
-            }
-        }
-    } catch(e) { console.warn("Ensure Mapping Note:", e); }
-};
 
 window.initMandatoryAliasHandlers = function() {
     const btnSave = document.getElementById('btnSaveMandatoryAlias');
