@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.248";
+const APP_VERSION = "20260807.249";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -821,19 +821,19 @@ async function validateIdentity() {
 }
 
 async function sendPushNotification(targetId, text) {
-    if (!VALIDATION_SERVER_URL || !targetId) return;
+    if (!targetId) return;
+
+    const serverUrl = (VALIDATION_SERVER_URL && VALIDATION_SERVER_URL.startsWith('http'))
+        ? VALIDATION_SERVER_URL
+        : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
 
     // Usiamo il testo fornito o un messaggio generico di fallback
-    const notificationText = (text && text.trim() !== "") ? text.substring(0, 150) : "Hai nuovi messaggi su Sfida Telegrafia! 📻";
+    const notificationText = (text && text.trim() !== "") ? text : "Hai nuovi messaggi su Sfida Telegrafia! 📻";
 
-    const url = `${VALIDATION_SERVER_URL}?action=notify&targetId=${targetId}&text=${encodeURIComponent(notificationText)}`;
+    const url = `${serverUrl}?action=notify&targetId=${targetId}&text=${encodeURIComponent(notificationText)}`;
     try {
-        // Proviamo mode: 'cors' per avere feedback sulla riuscita, ma manteniamo fallback se fallisce per CORS
-        fetch(url, { mode: 'cors' }).catch(() => {
-            // Fallback silenzioso se CORS blocca la lettura della risposta
-            fetch(url, { mode: 'no-cors' });
-        });
-        console.log("Push: Richiesta inviata per", targetId);
+        fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
+        console.log("Push: Richiesta inviata per targetId =", targetId);
     } catch(e) { console.error("Push Error:", e); }
 }
 
