@@ -526,6 +526,9 @@ window.listenToRoomInBackground = function() {
             window.isSinglePlayer = (rData.type === 'single');
             window.isFixedSpeed = !!rData.fixedSpeed;
             window.isEasyMode = !!rData.easyMode;
+            if (window.currentMode === 'daily_challenge' || window.currentMode === 'tri_daily' || window.currentMode === 'tournament' || window.currentMode === 'battle_royale' || window.currentMode === 'code_groups' || window.currentMode === 'quiz') {
+                window.isEasyMode = false;
+            }
             window.isAllowSpectators = !!rData.allowSpectators;
             window.isSpeakMode = !!rData.speakMode; // NUOVO
             window.isVoiceInputMode = !!rData.voiceInputMode; // NUOVO

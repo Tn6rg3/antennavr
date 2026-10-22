@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.247";
+const APP_VERSION = "20260807.248";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -440,6 +440,7 @@ window.resetGameState = function() {
     window.wordSpaceMult = 1.0;
     window.isFixedSpeed = false;
     window.isEasyMode = false;
+    if (els && els.easyModeCheckbox) els.easyModeCheckbox.checked = false;
     window.isAllowSpectators = false;
 };
 
@@ -927,7 +928,7 @@ async function initGame() {
     if (els.charSpaceInput) els.charSpaceInput.value = localStorage.getItem(STORAGE_PREF_CHAR_SPACE) || "";
     if (els.wordSpaceSelect) els.wordSpaceSelect.value = localStorage.getItem(STORAGE_PREF_WORD_SPACE) || "1.0";
     if (els.fixedSpeedCheckbox) els.fixedSpeedCheckbox.checked = localStorage.getItem(STORAGE_PREF_FIXED) === 'true';
-    if (els.easyModeCheckbox) els.easyModeCheckbox.checked = localStorage.getItem(STORAGE_PREF_EASY) === 'true';
+    if (els.easyModeCheckbox) els.easyModeCheckbox.checked = false; // Disattivata di default ad ogni avvio
     if (els.allowSpectatorsCheckbox) els.allowSpectatorsCheckbox.checked = localStorage.getItem(STORAGE_PREF_SPECTATE) === 'true';
     if (document.getElementById('voiceInputCheckbox')) document.getElementById('voiceInputCheckbox').checked = localStorage.getItem('cwgame_pref_voice_input') === 'true';
     if (document.getElementById('autoAdvanceCheckbox')) document.getElementById('autoAdvanceCheckbox').checked = localStorage.getItem('cwgame_pref_auto_advance') === 'true';
@@ -942,7 +943,6 @@ async function initGame() {
     els.charSpaceInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_CHAR_SPACE, e.target.value));
     els.wordSpaceSelect?.addEventListener('change', (e) => savePref(STORAGE_PREF_WORD_SPACE, e.target.value));
     els.fixedSpeedCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_FIXED, e.target.checked));
-    els.easyModeCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_EASY, e.target.checked));
     els.allowSpectatorsCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_SPECTATE, e.target.checked));
     document.getElementById('voiceInputCheckbox')?.addEventListener('change', (e) => savePref('cwgame_pref_voice_input', e.target.checked));
     document.getElementById('autoAdvanceCheckbox')?.addEventListener('change', (e) => savePref('cwgame_pref_auto_advance', e.target.checked));

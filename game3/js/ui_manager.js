@@ -148,8 +148,12 @@ window.checkGameTypeUI = function() {
     if (containers.timeout) containers.timeout.style.display = (isSingle || isTrn || isCoop || isArcadeType || isTx || selectedMode === 'qso') ? 'none' : 'block';
 
     const isFixedAllowed = (isSingle || isTx) && selectedMode !== 'qso' && selectedMode !== 'real_tx' && selectedMode !== 'groups_tx' && selectedMode !== 'qso_audio_search';
+    const isEasyAllowed = isFixedAllowed && selectedMode !== 'daily_challenge' && selectedMode !== 'tri_daily' && selectedMode !== 'code_groups' && selectedMode !== 'quiz';
     if (containers.fixed) containers.fixed.style.display = isFixedAllowed ? 'flex' : 'none';
-    if (containers.easy) containers.easy.style.display = isFixedAllowed ? 'flex' : 'none';
+    if (containers.easy) containers.easy.style.display = isEasyAllowed ? 'flex' : 'none';
+    if (!isEasyAllowed && document.getElementById('easyModeCheckbox')) {
+        document.getElementById('easyModeCheckbox').checked = false;
+    }
     if (containers.spacing) containers.spacing.style.display = isFixedAllowed ? 'flex' : 'none';
     if (containers.custom) containers.custom.style.display = (selectedMode === 'custom') ? 'flex' : 'none';
     if (containers.spectator) containers.spectator.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
