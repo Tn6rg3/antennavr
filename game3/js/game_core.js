@@ -34,14 +34,22 @@ window.startLiveScoreDecayAnimation = function(initialMaxPoints) {
 
     window.liveScoreInterval = setInterval(() => {
         const elapsedMs = Date.now() - startTime;
-        const factor = Math.max(0.5, 1.0 - (elapsedMs / 10000));
+        let factor = 1.0;
+
+        // 1 Secondo di Grazia (0-1000ms): Punti al 100%
+        if (elapsedMs > 1000) {
+            // Nei 10 secondi successivi (1000ms - 11000ms), scende dal 100% al 75%
+            const decayElapsed = elapsedMs - 1000;
+            factor = Math.max(0.75, 1.0 - (0.25 * (decayElapsed / 10000)));
+        }
+
         window.currentLiveMaxPoints = Math.max(10, Math.round(startVal * factor));
         valEl.textContent = window.currentLiveMaxPoints;
 
-        if (factor < 0.7 && factor >= 0.55) {
+        if (factor < 0.90 && factor >= 0.80) {
             badge.style.borderColor = "#ff9800";
             badge.style.color = "#ff9800";
-        } else if (factor < 0.55) {
+        } else if (factor < 0.80) {
             badge.style.borderColor = "#f44336";
             badge.style.color = "#f44336";
         }
@@ -2179,8 +2187,31 @@ window.handleWordSubmission = function(userWord) {
             const res = window.calculateGamePoints(window.currentMode, currentWord, userWord, activeWpmForThisWord, reactionMs, levDist, usedReplay);
             points = res.points; scoreColor = res.scoreColor;
         }
-        if (window.currentMode === 'tri_daily' && levDist === 0 && !usedReplay && window.currentLiveMaxPoints > 0) {
-            points = window.currentLiveMaxPoints;
+        if (window.currentMode === 'tri_daily') {
+            if (usedReplay) {
+                points = 0;
+                scoreColor = "#999999";
+            } else {
+                const availableTimePoints = window.currentLiveMaxPoints > 0 ? window.currentLiveMaxPoints : points;
+                let errorFactor = 0;
+                if (levDist === 0) {
+                    errorFactor = 1.0;     // 0 errori -> 100%
+                    scoreColor = "#4caf50";
+                } else if (levDist === 1) {
+                    errorFactor = 0.50;    // 1 errore -> 50%
+                    scoreColor = "#ff9800";
+                } else if (levDist === 2) {
+                    errorFactor = 0.25;    // 2 errori -> 25%
+                    scoreColor = "#ff9800";
+                } else if (levDist === 3) {
+                    errorFactor = 0.125;   // 3 errori -> 12.5%
+                    scoreColor = "#d32f2f";
+                } else {
+                    errorFactor = 0;       // 4+ errori -> 0%
+                    scoreColor = "#d32f2f";
+                }
+                points = Math.round(availableTimePoints * errorFactor);
+            }
         }
     }
 
