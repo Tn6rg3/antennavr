@@ -268,7 +268,7 @@ window.fetchAndRenderTriDailyLeaderboard = function() {
     const container = els.leaderboardContainer;
     if (!container) return;
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = window.getLocalDateString();
     container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Caricamento Classifica Tripla del ${todayStr}...</p>`;
 
     db.ref(`leaderboard/tri_daily/${todayStr}`).orderByChild('totalScore').limitToLast(100).once('value', snapshot => {
@@ -335,7 +335,7 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
 
     // 1. SFIDA GIORNALIERA
     if (tabType === 'daily_challenge') {
-        let todayStr = new Date().toISOString().split('T')[0];
+        let todayStr = window.getLocalDateString();
         db.ref(`leaderboard/daily_challenge/${todayStr}`).orderByChild('score').limitToLast(100).once('value', snapshot => {
             let players = [];
             snapshot.forEach(child => {

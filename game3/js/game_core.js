@@ -346,7 +346,7 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
                         abandoned: true,
                         wordCount: requestedWordCount
                     });
-                    localStorage.setItem(STORAGE_DAILY_STATUS_KEY, new Date().toISOString().split('T')[0]);
+                    localStorage.setItem(STORAGE_DAILY_STATUS_KEY, window.getLocalDateString());
                 }
 
                 db.ref(`rooms/${currentCode}/players/${myId}`).update({ finished: true, abandoned: true, online: false }).then(() => {
@@ -1355,10 +1355,10 @@ window.finishGame = function() {
 
             let dbPath;
             if (window.currentMode === 'daily_challenge') {
-                let todayStr = new Date().toISOString().split('T')[0];
+                let todayStr = window.getLocalDateString();
                 dbPath = `leaderboard/daily_challenge/${todayStr}/${window.myId}`;
             } else if (window.currentMode === 'tri_daily') {
-                let todayStr = new Date().toISOString().split('T')[0];
+                let todayStr = window.getLocalDateString();
                 const slotId = window.currentTriDailySlotId || (typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot().id : 'morning');
 
                 db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}/${slotId}`).update({

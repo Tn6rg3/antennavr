@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.246";
+const APP_VERSION = "20260807.247";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1312,7 +1312,7 @@ window.initMandatoryAliasHandlers = function() {
         if (savedLang) window.setLanguage(savedLang); else updateMuteBtnUI();
         
         window.loadDictionaries().then(() => {
-            let today = new Date().toISOString().split('T')[0];
+            let today = window.getLocalDateString();
 
             if (startParam) return;
 
@@ -1327,7 +1327,7 @@ window.initMandatoryAliasHandlers = function() {
                 if (!alreadyPlayedToday) {
                     Object.values(history).forEach(m => {
                         if (!m.date) return;
-                        const mDate = new Date(m.date).toISOString().split('T')[0];
+                        const mDate = window.getLocalDateString(m.date);
                         if (m.mode === 'daily_challenge' && mDate === today) alreadyPlayedToday = true;
                     });
                 }
@@ -2411,7 +2411,7 @@ if (els.btnPlayDailyNow) {
 
         const startDaily = () => {
             // SEGNIAMO IL TENTATIVO IMMEDIATAMENTE PER EVITARE REPLAY IN CASO DI ABBANDONO/RELOAD
-            let today = new Date().toISOString().split('T')[0];
+            let today = window.getLocalDateString();
             db.ref(`users/${myId}/daily_attempt`).set(today);
             localStorage.setItem(STORAGE_DAILY_STATUS_KEY, today);
 
@@ -2497,7 +2497,7 @@ window.reopenDailyChallenge = function() {
         return;
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = window.getLocalDateString();
 
     db.ref(`users/${window.myId}/history`).once('value').then(snap => {
         const history = snap.val() || {};
@@ -2505,7 +2505,7 @@ window.reopenDailyChallenge = function() {
 
         Object.values(history).forEach(m => {
             if (m && m.mode === 'daily_challenge' && m.date) {
-                const mDate = new Date(m.date).toISOString().split('T')[0];
+                const mDate = window.getLocalDateString(m.date);
                 if (mDate === today) playedAndScoredToday = true;
             }
         });
@@ -2567,7 +2567,7 @@ window.renderTriDailyHubCards = function() {
     const completedSlotsEl = document.getElementById('triDailyHubCompletedSlots');
     if (!cardsContainer) return;
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = window.getLocalDateString();
     const currentSlot = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { id: 'morning' };
 
     cardsContainer.innerHTML = '<p style="font-size:0.85em; color:var(--hint-color);">Caricamento dati sfida...</p>';
@@ -2686,7 +2686,7 @@ window.showTriDailyPreview = function(slotId) {
     previewModal.style.display = 'flex';
     previewList.innerHTML = '<p style="text-align:center; color:var(--hint-color);">Caricamento classifica provvisoria...</p>';
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = window.getLocalDateString();
     const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { labelIt: 'Sessione', wordCount: 10 };
 
     if (previewTitle) previewTitle.textContent = `🔥 Classifica Provvisoria (${slotInfo.labelIt})`;
@@ -2754,7 +2754,7 @@ window.showTriDailyPreview = function(slotId) {
 window.withdrawTriDailySession = function(slotId) {
     if (!confirm("Sei sicuro di volerti ritirare da questa sessione della Sfida Tripla? Potrai comunque partecipare alle sessioni successive.")) return;
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = window.getLocalDateString();
     localStorage.setItem(`cwgame_tri_played_${todayStr}_${slotId}`, "true");
     db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}/${slotId}`).set({
         played: true,
@@ -2770,7 +2770,7 @@ window.withdrawTriDailySession = function(slotId) {
 window.startTriDailySession = function(slotId) {
     window.resetGameState();
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = window.getLocalDateString();
     localStorage.setItem(`cwgame_tri_played_${todayStr}_${slotId}`, "true");
     const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { wordCount: 10, defaultWpm: 15 };
 
