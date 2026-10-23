@@ -21,12 +21,22 @@ window.getLocalDateString = function(dateObj = new Date()) {
 
 window.normalizeAccents = function(str) {
     if (!str) return "";
-    let s = String(str).toUpperCase();
-    s = s.replace(/[ÁÂÄÃ]/g, 'À');
+    let s = String(str).toUpperCase().trim();
+
+    // 1. Convertiamo sequenze Lettera + Apostrofo (es. A' -> À, E' -> È, I' -> Ì, O' -> Ò, U' -> Ù)
+    s = s.replace(/A['’]/g, 'À');
+    s = s.replace(/E['’]/g, 'È');
+    s = s.replace(/I['’]/g, 'Ì');
+    s = s.replace(/O['’]/g, 'Ò');
+    s = s.replace(/U['’]/g, 'Ù');
+
+    // 2. Normalizzazione di tutte le varianti di accenti (grave, acuto, circonflesso, dieresi/umlaut, tilde, ecc.)
+    s = s.replace(/[ÁÂÄÃÅ]/g, 'À');
     s = s.replace(/[ÉÊË]/g, 'È');
     s = s.replace(/[ÍÎÏ]/g, 'Ì');
-    s = s.replace(/[ÓÔÖÕ]/g, 'Ò');
+    s = s.replace(/[ÓÔÖÕØ]/g, 'Ò');
     s = s.replace(/[ÚÛÜ]/g, 'Ù');
+
     return s;
 };
 
