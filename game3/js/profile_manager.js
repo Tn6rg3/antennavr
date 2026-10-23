@@ -1207,8 +1207,11 @@ window.updateUserInAllLeaderboards = async function(newName, newUsername, privLb
 window.trackAdvancedErrors = function(realWord, userWord, wpm) {
     if (!myId || !realWord) return;
 
-    const realWords = realWord.toUpperCase().split(' ').filter(w => w.length > 0);
-    const typedWords = userWord.toUpperCase().split(' ').filter(w => w.length > 0);
+    const normRealWord = (typeof window.normalizeAccents === 'function') ? window.normalizeAccents(realWord) : realWord.toUpperCase();
+    const normUserWord = (typeof window.normalizeAccents === 'function') ? window.normalizeAccents(userWord) : userWord.toUpperCase();
+
+    const realWords = normRealWord.split(' ').filter(w => w.length > 0);
+    const typedWords = normUserWord.split(' ').filter(w => w.length > 0);
     const statsBase = db.ref(`users/${myId}/stats`);
     const today = new Date().toISOString().split('T')[0];
 
@@ -1405,7 +1408,7 @@ if (els.deleteDataBtn) {
 
             const safeRemove = (ref) => ref.remove().catch(e => console.warn("Safe remove note:", e));
 
-            // Spegniamo tutti i listener attivi in tempo reale per evitare 'permission_denied' alla cancellazione
+            // Spegniamo tutti i listener attivi in tempo real are 'permission_denied' alla cancellazione
             try {
                 if (window.myId && db) {
                     db.ref(`users/${window.myId}`).off();

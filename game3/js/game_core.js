@@ -1912,10 +1912,13 @@ window.speakWord = function(text) {
 window.renderDiffSecure = function(container, real, typed) {
     if (!real) return;
 
+    const normReal = (typeof window.normalizeAccents === 'function') ? window.normalizeAccents(real) : String(real || "").toUpperCase();
+    const normTyped = (typeof window.normalizeAccents === 'function') ? window.normalizeAccents(typed) : String(typed || "").toUpperCase();
+
     // Se ci sono spazi, analizziamo parola per parola per evitare l'effetto trascinamento degli errori
-    if (real.includes(' ')) {
-        const rWords = real.toUpperCase().split(' ');
-        const tWords = (typed || "").toUpperCase().split(' ');
+    if (normReal.includes(' ')) {
+        const rWords = normReal.split(' ');
+        const tWords = normTyped.split(' ');
 
         rWords.forEach((rw, wIdx) => {
             const tw = tWords[wIdx] || "";
@@ -1938,17 +1941,15 @@ window.renderDiffSecure = function(container, real, typed) {
         return;
     }
 
-    const r = real.toUpperCase();
-    const t = (typed || "").toUpperCase();
-    for (let i = 0; i < Math.max(r.length, t.length); i++) {
-        if (!r[i]) continue;
+    for (let i = 0; i < Math.max(normReal.length, normTyped.length); i++) {
+        if (!normReal[i]) continue;
         const span = document.createElement('span');
-        if (!t[i] || t[i] !== r[i]) {
+        if (!normTyped[i] || normTyped[i] !== normReal[i]) {
             span.style.color = "#d32f2f";
             span.style.fontWeight = "bold";
             span.style.textDecoration = "underline";
         }
-        span.textContent = r[i];
+        span.textContent = normReal[i];
         container.appendChild(span);
     }
 };
@@ -2017,7 +2018,9 @@ window.handleWordSubmission = function(userWord) {
     if (isCourseMode) {
         inputActive = false;
         const currentWord = gameWords[wordIndex] || "";
-        const isCorrect = (userWord === currentWord);
+        const normUser = (typeof window.normalizeAccents === 'function') ? window.normalizeAccents(userWord) : userWord;
+        const normReal = (typeof window.normalizeAccents === 'function') ? window.normalizeAccents(currentWord) : currentWord;
+        const isCorrect = (normUser === normReal);
         if (els.permanentGameInput) els.permanentGameInput.value = "";
 
         if (window.courseData) {
@@ -2029,21 +2032,21 @@ window.handleWordSubmission = function(userWord) {
                 window.courseData.progress.char_stats_by_type[sessionType] = {};
             }
 
-            for (let i = 0; i < currentWord.length; i++) {
-                let c = currentWord[i];
+            for (let i = 0; i < normReal.length; i++) {
+                let c = normReal[i];
                 if (!c) continue;
                 let dbChar = (typeof firebaseEscape === 'function') ? firebaseEscape(c) : c.replace(/\./g, '_dot_');
 
                 // Statistiche generali
                 if (!window.courseData.progress.char_stats[dbChar]) window.courseData.progress.char_stats[dbChar] = { attempts: 0, errors: 0 };
                 window.courseData.progress.char_stats[dbChar].attempts++;
-                if (userWord[i] !== currentWord[i]) window.courseData.progress.char_stats[dbChar].errors++;
+                if (normUser[i] !== normReal[i]) window.courseData.progress.char_stats[dbChar].errors++;
 
                 // Statistiche divise per tipologia (Z2 / WORK / LONG)
                 let typeStats = window.courseData.progress.char_stats_by_type[sessionType];
                 if (!typeStats[dbChar]) typeStats[dbChar] = { attempts: 0, errors: 0 };
                 typeStats[dbChar].attempts++;
-                if (userWord[i] !== currentWord[i]) typeStats[dbChar].errors++;
+                if (normUser[i] !== normReal[i]) typeStats[dbChar].errors++;
             }
             window.saveCourseState();
         }
