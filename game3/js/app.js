@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.251";
+const APP_VERSION = "20260807.252";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -2473,6 +2473,7 @@ window.allowReplayDailyChallenge = function() {
     const resetAndOpenModal = () => {
         showToast("🔄 Sfida Giornaliera riattivata! Buona fortuna...");
         if (els.leaderboardScreen) els.leaderboardScreen.classList.remove('active-screen');
+        if (typeof window.loadDailyYesterdayPodium === 'function') window.loadDailyYesterdayPodium();
         const modal = document.getElementById('dailyChallengeModal');
         if (modal) modal.style.display = 'flex';
     };
@@ -2518,6 +2519,7 @@ window.reopenDailyChallenge = function() {
         localStorage.removeItem(STORAGE_DAILY_STATUS_KEY);
         db.ref(`users/${window.myId}/daily_attempt`).remove().then(() => {
             showToast("📅 Sfida Giornaliera riattivata! Preparati...");
+            if (typeof window.loadDailyYesterdayPodium === 'function') window.loadDailyYesterdayPodium();
             const modal = document.getElementById('dailyChallengeModal');
             if (modal) {
                 modal.style.display = 'flex';
@@ -2944,18 +2946,95 @@ window.checkTriDailyNextDayResults = function() {
     });
 };
 
+window.loadDailyYesterdayPodium = function() {
+    const podiumList = document.getElementById('dailyYesterdayPodiumList');
+    const dateLabel = document.getElementById('dailyYesterdayDateLabel');
+    if (!podiumList) return;
+
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterdayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString(yesterdayDate) : yesterdayDate.toISOString().split('T')[0];
+    const yesterdayFormatted = yesterdayDate.toLocaleDateString('it-IT');
+
+    if (dateLabel) dateLabel.textContent = yesterdayFormatted;
+    podiumList.innerHTML = '<p style="text-align:center; font-size:0.8em; color:var(--hint-color); margin:5px 0;">Caricamento podio di ieri...</p>';
+
+    if (!db) return;
+
+    db.ref(`leaderboard/daily_challenge/${yesterdayStr}`).orderByChild('score').limitToLast(50).once('value', snap => {
+        podiumList.innerHTML = '';
+        if (!snap.exists()) {
+            podiumList.innerHTML = '<p style="text-align:center; font-size:0.8em; color:var(--hint-color); margin:5px 0;">Nessun dato registrato ieri.</p>';
+            return;
+        }
+
+        const list = [];
+        snap.forEach(c => {
+            list.unshift({ id: c.key, ...c.val() });
+        });
+
+        // Ordinamento per punteggio decrescente, poi WPM decrescente
+        list.sort((a, b) => (Number(b.score) - Number(a.score)) || (Number(b.wpm) - Number(a.wpm)));
+
+        const top3 = list.slice(0, 3);
+        top3.forEach((item, idx) => {
+            const rank = idx + 1;
+            const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉';
+            const name = item.name || 'Telegrafista';
+            const score = item.score || 0;
+            const wpm = item.wpm || 15;
+            const isMe = (item.id === window.myId);
+
+            const row = document.createElement('div');
+            row.style.cssText = `display:flex; justify-content:space-between; align-items:center; padding:4px 6px; border-radius:6px; font-size:0.82em; ${isMe ? 'background:rgba(255,215,0,0.25); font-weight:bold;' : 'background:rgba(255,255,255,0.03);'}`;
+
+            const leftSpan = document.createElement('span');
+            leftSpan.textContent = `${medal} ${name}`;
+
+            const rightSpan = document.createElement('span');
+            rightSpan.style.color = "var(--champ-color)";
+            rightSpan.style.fontWeight = "bold";
+            rightSpan.textContent = `${score} pt (${wpm} WPM)`;
+
+            row.appendChild(leftSpan);
+            row.appendChild(rightSpan);
+            podiumList.appendChild(row);
+        });
+
+        // Se l'utente ha giocato ieri ma non è nei Top 3, mostriamo il suo piazzamento
+        const myIndex = list.findIndex(x => x.id === window.myId);
+        if (myIndex >= 3) {
+            const myItem = list[myIndex];
+            const myRank = myIndex + 1;
+            const myRow = document.createElement('div');
+            myRow.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:4px 6px; margin-top:4px; border-top:1px dashed rgba(255,215,0,0.3); font-size:0.8em; background:rgba(255,215,0,0.15); font-weight:bold; border-radius:6px;";
+
+            const leftSpan = document.createElement('span');
+            leftSpan.textContent = `👤 Tu: ${myRank}° su ${list.length}`;
+
+            const rightSpan = document.createElement('span');
+            rightSpan.style.color = "var(--champ-color)";
+            rightSpan.textContent = `${myItem.score || 0} pt (${myItem.wpm || 15} WPM)`;
+
+            myRow.appendChild(leftSpan);
+            myRow.appendChild(rightSpan);
+            podiumList.appendChild(myRow);
+        }
+    });
+};
+
 window.checkTodayStartupModals = function(skipYesterdayCheck = false) {
     if (window.isMandatoryAliasPending) return;
     if (typeof window.closeAllModals === 'function') window.closeAllModals();
 
     const d = new Date();
-    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString(d) : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     // Step 1: Risultati di ieri se non ancora visti
     if (!skipYesterdayCheck) {
         const yesterdayDate = new Date();
         yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-        const yesterdayStr = `${yesterdayDate.getFullYear()}-${String(yesterdayDate.getMonth() + 1).padStart(2, '0')}-${String(yesterdayDate.getDate()).padStart(2, '0')}`;
+        const yesterdayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString(yesterdayDate) : `${yesterdayDate.getFullYear()}-${String(yesterdayDate.getMonth() + 1).padStart(2, '0')}-${String(yesterdayDate.getDate()).padStart(2, '0')}`;
         const ackKey = `cwgame_tri_ack_${yesterdayStr}`;
 
         if (!localStorage.getItem(ackKey)) {
@@ -2971,6 +3050,7 @@ window.checkTodayStartupModals = function(skipYesterdayCheck = false) {
     const dailyLaterInThisSession = (sessionStorage.getItem("cwgame_daily_later_session") === "true");
     if (!dailyPlayed && !dailyLaterInThisSession && els.dailyChallengeModal) {
         if (!window.isNewUserWaitingWelcome) {
+            if (typeof window.loadDailyYesterdayPodium === 'function') window.loadDailyYesterdayPodium();
             els.dailyChallengeModal.style.display = 'flex';
             return;
         }
