@@ -127,6 +127,23 @@
     </div>
 </div>
 
+<!-- POPUP RECORD MAX WPM -->
+<div id="maxWpmRecordsModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 450px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5500; border: 2px solid #ff9800; border-radius: 14px; padding: 18px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.7); text-align: center; max-height: 95vh; overflow-y: auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h3 style="color: #ff9800; margin: 0; font-size: 1.15em; display:flex; align-items:center; gap:6px;">⚡ Record Max WPM (Velocità)</h3>
+        <button onclick="document.getElementById('maxWpmRecordsModal').style.display='none'" class="btn-secondary" style="width:auto; padding:2px 8px; margin:0; font-size:0.8em;">✕</button>
+    </div>
+
+    <p style="font-size:0.8em; color:var(--hint-color); margin:0 0 12px 0;">Record assoluti di velocità (Max WPM) stabiliti dai telegrafisti nelle prove individuali.</p>
+
+    <!-- CONTENITORE TABELLA RECORD -->
+    <div id="maxWpmRecordsList" style="display:flex; flex-direction:column; gap:6px; margin-bottom:15px; text-align:left;">
+        <p style="text-align:center; font-size:0.85em; color:var(--hint-color); padding:10px;">Caricamento record di velocità...</p>
+    </div>
+
+    <button onclick="document.getElementById('maxWpmRecordsModal').style.display='none'" class="btn-success" style="width:100%; padding:10px; font-weight:bold; font-size:0.9em;">CHIUDI ✅</button>
+</div>
+
 <!-- POPUP HUB SFIDA TRIPLA GIORNALIERA -->
 <div id="triDailyModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 450px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5200; border: 2px solid #ff9800; border-radius: 14px; padding: 18px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.6); text-align: center; max-height: 95vh; overflow-y: auto;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -591,10 +608,13 @@
                 </div>
             </div>
         </div>
-        <!-- BOTTONE CONDIVISIONE APP (COMPATTO E DISCRETO IN BASSO) -->
-        <div style="width: 100%; text-align: center; margin-top: 8px; margin-bottom: 4px; flex-shrink: 0;">
-            <button id="shareAppBtn" onclick="shareAppToFriends()" class="btn-secondary" style="width: auto; padding: 6px 16px; font-size: 0.85em; border-radius: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); margin: 0;">
-                📢 Condividi il gioco con un Amico
+        <!-- BOTTONI CONDIVISIONE E RECORD MAX WPM -->
+        <div style="width: 100%; text-align: center; margin-top: 8px; margin-bottom: 4px; flex-shrink: 0; display:flex; justify-content:center; gap:8px; flex-wrap:wrap;">
+            <button id="shareAppBtn" onclick="shareAppToFriends()" class="btn-secondary" style="width: auto; padding: 6px 12px; font-size: 0.85em; border-radius: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); margin: 0;">
+                📢 Condividi con un Amico
+            </button>
+            <button id="maxWpmRecordsBtn" onclick="window.openMaxWpmRecordsModal()" class="btn-secondary" style="width: auto; padding: 6px 12px; font-size: 0.85em; border-radius: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); margin: 0; background: linear-gradient(135deg, #ff9800, #f57c00); color: white; border: 1px solid #ffb74d; font-weight: bold; cursor: pointer;">
+                ⚡ Record Max WPM 🏆
             </button>
         </div>
         <!-- BANNER BATTAGLIA SERALE (COMPATTO / ESTESO) -->
