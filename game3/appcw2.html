@@ -101,15 +101,29 @@
 </div>
 
 <!-- POPUP SFIDA GIORNALIERA -->
-<div id="dailyChallengeModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
-    <span style="font-size: 3em; margin-bottom: 10px;">📅</span>
-    <h2 style="color: var(--champ-color); margin: 0 0 10px 0;">Sfida Giornaliera!</h2>
-    <p style="font-size: 0.9em; margin-bottom: 15px;">20 Parole a 15 WPM (con velocità crescente se indovini). Tutti i giocatori affrontano le stesse parole oggi. Entra in classifica e vinci una medaglia se arrivi a podio!</p>
+<div id="dailyChallengeModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 450px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 14px; padding: 18px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.6); text-align: center; max-height: 95vh; overflow-y: auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <h2 style="color: var(--champ-color); margin: 0; font-size: 1.2em; display:flex; align-items:center; gap:6px;">📅 Sfida Giornaliera</h2>
+        <button onclick="document.getElementById('dailyChallengeModal').style.display='none'" class="btn-secondary" style="width:auto; padding:2px 8px; margin:0; font-size:0.8em;">✕</button>
+    </div>
 
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-        <button id="btnPlayDailyNow" class="btn-success">ACCETTA LA SFIDA 🚀</button>
-        <button id="btnPlayDailyLater" class="btn-secondary">Più Tardi</button>
-        <button id="btnDeclineDaily" class="btn-danger">Rifiuta per oggi</button>
+    <p style="font-size: 0.85em; color:var(--hint-color); margin:0 0 12px 0;">20 Parole a 15 WPM con velocità crescente. Tutti i giocatori affrontano le stesse parole oggi!</p>
+
+    <!-- SEZIONE PODIO VINCITORI DI IERI -->
+    <div id="dailyYesterdayPodiumBox" style="background: rgba(255, 215, 0, 0.08); border: 1px solid var(--champ-color); border-radius: 10px; padding: 10px; margin-bottom: 12px; text-align: left;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; border-bottom:1px solid rgba(255,215,0,0.2); padding-bottom:4px;">
+            <b style="color:var(--champ-color); font-size:0.85em;">🏆 Vincitori di Ieri (<span id="dailyYesterdayDateLabel">--</span>)</b>
+            <span style="font-size:0.75em; color:var(--hint-color);" id="dailyYesterdayCount">Podio</span>
+        </div>
+        <div id="dailyYesterdayPodiumList" style="display:flex; flex-direction:column; gap:4px;">
+            <p style="text-align:center; font-size:0.8em; color:var(--hint-color); margin:5px 0;">Caricamento podio di ieri...</p>
+        </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button id="btnPlayDailyNow" class="btn-success" style="padding:10px; font-weight:bold;">ACCETTA LA SFIDA 🚀</button>
+        <button id="btnPlayDailyLater" class="btn-secondary" style="padding:8px;">Più Tardi</button>
+        <button id="btnDeclineDaily" class="btn-danger" style="padding:8px;">Rifiuta per oggi</button>
     </div>
 </div>
 
