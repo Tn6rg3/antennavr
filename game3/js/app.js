@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.252";
+const APP_VERSION = "20260807.253";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -3124,6 +3124,96 @@ window.checkAndTriggerTriDailySlotNotifications = function() {
 window.shareAppToFriends = function() {
     const url = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}`)}&text=${encodeURIComponent("📻 Unisciti a me su Sfida Telegrafia!\n@" + BOT_USERNAME)}`;
     if (tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
+};
+
+window.openMaxWpmRecordsModal = function() {
+    const modal = document.getElementById('maxWpmRecordsModal');
+    const container = document.getElementById('maxWpmRecordsList');
+    if (!modal || !container) return;
+
+    modal.style.display = 'flex';
+    container.innerHTML = '<p style="text-align:center; font-size:0.85em; color:var(--hint-color); padding:10px;">Caricamento record di velocità...</p>';
+
+    if (!db) return;
+
+    const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+
+    const modesToFetch = [
+        { id: 'standard', name: '🔤 Parole Comuni', path: 'leaderboard/standard' },
+        { id: 'standard_plus', name: '➕ Parole +', path: 'leaderboard/standard_plus' },
+        { id: 'daily_challenge', name: '📅 Sfida Giornaliera (Oggi)', path: `leaderboard/daily_challenge/${todayStr}` },
+        { id: 'tri_daily', name: '🏆 Sfida Tripla (Oggi)', path: `leaderboard/tri_daily/${todayStr}` },
+        { id: 'callsign', name: '🎙️ CW Freak (Nominativi)', path: 'leaderboard/callsign/global' }
+    ];
+
+    const promises = modesToFetch.map(m => {
+        return db.ref(m.path).once('value').then(snap => {
+            let bestName = "Nessun Record";
+            let maxWpm = 0;
+
+            if (snap.exists()) {
+                const scan = (node) => {
+                    if (!node) return;
+                    node.forEach(c => {
+                        const val = c.val();
+                        if (val && typeof val === 'object') {
+                            if (!val.wpm && !val.peakWpm && !val.score) {
+                                c.forEach(subC => {
+                                    const subVal = subC.val();
+                                    if (subVal && typeof subVal === 'object') {
+                                        const w = Number(subVal.wpm || subVal.peakWpm || 0);
+                                        if (w > maxWpm) {
+                                            maxWpm = w;
+                                            bestName = subVal.name || "Telegrafista";
+                                        }
+                                    }
+                                });
+                            } else {
+                                const w = Number(val.wpm || val.peakWpm || 0);
+                                if (w > maxWpm) {
+                                    maxWpm = w;
+                                    bestName = val.name || "Telegrafista";
+                                }
+                            }
+                        }
+                    });
+                };
+                scan(snap);
+            }
+
+            return { name: m.name, bestName, maxWpm };
+        }).catch(() => ({ name: m.name, bestName: "Nessun Record", maxWpm: 0 }));
+    });
+
+    Promise.all(promises).then(results => {
+        container.innerHTML = '';
+        results.forEach(res => {
+            const row = document.createElement('div');
+            row.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;";
+
+            const leftDiv = document.createElement('div');
+            leftDiv.style.cssText = "display:flex; flex-direction:column;";
+
+            const modeB = document.createElement('b');
+            modeB.style.cssText = "font-size:0.85em; color:var(--text-color);";
+            modeB.textContent = res.name;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.style.cssText = "font-size:0.75em; color:var(--hint-color); margin-top:2px;";
+            nameSpan.textContent = res.maxWpm > 0 ? `🥇 Recordman: ${res.bestName}` : `Nessun record salvato`;
+
+            leftDiv.appendChild(modeB);
+            leftDiv.appendChild(nameSpan);
+
+            const rightB = document.createElement('b');
+            rightB.style.cssText = "font-size:1em; color:#ff9800; font-weight:bold;";
+            rightB.textContent = res.maxWpm > 0 ? `${res.maxWpm} WPM` : `--`;
+
+            row.appendChild(leftDiv);
+            row.appendChild(rightB);
+            container.appendChild(row);
+        });
+    });
 };
 
 window.inviteFriendsToRoom = function() {
