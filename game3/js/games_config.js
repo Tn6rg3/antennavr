@@ -19,6 +19,17 @@ window.getLocalDateString = function(dateObj = new Date()) {
     return `${year}-${month}-${day}`;
 };
 
+window.normalizeAccents = function(str) {
+    if (!str) return "";
+    let s = String(str).toUpperCase();
+    s = s.replace(/[ÁÂÄÃ]/g, 'À');
+    s = s.replace(/[ÉÊË]/g, 'È');
+    s = s.replace(/[ÍÎÏ]/g, 'Ì');
+    s = s.replace(/[ÓÔÖÕ]/g, 'Ò');
+    s = s.replace(/[ÚÛÜ]/g, 'Ù');
+    return s;
+};
+
 // --- GESTIONE SLOT SFIDA TRIPLA GIORNALIERA ---
 window.getTriDailySlot = function(dateObj = new Date()) {
     const hour = dateObj.getHours();
