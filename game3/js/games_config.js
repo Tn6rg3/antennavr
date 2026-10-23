@@ -21,16 +21,24 @@ window.getLocalDateString = function(dateObj = new Date()) {
 
 window.normalizeAccents = function(str) {
     if (!str) return "";
-    let s = String(str).toUpperCase().trim();
+    let s = String(str).trim();
 
-    // 1. Convertiamo sequenze Lettera + Apostrofo (es. A' -> À, E' -> È, I' -> Ì, O' -> Ò, U' -> Ù)
-    s = s.replace(/A['’]/g, 'À');
-    s = s.replace(/E['’]/g, 'È');
-    s = s.replace(/I['’]/g, 'Ì');
-    s = s.replace(/O['’]/g, 'Ò');
-    s = s.replace(/U['’]/g, 'Ù');
+    // 1. Convertiamo minuscole/maiuscole con apostrofo (a', e', i', o', u', A', E', I', O', U')
+    s = s.replace(/a['’]/gi, 'À');
+    s = s.replace(/e['’]/gi, 'È');
+    s = s.replace(/i['’]/gi, 'Ì');
+    s = s.replace(/o['’]/gi, 'Ò');
+    s = s.replace(/u['’]/gi, 'Ù');
 
-    // 2. Normalizzazione di tutte le varianti di accenti (grave, acuto, circonflesso, dieresi/umlaut, tilde, ecc.)
+    // 2. Convertiamo tutte le minuscole accentate e varianti
+    s = s.replace(/[àáâäãå]/g, 'À');
+    s = s.replace(/[èéêë]/g, 'È');
+    s = s.replace(/[ìíîï]/g, 'Ì');
+    s = s.replace(/[òóôöõø]/g, 'Ò');
+    s = s.replace(/[ùúûü]/g, 'Ù');
+
+    // 3. Portiamo in Maiuscolo e convertiamo le maiuscole accentate e varianti
+    s = s.toUpperCase();
     s = s.replace(/[ÁÂÄÃÅ]/g, 'À');
     s = s.replace(/[ÉÊË]/g, 'È');
     s = s.replace(/[ÍÎÏ]/g, 'Ì');
