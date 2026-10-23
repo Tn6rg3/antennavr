@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.249";
+const APP_VERSION = "20260807.251";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -15,7 +15,6 @@ window.saveFirebaseConfigUrl = function(key, newUrl) {
     const cleanUrl = newUrl.trim();
     if (typeof db !== 'undefined' && db) {
         db.ref(`config/${key}`).set(cleanUrl).then(() => {
-            if (key === 'addestra_script_url') window.aiActiveAddestraUrl = cleanUrl;
             if (key === 'validation_server_url') window.VALIDATION_SERVER_URL = cleanUrl;
             if (typeof showToast === 'function') showToast(`🔒 Config '${key}' salvato su Firebase!`);
             console.log(`✓ Firebase Config '${key}' updated:`, cleanUrl);

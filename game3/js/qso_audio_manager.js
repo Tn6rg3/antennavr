@@ -32,7 +32,7 @@ window.toggleQsoSearchPanel = function() {
 };
 
 window.getQsoServerUrlAutomatic = async function() {
-    let serverUrl = window.qsoAudioServerUrl || window.aiActiveAddestraUrl || localStorage.getItem('cwgame_qso_audio_url');
+    let serverUrl = window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
     if (serverUrl && serverUrl.startsWith('http')) return serverUrl;
 
     // 1. Recupero dinamico da Firebase Config (Controlla sia appConfig che config)
@@ -40,13 +40,7 @@ window.getQsoServerUrlAutomatic = async function() {
         try {
             let snap = await firebase.database().ref('appConfig/qso_audio_server_url').once('value');
             if (!snap.exists() || !snap.val()) {
-                snap = await firebase.database().ref('appConfig/addestra_script_url').once('value');
-            }
-            if (!snap.exists() || !snap.val()) {
                 snap = await firebase.database().ref('config/qso_audio_server_url').once('value');
-            }
-            if (!snap.exists() || !snap.val()) {
-                snap = await firebase.database().ref('config/addestra_script_url').once('value');
             }
             if (snap.exists() && snap.val()) {
                 window.qsoAudioServerUrl = snap.val().trim();
@@ -74,7 +68,7 @@ window.getQsoServerUrlAutomatic = async function() {
         }
     }
 
-    return window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url') || window.aiActiveAddestraUrl;
+    return window.qsoAudioServerUrl || localStorage.getItem('cwgame_qso_audio_url');
 };
 
 window.searchQsoAudioFiles = async function() {
