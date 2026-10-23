@@ -2,8 +2,10 @@
 
 window.lbGroups = {
     daily: [
-        { val: 'tri_daily', it: '🏆 Sfida Tripla Giornaliera', en: '🏆 Triple Daily Challenge' },
-        { val: 'daily_challenge', it: '📅 Sfida Giornaliera Classica', en: '📅 Classic Daily Challenge' },
+        { val: 'tri_daily', it: '🏆 Sfida Tripla (Oggi)', en: '🏆 Triple Daily (Today)' },
+        { val: 'tri_daily_monthly', it: '🏆 Sfida Tripla (Mese - Medagliere)', en: '🏆 Triple Daily (Monthly Medals)' },
+        { val: 'daily_challenge', it: '📅 Sfida Giornaliera (Oggi)', en: '📅 Classic Daily (Today)' },
+        { val: 'daily_monthly', it: '📅 Sfida Giornaliera (Mese - Medagliere)', en: '📅 Classic Daily (Monthly Medals)' },
         { val: 'my_history', it: '📜 I Miei Match Recenti', en: '📜 My Recent Matches' },
         { val: 'room', it: '🏁 Ultima Partita (Sessione)', en: '🏁 Last Match (Session)' }
     ],
@@ -94,6 +96,8 @@ window.showLeaderboardTab = function(modeValue) {
         window.fetchAndRenderMyHistory();
     } else if (modeValue === 'tri_daily') {
         window.fetchAndRenderTriDailyLeaderboard();
+    } else if (modeValue === 'tri_daily_monthly' || modeValue === 'daily_monthly') {
+        window.fetchAndRenderMonthlyLeaderboard(modeValue);
     } else if (modeValue === 'daily_challenge') {
         if (els.btnShareDaily && totalScore > 0 && currentMode === 'daily_challenge') {
             els.btnShareDaily.style.display = 'block';
@@ -318,6 +322,142 @@ window.fetchAndRenderTriDailyLeaderboard = function() {
                     <td style="padding:8px 6px; text-align:center; color:#2e7d32;"><b>${slots}</b></td>
                     <td style="padding:8px 6px; text-align:right; color:#ff9800;"><b>${score} pt</b></td>
                     <td style="padding:8px 6px; text-align:right;">${wpm} WPM</td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+    });
+};
+
+window.fetchAndRenderMonthlyLeaderboard = function(mode) {
+    const container = els.leaderboardContainer;
+    if (!container) return;
+
+    const now = new Date();
+    const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const isTri = (mode === 'tri_daily_monthly');
+    const titleText = isTri ? "🏆 Classifica Mensile Sfida Tripla" : "📅 Classifica Mensile Sfida Giornaliera";
+    const nodePath = isTri ? "leaderboard/tri_daily" : "leaderboard/daily_challenge";
+
+    container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Caricamento piazzamenti del mese (${currentMonthStr})...</p>`;
+
+    if (!db) return;
+
+    // Leggiamo tutti i giorni del mese corrente (da 01 fino a oggi)
+    const promises = [];
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dayStr = `${currentMonthStr}-${String(day).padStart(2, '0')}`;
+        promises.push(
+            db.ref(`${nodePath}/${dayStr}`).once('value').then(snap => {
+                return { dayStr, snap };
+            }).catch(() => ({ dayStr, snap: null }))
+        );
+    }
+
+    Promise.all(promises).then(results => {
+        const playerStats = {};
+
+        results.forEach(res => {
+            if (!res.snap || !res.snap.exists()) return;
+            const dayList = [];
+            res.snap.forEach(child => {
+                dayList.push({ id: child.key, ...child.val() });
+            });
+
+            if (dayList.length === 0) return;
+
+            // Ordinamento giornaliero per determinare i piazzamenti
+            if (isTri) {
+                dayList.sort((a, b) => (Number(b.totalScore) - Number(a.totalScore)) || (Number(b.peakWpm) - Number(a.peakWpm)));
+            } else {
+                dayList.sort((a, b) => (Number(b.score) - Number(a.score)) || (Number(b.wpm) - Number(a.wpm)));
+            }
+
+            // Punti piazzamento del giorno: 1°=10pt, 2°=8pt, 3°=6pt, 4°=5pt, 5°=4pt, 6°-10°=3..1pt
+            const placementPointsTable = [10, 8, 6, 5, 4, 3, 2, 1, 1, 1];
+
+            dayList.forEach((p, idx) => {
+                const uid = p.id;
+                if (!uid) return;
+
+                if (!playerStats[uid]) {
+                    playerStats[uid] = {
+                        id: uid,
+                        name: p.name || 'Telegrafista',
+                        golds: 0,
+                        silvers: 0,
+                        bronzes: 0,
+                        placementPts: 0,
+                        daysPlayed: 0
+                    };
+                }
+
+                playerStats[uid].daysPlayed++;
+                const rank = idx + 1;
+                const pts = placementPointsTable[idx] || 1;
+                playerStats[uid].placementPts += pts;
+
+                if (rank === 1) playerStats[uid].golds++;
+                else if (rank === 2) playerStats[uid].silvers++;
+                else if (rank === 3) playerStats[uid].bronzes++;
+            });
+        });
+
+        const players = Object.values(playerStats);
+
+        if (players.length === 0) {
+            container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Nessun piazzamento registrato finora nel mese di ${currentMonthStr}.</p>`;
+            return;
+        }
+
+        // Ordinamento Mensile: Più Ori 🥇 -> Più Argenti 🥈 -> Più Bronzi 🥉 -> Punti Piazzamento
+        players.sort((a, b) =>
+            (b.golds - a.golds) ||
+            (b.silvers - a.silvers) ||
+            (b.bronzes - a.bronzes) ||
+            (b.placementPts - a.placementPts) ||
+            (b.daysPlayed - a.daysPlayed)
+        );
+
+        let html = `
+            <div style="background:rgba(255,215,0,0.1); padding:10px; border-radius:8px; border:1px solid var(--champ-color); margin-bottom:12px; text-align:center;">
+                <b style="color:var(--champ-color);">${titleText} (${currentMonthStr})</b>
+                <div style="font-size:0.8em; color:var(--hint-color); margin-top:4px;">Piazzamento mensile calcolato sui podi giornalieri (🥇 Ori, 🥈 Argenti, 🥉 Bronzi)</div>
+            </div>
+            <table class="leaderboard-table" style="width:100%; border-collapse:collapse; font-size:0.85em;">
+                <thead>
+                    <tr style="border-bottom:2px solid var(--link-color); text-align:left;">
+                        <th style="padding:6px;">#</th>
+                        <th style="padding:6px;">Telegrafista</th>
+                        <th style="padding:6px; text-align:center;">🥇</th>
+                        <th style="padding:6px; text-align:center;">🥈</th>
+                        <th style="padding:6px; text-align:center;">🥉</th>
+                        <th style="padding:6px; text-align:center;">Giorni</th>
+                        <th style="padding:6px; text-align:right;">Punti Pos.</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        players.forEach((p, idx) => {
+            const rank = idx + 1;
+            const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+            const isMe = (p.id === window.myId);
+            const name = p.name || 'Telegrafista';
+
+            html += `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05); ${isMe ? 'background:rgba(255,215,0,0.18); font-weight:bold;' : ''}">
+                    <td style="padding:8px 6px;">${medal}</td>
+                    <td style="padding:8px 6px;">${name}</td>
+                    <td style="padding:8px 6px; text-align:center; color:#ffd700;"><b>${p.golds || 0}</b></td>
+                    <td style="padding:8px 6px; text-align:center; color:#c0c0c0;"><b>${p.silvers || 0}</b></td>
+                    <td style="padding:8px 6px; text-align:center; color:#cd7f32;"><b>${p.bronzes || 0}</b></td>
+                    <td style="padding:8px 6px; text-align:center;">${p.daysPlayed}d</td>
+                    <td style="padding:8px 6px; text-align:right; color:var(--champ-color);"><b>${p.placementPts} pt</b></td>
                 </tr>
             `;
         });
