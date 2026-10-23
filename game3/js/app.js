@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.253";
+const APP_VERSION = "20260807.254";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -3141,8 +3141,8 @@ window.openMaxWpmRecordsModal = function() {
     const modesToFetch = [
         { id: 'standard', name: '🔤 Parole Comuni', path: 'leaderboard/standard' },
         { id: 'standard_plus', name: '➕ Parole +', path: 'leaderboard/standard_plus' },
-        { id: 'daily_challenge', name: '📅 Sfida Giornaliera (Oggi)', path: `leaderboard/daily_challenge/${todayStr}` },
-        { id: 'tri_daily', name: '🏆 Sfida Tripla (Oggi)', path: `leaderboard/tri_daily/${todayStr}` },
+        { id: 'daily_challenge', name: '📅 Sfida Giornaliera', path: 'leaderboard/daily_challenge' },
+        { id: 'tri_daily', name: '🏆 Sfida Tripla', path: 'leaderboard/tri_daily' },
         { id: 'callsign', name: '🎙️ CW Freak (Nominativi)', path: 'leaderboard/callsign/global' }
     ];
 
@@ -3152,33 +3152,24 @@ window.openMaxWpmRecordsModal = function() {
             let maxWpm = 0;
 
             if (snap.exists()) {
-                const scan = (node) => {
+                const scanNode = (node) => {
                     if (!node) return;
-                    node.forEach(c => {
-                        const val = c.val();
+                    node.forEach(child => {
+                        const val = child.val();
                         if (val && typeof val === 'object') {
-                            if (!val.wpm && !val.peakWpm && !val.score) {
-                                c.forEach(subC => {
-                                    const subVal = subC.val();
-                                    if (subVal && typeof subVal === 'object') {
-                                        const w = Number(subVal.wpm || subVal.peakWpm || 0);
-                                        if (w > maxWpm) {
-                                            maxWpm = w;
-                                            bestName = subVal.name || "Telegrafista";
-                                        }
-                                    }
-                                });
-                            } else {
-                                const w = Number(val.wpm || val.peakWpm || 0);
+                            if (val.wpm !== undefined || val.peakWpm !== undefined) {
+                                const w = Number(val.peakWpm || val.wpm || 0);
                                 if (w > maxWpm) {
                                     maxWpm = w;
                                     bestName = val.name || "Telegrafista";
                                 }
+                            } else {
+                                scanNode(child);
                             }
                         }
                     });
                 };
-                scan(snap);
+                scanNode(snap);
             }
 
             return { name: m.name, bestName, maxWpm };
