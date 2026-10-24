@@ -181,32 +181,49 @@ window.playMorseAudio = function(text, wpm, forcePlay = false) {
         if (!forcePlay && !gameRunning && !isBrActive) { resolve(); return; }
         window.stopAllMorseAudio();
         const currentToken = window.morsePlayToken;
-        let charUnit = 1.2 / wpm;
-        let effSpaceWpm = (window.charSpaceWpm && window.charSpaceWpm < wpm) ? window.charSpaceWpm : wpm;
+
+        const safeWpm = Math.max(5, Math.min(200, Number(wpm) || 20));
+        let charUnit = 1.2 / safeWpm;
+        let effSpaceWpm = (window.charSpaceWpm && window.charSpaceWpm < safeWpm) ? window.charSpaceWpm : safeWpm;
         let spaceUnit = 1.2 / effSpaceWpm;
         let wordMult = window.wordSpaceMult || 1.0;
-        let time = window.audioCtx.currentTime + 0.05;
+        let time = window.audioCtx.currentTime + 0.03;
+
+        // Rampa d'attacco/stacco dinamica basata sui WPM (max 4ms a bassa velocità, fino a 1ms a 200 WPM per evitare clipping)
+        const rampTime = Math.min(0.004, charUnit * 0.25);
 
         for (let char of text) {
             if (currentToken !== window.morsePlayToken || (!forcePlay && !gameRunning && !isBrActive)) break;
-            if (window.morseDict[char]) {
-                for (let i = 0; i < window.morseDict[char].length; i++) {
+            const morseSeq = window.morseDict[char] || window.morseDict[char.toUpperCase()];
+
+            if (morseSeq) {
+                for (let i = 0; i < morseSeq.length; i++) {
                     if (currentToken !== window.morsePlayToken || (!forcePlay && !gameRunning && !isBrActive)) break;
-                    let symbol = window.morseDict[char][i];
+                    let symbol = morseSeq[i];
+                    const duration = (symbol === '-') ? (3 * charUnit) : charUnit;
+
                     const osc = window.audioCtx.createOscillator();
                     const gain = window.audioCtx.createGain();
-                    osc.frequency.value = window.currentTone || 600;
+                    osc.type = 'sine';
+                    osc.frequency.value = parseInt(window.currentTone) || 600;
+
                     osc.connect(gain).connect(window.audioCtx.destination);
-                    const duration = (symbol === '-') ? (3 * charUnit) : charUnit;
+
                     gain.gain.setValueAtTime(0, time);
-                    gain.gain.linearRampToValueAtTime(0.5, time + 0.005);
-                    gain.gain.setValueAtTime(0.5, time + duration - 0.005);
+                    gain.gain.linearRampToValueAtTime(0.5, time + rampTime);
+                    gain.gain.setValueAtTime(0.5, time + duration - rampTime);
                     gain.gain.linearRampToValueAtTime(0, time + duration);
+
                     osc.start(time);
-                    osc.stop(time + duration + 0.05);
+                    osc.stop(time + duration + 0.02);
+
+                    osc.onended = () => {
+                        try { osc.disconnect(); gain.disconnect(); } catch(e) {}
+                    };
+
                     window.activeOscillators.push(osc);
                     time += duration;
-                    if (i < window.morseDict[char].length - 1) time += charUnit;
+                    if (i < morseSeq.length - 1) time += charUnit;
                 }
                 time += (3 * spaceUnit);
             } else if (char === ' ') {
@@ -215,6 +232,10 @@ window.playMorseAudio = function(text, wpm, forcePlay = false) {
                 time += Math.max(0, remainingSpace);
             }
         }
-        setTimeout(() => { if (currentToken === window.morsePlayToken) resolve(); }, Math.max(0, (time - window.audioCtx.currentTime) * 1000));
+
+        const remainingMs = Math.max(0, (time - window.audioCtx.currentTime) * 1000);
+        setTimeout(() => {
+            if (currentToken === window.morsePlayToken) resolve();
+        }, remainingMs);
     });
 };
