@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.254";
+const APP_VERSION = "20260807.255";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -2591,15 +2591,16 @@ window.renderTriDailyHubCards = function() {
             const isPlayed = !!slotObj.played;
             const isCompleted = !!slotObj.completed;
             const isWithdrawn = !!slotObj.withdrawn;
+            const isInterrupted = isPlayed && !isCompleted && !isWithdrawn;
             const score = slotObj.score || 0;
             const finalWpm = slotObj.finalWpm || slotObj.peakWpm || 0;
 
-            if (isCompleted || isPlayed || isWithdrawn) {
+            if (isCompleted || isWithdrawn) {
                 localStorage.setItem(`cwgame_tri_played_${todayStr}_${s.id}`, "true");
-                if (isCompleted || isPlayed) {
-                    totalScore += score;
-                    completedCount++;
-                }
+            }
+            if (isCompleted || isPlayed) {
+                totalScore += score;
+                completedCount++;
             }
 
             const card = document.createElement('div');
@@ -2621,9 +2622,9 @@ window.renderTriDailyHubCards = function() {
             } else if (isCompleted) {
                 badgeSpan.style.color = "#4caf50";
                 badgeSpan.textContent = `✅ ${score} pt (${finalWpm} WPM)`;
-            } else if (isPlayed) {
+            } else if (isInterrupted) {
                 badgeSpan.style.color = "#ff9800";
-                badgeSpan.textContent = `⏹️ Giocata (${score} pt)`;
+                badgeSpan.textContent = "⚠️ Interrotta (Riprendi)";
             } else if (currentSlot.id === s.id) {
                 badgeSpan.style.color = "#ff9800";
                 badgeSpan.style.animation = "pulse 1.5s infinite";
@@ -2643,14 +2644,14 @@ window.renderTriDailyHubCards = function() {
             infoDiv.textContent = `${s.words} Parole | Incremento WPM: ${s.step}`;
             card.appendChild(infoDiv);
 
-            if (currentSlot.id === s.id && !isPlayed && !isWithdrawn) {
+            if (currentSlot.id === s.id && (!isCompleted || isInterrupted) && !isWithdrawn) {
                 const btnDiv = document.createElement('div');
                 btnDiv.style.cssText = "display:flex; gap:8px; margin-top:10px;";
 
                 const startBtnEl = document.createElement('button');
                 startBtnEl.className = "btn-success";
                 startBtnEl.style.cssText = "flex:2; padding:8px; font-size:0.85em; margin:0;";
-                startBtnEl.textContent = `INIZIA SESSIONE (${s.words} PAROLE) 🚀`;
+                startBtnEl.textContent = isInterrupted ? `🔄 RIPRENDI SESSIONE (${s.words} PAROLE) 🚀` : `INIZIA SESSIONE (${s.words} PAROLE) 🚀`;
                 startBtnEl.onclick = () => window.showTriDailyPreview(s.id);
 
                 const withdrawBtnEl = document.createElement('button');
@@ -2836,7 +2837,11 @@ window.checkTriDailyNextDayResults = function() {
     if (localStorage.getItem(ackKey)) return;
 
     db.ref(`users/${window.myId}/tri_daily_attempt/${yesterdayStr}`).once('value', snap => {
-        if (!snap.exists()) return;
+        if (!snap.exists()) {
+            localStorage.setItem(ackKey, "true");
+            if (typeof window.checkTodayStartupModals === 'function') window.checkTodayStartupModals(true);
+            return;
+        }
 
         const attempt = snap.val() || {};
         let myTotal = 0;
@@ -2848,7 +2853,11 @@ window.checkTriDailyNextDayResults = function() {
             }
         });
 
-        if (myTotal <= 0) return;
+        if (myTotal <= 0) {
+            localStorage.setItem(ackKey, "true");
+            if (typeof window.checkTodayStartupModals === 'function') window.checkTodayStartupModals(true);
+            return;
+        }
 
         db.ref(`leaderboard/tri_daily/${yesterdayStr}`).once('value', lbSnap => {
             if (!lbSnap.exists()) return;

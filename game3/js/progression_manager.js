@@ -119,7 +119,7 @@ window.showLevelUpOverlay = function(newLevel) {
 window.generateDailyMissions = function() {
     if (!myId || !db || window.isMandatoryAliasPending) return;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
     const missions = [
         { id: 'm1', type: 'count', target: 50, current: 0, xp: 100, it: "Indovina 50 parole totali", en: "Guess 50 total words" },
         { id: 'm2', type: 'wpm_min', target: 5, wpm: 30, current: 0, xp: 150, it: "Indovina 5 parole a >30 WPM", en: "Guess 5 words at >30 WPM" },
@@ -190,7 +190,7 @@ window.updateMissionProgress = function(type, value = 1) {
 };
 
 window.checkDailyMissionsStatus = function() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
     if (window.userProgression?.dailyMissions?.date !== today) {
         window.generateDailyMissions();
     } else {
