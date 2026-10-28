@@ -3344,6 +3344,7 @@ window.openMaxWpmRecordsModal = function() {
         return db.ref(m.path).once('value').then(snap => {
             let bestName = "Nessun Record";
             let maxWpm = 0;
+            let bestScore = 0;
 
             if (snap.exists()) {
                 const scanNode = (node) => {
@@ -3364,6 +3365,7 @@ window.openMaxWpmRecordsModal = function() {
                                     if (window.isDateInCurrentMonth(recordDate) && w > maxWpm) {
                                         maxWpm = w;
                                         bestName = val.name || "Telegrafista";
+                                        bestScore = val.score || val.totalScore || 0;
                                     }
                                 }
                             } else {
@@ -3378,8 +3380,8 @@ window.openMaxWpmRecordsModal = function() {
                 scanNode(snap);
             }
 
-            return { name: m.name, bestName, maxWpm };
-        }).catch(() => ({ name: m.name, bestName: "Nessun Record", maxWpm: 0 }));
+            return { name: m.name, bestName, maxWpm, bestScore };
+        }).catch(() => ({ name: m.name, bestName: "Nessun Record", maxWpm: 0, bestScore: 0 }));
     });
 
     Promise.all(promises).then(results => {
@@ -3395,9 +3397,10 @@ window.openMaxWpmRecordsModal = function() {
             modeB.style.cssText = "font-size:0.85em; color:var(--text-color);";
             modeB.textContent = res.name;
 
+            const extraScoreStr = (res.bestScore > 0) ? ` • ${res.bestScore} pt` : '';
             const nameSpan = document.createElement('span');
             nameSpan.style.cssText = "font-size:0.75em; color:var(--hint-color); margin-top:2px;";
-            nameSpan.textContent = res.maxWpm > 0 ? `🥇 Recordman: ${res.bestName}` : `Nessun record questo mese`;
+            nameSpan.textContent = res.maxWpm > 0 ? `🥇 Recordman: ${res.bestName}${extraScoreStr}` : `Nessun record questo mese`;
 
             leftDiv.appendChild(modeB);
             leftDiv.appendChild(nameSpan);
