@@ -3351,13 +3351,20 @@ window.openMaxWpmRecordsModal = function() {
                     node.forEach(child => {
                         const val = child.val();
                         if (val && typeof val === 'object') {
-                            if (val.wpm !== undefined || val.peakWpm !== undefined) {
-                                const w = Number(val.peakWpm || val.wpm || 0);
-                                const recordDate = String(val.date || child.key || "");
+                            // Escludiamo rigorosamente le partite in singolo giocate con parametri personalizzati (Semplice/FixedSpeed/Spaziatura)
+                            const isCustomParamMatch = !!val.isEasyMode || !!val.isFixedSpeed || !!val.hasCustomParams ||
+                                                       (val.charSpaceWpm && Number(val.charSpaceWpm) > 0) ||
+                                                       (val.wordSpaceMult && Number(val.wordSpaceMult) !== 1.0);
 
-                                if (window.isDateInCurrentMonth(recordDate) && w > maxWpm) {
-                                    maxWpm = w;
-                                    bestName = val.name || "Telegrafista";
+                            if (val.wpm !== undefined || val.peakWpm !== undefined) {
+                                if (!isCustomParamMatch) {
+                                    const w = Number(val.peakWpm || val.wpm || 0);
+                                    const recordDate = String(val.date || child.key || "");
+
+                                    if (window.isDateInCurrentMonth(recordDate) && w > maxWpm) {
+                                        maxWpm = w;
+                                        bestName = val.name || "Telegrafista";
+                                    }
                                 }
                             } else {
                                 const key = String(child.key || "");
