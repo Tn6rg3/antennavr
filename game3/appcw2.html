@@ -2196,10 +2196,13 @@
             <!-- BOX STATO CORRISPONDENZA HANDSHAKE -->
             <div id="cwgHandshakeStatusBox" style="display:none; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:8px; margin-bottom:8px; text-align:center;"></div>
 
-            <!-- PULSANTE CHIAMATA CQ ACTIVITY SPOT -->
-            <div style="margin-bottom:10px;">
-                <button id="btnCwgSendCqSpot" onclick="window.sendCwgCqSpotInChat()" class="action-btn-small btn-primary" style="width:100%; padding:8px 12px; font-weight:bold; font-size:0.85em; background:linear-gradient(135deg, #00bcd4, #008ba3); border:1px solid #00e5ff; color:#fff; box-shadow:0 2px 6px rgba(0,188,212,0.3);">
-                    📡 LANCIA CHIAMATA CQ ACTIVITY IN CHAT GLOBALE 📻
+            <!-- PULSANTI CQ SPOT E RIMUOVI SPOT -->
+            <div style="display:flex; gap:6px; margin-bottom:10px;">
+                <button id="btnCwgSendCqSpot" onclick="window.sendCwgCqSpotInChat()" class="action-btn-small btn-primary" style="flex:1; padding:8px 10px; font-weight:bold; font-size:0.85em; background:linear-gradient(135deg, #00bcd4, #008ba3); border:1px solid #00e5ff; color:#fff; cursor:pointer;">
+                    📡 CQ SPOT 📻
+                </button>
+                <button id="btnCwgRemoveCqSpot" onclick="window.removeCwgCqSpot()" class="action-btn-small btn-danger" style="flex:1; padding:8px 10px; font-weight:bold; font-size:0.85em; cursor:pointer;">
+                    🗑️ RIMUOVI SPOT ❌
                 </button>
             </div>
 
