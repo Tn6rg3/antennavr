@@ -151,6 +151,7 @@ window.showScreen = function(screenId) {
         isRejoining = false;
         window.isRejoining = false;
         if (els.rejoinContainer) els.rejoinContainer.style.display = 'none';
+        if (typeof window.checkCwgBetaVisibility === 'function') window.checkCwgBetaVisibility();
 
         // OTTIMIZZAZIONE: Attiviamo i listener solo nel menu principale
         if (typeof window.listenToOnlineUsers === 'function') window.listenToOnlineUsers();

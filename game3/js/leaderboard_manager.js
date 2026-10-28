@@ -6,6 +6,7 @@ window.lbGroups = {
         { val: 'tri_daily_monthly', it: '🏆 Sfida Tripla (Mese - Medagliere)', en: '🏆 Triple Daily (Monthly Medals)' },
         { val: 'daily_challenge', it: '📅 Sfida Giornaliera (Oggi)', en: '📅 Classic Daily (Today)' },
         { val: 'daily_monthly', it: '📅 Sfida Giornaliera (Mese - Medagliere)', en: '📅 Classic Daily (Monthly Medals)' },
+        { val: 'cwg_activity_monthly', it: '📻 Activity - CWG (Mese)', en: '📻 Activity - CWG (Monthly)' },
         { val: 'my_history', it: '📜 I Miei Match Recenti', en: '📜 My Recent Matches' },
         { val: 'room', it: '🏁 Ultima Partita (Sessione)', en: '🏁 Last Match (Session)' }
     ],
@@ -38,7 +39,7 @@ window.lbGroups = {
     ]
 };
 
-window.switchLBGroup = function(groupId) {
+window.switchLBGroup = async function(groupId) {
     console.log("LB: Switching to group:", groupId);
     document.querySelectorAll('#lbCategoryTabs .tab-btn').forEach(b => b.classList.remove('active-tab'));
     const activeBtn = document.getElementById('tab' + groupId.charAt(0).toUpperCase() + groupId.slice(1) + 'LB');
@@ -49,16 +50,20 @@ window.switchLBGroup = function(groupId) {
 
     select.innerHTML = '';
     const modes = window.lbGroups[groupId] || [];
+    const isBetaTester = (typeof window.isUserCwgBetaTester === 'function') ? await window.isUserCwgBetaTester() : false;
+
     modes.forEach(m => {
+        if (m.val === 'cwg_activity_monthly' && !isBetaTester) return;
+
         const opt = document.createElement('option');
         opt.value = m.val;
         opt.textContent = currentLang === 'it' ? m.it : m.en;
         select.appendChild(opt);
     });
 
-    if (modes.length > 0) {
-        select.value = modes[0].val;
-        window.showLeaderboardTab(modes[0].val);
+    if (select.options.length > 0) {
+        select.value = select.options[0].value;
+        window.showLeaderboardTab(select.options[0].value);
     }
 };
 
@@ -98,6 +103,8 @@ window.showLeaderboardTab = function(modeValue) {
         window.fetchAndRenderTriDailyLeaderboard();
     } else if (modeValue === 'tri_daily_monthly' || modeValue === 'daily_monthly') {
         window.fetchAndRenderMonthlyLeaderboard(modeValue);
+    } else if (modeValue === 'cwg_activity_monthly') {
+        window.fetchAndRenderCwgActivityMonthlyLeaderboard();
     } else if (modeValue === 'daily_challenge') {
         if (els.btnShareDaily && totalScore > 0 && currentMode === 'daily_challenge') {
             els.btnShareDaily.style.display = 'block';
@@ -458,6 +465,77 @@ window.fetchAndRenderMonthlyLeaderboard = function(mode) {
                     <td style="padding:8px 6px; text-align:center; color:#cd7f32;"><b>${p.bronzes || 0}</b></td>
                     <td style="padding:8px 6px; text-align:center;">${p.daysPlayed}d</td>
                     <td style="padding:8px 6px; text-align:right; color:var(--champ-color);"><b>${p.placementPts} pt</b></td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+    });
+};
+
+window.fetchAndRenderCwgActivityMonthlyLeaderboard = async function() {
+    const container = els.leaderboardContainer;
+    if (!container) return;
+
+    const isBeta = (typeof window.isUserCwgBetaTester === 'function') ? await window.isUserCwgBetaTester() : false;
+    if (!isBeta) {
+        container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">⚠️ Questa classifica è attualmente riservata ai Beta Tester autorizzati.</p>`;
+        return;
+    }
+
+    const now = new Date();
+    const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Caricamento Classifica Activity - CWG (${currentMonthStr})...</p>`;
+
+    if (!db) return;
+
+    db.ref(`leaderboard/cwg_activity_monthly/${currentMonthStr}`).orderByChild('totalPoints').limitToLast(100).once('value', snap => {
+        if (!snap.exists()) {
+            container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Nessun QSO registrato finora nel mese di ${currentMonthStr}.</p>`;
+            return;
+        }
+
+        const players = [];
+        snap.forEach(c => {
+            players.push({ id: c.key, ...c.val() });
+        });
+
+        // Ordinamento per Punti Totali decrescenti, poi QSO Validi decrescenti
+        players.sort((a, b) => (Number(b.totalPoints || 0) - Number(a.totalPoints || 0)) || (Number(b.validQsos || 0) - Number(a.validQsos || 0)));
+
+        let html = `
+            <div style="background:rgba(0,188,212,0.1); padding:10px; border-radius:8px; border:1px solid #00bcd4; margin-bottom:12px; text-align:center;">
+                <b style="color:#00bcd4;">📻 Classifica Mensile Activity - CWG (${currentMonthStr})</b>
+                <div style="font-size:0.8em; color:var(--hint-color); margin-top:4px;">Punti accumulati nei QSO convalidati (1 pt singolo, 2 pt reciproco incrociato)</div>
+            </div>
+            <table class="leaderboard-table" style="width:100%; border-collapse:collapse; font-size:0.85em;">
+                <thead>
+                    <tr style="border-bottom:2px solid #00bcd4; text-align:left;">
+                        <th style="padding:6px;">#</th>
+                        <th style="padding:6px;">Telegrafista</th>
+                        <th style="padding:6px; text-align:center;">QSO Tot.</th>
+                        <th style="padding:6px; text-align:center;">Reciproci</th>
+                        <th style="padding:6px; text-align:right;">Punti Log</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        players.forEach((p, idx) => {
+            const rank = idx + 1;
+            const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+            const isMe = (p.id === window.myId);
+            const name = p.name || 'Telegrafista';
+
+            html += `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05); ${isMe ? 'background:rgba(0,188,212,0.18); font-weight:bold;' : ''}">
+                    <td style="padding:8px 6px;">${medal}</td>
+                    <td style="padding:8px 6px;">${name}</td>
+                    <td style="padding:8px 6px; text-align:center;">${p.validQsos || 0}</td>
+                    <td style="padding:8px 6px; text-align:center; color:#00ff66;"><b>${p.mutualQsos || 0}</b></td>
+                    <td style="padding:8px 6px; text-align:right; color:#00bcd4;"><b>${p.totalPoints || 0} pt</b></td>
                 </tr>
             `;
         });

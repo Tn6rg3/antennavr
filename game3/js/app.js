@@ -1365,6 +1365,7 @@ window.initMandatoryAliasHandlers = function() {
         window.setupBugSystem?.();
         window.initAdminAnnouncementListener();
         window.checkBugFeedback();
+        if (typeof window.checkCwgBetaVisibility === 'function') window.checkCwgBetaVisibility();
 
         // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
         const updateVers = () => {
@@ -1475,6 +1476,7 @@ window.setupBugSystem = function() {
         if (els.adminBugPanel) els.adminBugPanel.style.display = 'block';
         if (els.btnReadAllBugs) els.btnReadAllBugs.style.display = 'block';
         window.updateAdminBadge();
+        window.loadAdminCwgTesterList?.();
 
         // Listener per Richieste Tutor
         db.ref('tutorRequests').off('value');
@@ -1685,6 +1687,108 @@ window.setupBugSystem = function() {
         btnCleanupIncomplete.onclick = async () => {
             if (typeof window.adminCleanupIncompleteUsers === 'function') {
                 await window.adminCleanupIncompleteUsers();
+            }
+        };
+    }
+
+    // --- GESTIONE BETA TESTER ACTIVITY - CWG ---
+    window.isUserCwgBetaTester = async function() {
+        if (window.isAdmin) return true;
+        if (!db || !window.myId) return false;
+        try {
+            const snap = await db.ref(`appConfig/cwg_beta_users/${window.myId}`).once('value');
+            return snap.exists() && snap.val() === true;
+        } catch(e) {
+            return false;
+        }
+    };
+
+    window.loadAdminCwgTesterList = function() {
+        const listDiv = document.getElementById('adminCwgTesterList');
+        if (!listDiv || !db) return;
+
+        db.ref('appConfig/cwg_beta_users').once('value', snap => {
+            listDiv.innerHTML = '';
+            if (!snap.exists()) {
+                listDiv.innerHTML = '<p style="text-align:center; color:var(--hint-color); margin:2px 0;">Nessun Beta Tester registrato. (Attivo per Admin)</p>';
+                return;
+            }
+
+            const testerIds = Object.keys(snap.val() || {});
+            if (testerIds.length === 0) {
+                listDiv.innerHTML = '<p style="text-align:center; color:var(--hint-color); margin:2px 0;">Nessun Beta Tester registrato.</p>';
+                return;
+            }
+
+            testerIds.forEach(id => {
+                db.ref(`users/${id}`).once('value', uSnap => {
+                    const uData = uSnap.val() || {};
+                    const name = uData.alias || uData.name || id;
+
+                    const item = document.createElement('div');
+                    item.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:3px 5px; border-bottom:1px solid rgba(255,255,255,0.05);";
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = `🧪 ${name} (${id})`;
+
+                    const delBtn = document.createElement('button');
+                    delBtn.style.cssText = "background:none; border:none; color:#f44336; cursor:pointer; font-weight:bold; font-size:0.8em;";
+                    delBtn.textContent = "✕";
+                    delBtn.onclick = () => {
+                        db.ref(`appConfig/cwg_beta_users/${id}`).remove().then(() => {
+                            showToast(`Tester ${name} rimosso.`);
+                            window.loadAdminCwgTesterList();
+                        });
+                    };
+
+                    item.appendChild(nameSpan);
+                    item.appendChild(delBtn);
+                    listDiv.appendChild(item);
+                });
+            });
+        });
+    };
+
+    const btnAddTester = document.getElementById('btnAdminAddCwgTester');
+    if (btnAddTester) {
+        btnAddTester.onclick = async () => {
+            const inputVal = (document.getElementById('adminCwgTesterInput')?.value || "").trim();
+            if (!inputVal) return alert("Inserisci l'ID Telegram, Alias o Username del Beta Tester da abilitare.");
+
+            const candidates = await window.findTargetUserCandidates(inputVal);
+            if (!candidates || candidates.length === 0) {
+                return alert(`Nessun utente trovato per '${inputVal}'. Assicurati che l'utente sia entrato almeno una volta nel gioco.`);
+            }
+
+            const target = candidates[0];
+            if (confirm(`Abilitare ${target.name} (${target.id}) come Beta Tester per Activity - CWG?`)) {
+                db.ref(`appConfig/cwg_beta_users/${target.id}`).set(true).then(() => {
+                    showToast(`✅ ${target.name} abilitato come Beta Tester!`);
+                    if (document.getElementById('adminCwgTesterInput')) document.getElementById('adminCwgTesterInput').value = "";
+                    window.loadAdminCwgTesterList();
+                });
+            }
+        };
+    }
+
+    const btnRemoveTester = document.getElementById('btnAdminRemoveCwgTester');
+    if (btnRemoveTester) {
+        btnRemoveTester.onclick = async () => {
+            const inputVal = (document.getElementById('adminCwgTesterInput')?.value || "").trim();
+            if (!inputVal) return alert("Inserisci l'ID Telegram, Alias o Username del Beta Tester da rimuovere.");
+
+            const candidates = await window.findTargetUserCandidates(inputVal);
+            if (!candidates || candidates.length === 0) {
+                return alert(`Nessun utente trovato per '${inputVal}'.`);
+            }
+
+            const target = candidates[0];
+            if (confirm(`Rimuovere ${target.name} (${target.id}) dai Beta Tester?`)) {
+                db.ref(`appConfig/cwg_beta_users/${target.id}`).remove().then(() => {
+                    showToast(`Tester ${target.name} rimosso.`);
+                    if (document.getElementById('adminCwgTesterInput')) document.getElementById('adminCwgTesterInput').value = "";
+                    window.loadAdminCwgTesterList();
+                });
             }
         };
     }
