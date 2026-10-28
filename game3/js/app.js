@@ -3281,6 +3281,38 @@ window.shareAppToFriends = function() {
     if (tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
 };
 
+window.isDateInCurrentMonth = function(dateVal) {
+    if (!dateVal) return true;
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+
+    const str = String(dateVal).trim();
+
+    // Formato ISO: YYYY-MM-DD
+    if (str.includes('-')) {
+        const parts = str.split('-');
+        if (parts.length >= 2) {
+            const y = parseInt(parts[0]);
+            const m = parseInt(parts[1]);
+            return (y === curYear && m === curMonth);
+        }
+    }
+
+    // Formato IT: DD/MM/YYYY
+    if (str.includes('/')) {
+        const parts = str.split('/');
+        if (parts.length >= 3) {
+            const m = parseInt(parts[1]);
+            const y = parseInt(parts[2]);
+            return (y === curYear && m === curMonth);
+        }
+    }
+
+    const yyyyMm = `${curYear}-${String(curMonth).padStart(2, '0')}`;
+    return str.includes(yyyyMm);
+};
+
 window.openMaxWpmRecordsModal = function() {
     const modal = document.getElementById('maxWpmRecordsModal');
     const container = document.getElementById('maxWpmRecordsList');
@@ -3323,11 +3355,7 @@ window.openMaxWpmRecordsModal = function() {
                                 const w = Number(val.peakWpm || val.wpm || 0);
                                 const recordDate = String(val.date || child.key || "");
 
-                                // Verifica se la data del record appartiene al mese corrente
-                                const isThisMonth = recordDate.includes(currentMonthStr) ||
-                                                    recordDate.includes(`/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`);
-
-                                if (isThisMonth && w > maxWpm) {
+                                if (window.isDateInCurrentMonth(recordDate) && w > maxWpm) {
                                     maxWpm = w;
                                     bestName = val.name || "Telegrafista";
                                 }

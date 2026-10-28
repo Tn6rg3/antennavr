@@ -1427,16 +1427,23 @@ window.finishGame = function() {
                     let oldWpm = oldData ? (Number(oldData.wpm) || 0) : 0;
                     const myLevel = window.userProgression?.level || 1;
 
-                    // Aggiorniamo se il punteggio è migliore, OPPURE se il punteggio è uguale ma la velocità è superiore
-                    if (!oldData || window.totalScore > oldScore || (window.totalScore === oldScore && window.peakWpm > oldWpm)) {
+                    const isNewWpmRecord = window.peakWpm > oldWpm;
+                    const isNewScoreRecord = window.totalScore > oldScore;
+
+                    // Aggiorniamo se la velocità (WPM) è superiore, OPPURE se il punteggio è superiore
+                    if (!oldData || isNewWpmRecord || isNewScoreRecord) {
+                        const bestScore = Math.max(window.totalScore, oldScore);
+                        const bestWpm = Math.max(window.peakWpm, oldWpm);
+                        const todayDateStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+
                         db.ref(dbPath).set({
                             name: window.myName,
                             username: window.myPrivacy ? "" : tgUsername,
-                            score: window.totalScore,
-                            wpm: window.peakWpm,
+                            score: bestScore,
+                            wpm: bestWpm,
                             level: myLevel,
                             wordCount: window.requestedWordCount,
-                            date: new Date().toLocaleDateString('it-IT'),
+                            date: todayDateStr,
                             privacyLeaderboard: !!window.myPrivacyLeaderboard
                         });
                         window.showToast(currentLang === 'it' ? "🏆 Nuovo Record in Classifica!" : "🏆 New Leaderboard Record!");
