@@ -9,10 +9,49 @@ window.cwgLiveQsoListenerRef = null;
 window.isCwgInitiator = false; // true se l'utente è Utente A (chi avvia per primo)
 window.cwgMyHandshakeTs = 0;
 
+window.cleanCallsignString = function(str) {
+    if (!str) return "";
+    let s = String(str).trim();
+    if (s.startsWith('@')) s = s.substring(1);
+    return s.toUpperCase().replace(/\s+/g, '');
+};
+
+window.saveMyActivityCallPreference = function(newCall) {
+    const cleanCall = window.cleanCallsignString(newCall);
+    if (!cleanCall || cleanCall.length < 2) return;
+    localStorage.setItem('cwgame_activity_call', cleanCall);
+    if (db && window.myId) {
+        db.ref(`users/${window.myId}/activity_call`).set(cleanCall).catch(() => {});
+    }
+};
+
 window.openCwgActivityScreen = async function() {
     const isBeta = typeof window.isUserCwgBetaTester === 'function' ? await window.isUserCwgBetaTester() : false;
     if (!isBeta) {
         return alert("⚠️ Questa modalità è attualmente riservata ai Beta Tester autorizzati.");
+    }
+
+    // Verifica / Richiesta obbligatoria del Nominativo Activity (SENZA mai usare lo username Telegram)
+    let myActivityCall = localStorage.getItem('cwgame_activity_call');
+
+    if (!myActivityCall && db && window.myId) {
+        try {
+            const snap = await db.ref(`users/${window.myId}/activity_call`).once('value');
+            if (snap.exists() && snap.val()) {
+                myActivityCall = snap.val().trim().toUpperCase();
+                localStorage.setItem('cwgame_activity_call', myActivityCall);
+            }
+        } catch(e) {}
+    }
+
+    if (!myActivityCall || myActivityCall.length < 2) {
+        const inputCall = prompt("📻 REGISTRAZIONE NOMINATIVO ACTIVITY:\n\nInserisci il tuo Call / Nominativo radioamatoriale per le sfide Activity (es. IU2XYZ o IK1ABC):");
+        if (!inputCall || inputCall.trim().length < 2) {
+            alert("⚠️ Per accedere alla modalità Activity è necessario registrare il proprio Nominativo.");
+            return;
+        }
+        myActivityCall = window.cleanCallsignString(inputCall);
+        window.saveMyActivityCallPreference(myActivityCall);
     }
 
     if (typeof window.showScreen === 'function') {
@@ -73,25 +112,14 @@ window.resetCwgForm = function() {
         startBtn.textContent = "▶️ AVVIA QSO & TIMER 4 MINUTI";
     }
 
-    const savedCall = localStorage.getItem('cwgame_activity_call');
+    const savedCall = localStorage.getItem('cwgame_activity_call') || "";
     const myCallInput = document.getElementById('cwgLogMyCall');
     if (myCallInput) {
-        if (!myCallInput.value || myCallInput.value.trim() === "") {
-            myCallInput.value = (savedCall || window.myAlias || window.myName || "").toUpperCase();
-        }
+        myCallInput.value = window.cleanCallsignString(savedCall);
     }
 
     if (document.getElementById('cwgLogStartTime')) document.getElementById('cwgLogStartTime').value = "";
     if (document.getElementById('cwgLogEndTime')) document.getElementById('cwgLogEndTime').value = "";
-};
-
-window.saveMyActivityCallPreference = function(newCall) {
-    if (!newCall || newCall.length < 2) return;
-    const cleanCall = newCall.trim().toUpperCase();
-    localStorage.setItem('cwgame_activity_call', cleanCall);
-    if (db && window.myId) {
-        db.ref(`users/${window.myId}/activity_call`).set(cleanCall).catch(() => {});
-    }
 };
 
 window.cancelCwgQso = function() {
@@ -105,16 +133,17 @@ window.checkCwgDoubleHandshakeMatch = function() {
     if (!db) return;
 
     const myCallInput = document.getElementById('cwgLogMyCall');
-    if (myCallInput && (!myCallInput.value || myCallInput.value.trim() === "")) {
-        myCallInput.value = (window.myName || window.myAlias || "").toUpperCase();
-    }
+    const partnerCallInput = document.getElementById('cwgLogPartnerCall');
 
-    const myCall = (myCallInput?.value || window.myName || "").trim().toUpperCase();
-    const partnerCall = (document.getElementById('cwgLogPartnerCall')?.value || "").trim().toUpperCase();
+    if (myCallInput) myCallInput.value = window.cleanCallsignString(myCallInput.value);
+    if (partnerCallInput) partnerCallInput.value = window.cleanCallsignString(partnerCallInput.value);
+
+    const myCall = myCallInput ? myCallInput.value : "";
+    const partnerCall = partnerCallInput ? partnerCallInput.value : "";
     const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
     const statusBox = document.getElementById('cwgHandshakeStatusBox');
 
-    if (!myCall || myCall.length < 3 || !partnerCall || partnerCall.length < 3 || myCall === partnerCall) {
+    if (!myCall || myCall.length < 2 || !partnerCall || partnerCall.length < 2 || myCall === partnerCall) {
         if (statusBox) statusBox.style.display = "none";
         return;
     }
@@ -173,10 +202,10 @@ window.checkCwgDoubleHandshakeMatch = function() {
 };
 
 window.startCwgQsoTimer = function(initialElapsedSeconds = 0, isInitiator = true) {
-    const myCall = (document.getElementById('cwgLogMyCall')?.value || window.myName || "").trim().toUpperCase();
-    const partnerCall = (document.getElementById('cwgLogPartnerCall')?.value || "").trim().toUpperCase();
+    const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || "");
+    const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
 
-    if (!partnerCall || partnerCall.length < 3) {
+    if (!partnerCall || partnerCall.length < 2) {
         return alert("⚠️ Inserisci prima un Nominativo (Call) del corrispondente valido.");
     }
 
@@ -320,10 +349,10 @@ window.onCwgRxKeyInputChanged = function() {
 };
 
 window.requestCwgTxKey = async function() {
-    const partnerCall = (document.getElementById('cwgLogPartnerCall')?.value || "").trim().toUpperCase();
+    const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
     const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
 
-    if (!partnerCall || partnerCall.length < 3) return;
+    if (!partnerCall || partnerCall.length < 2) return;
 
     const txBox = document.getElementById('cwgTxKeyDisplayBox');
     const txText = document.getElementById('cwgTxKeyText');
@@ -355,9 +384,11 @@ window.requestCwgTxKey = async function() {
 };
 
 window.saveCwgQsoLog = async function() {
-    const myCall = (document.getElementById('cwgLogMyCall')?.value || window.myName || "").trim().toUpperCase();
-    const partnerCall = (document.getElementById('cwgLogPartnerCall')?.value || "").trim().toUpperCase();
+    const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || "");
+    const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
     const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
+
+    if (!myCall || myCall.length < 2) return alert("⚠️ Inserisci prima il tuo Nominativo / Call.");
 
     window.saveMyActivityCallPreference(myCall);
 
@@ -376,7 +407,7 @@ window.saveCwgQsoLog = async function() {
     const rxKey = (document.getElementById('cwgRxKeyInput')?.value || "").trim().toUpperCase();
     const txKey = window.cwgGeneratedTxKey;
 
-    if (!partnerCall || partnerCall.length < 3) return alert("⚠️ Inserisci un Call valido.");
+    if (!partnerCall || partnerCall.length < 2) return alert("⚠️ Inserisci un Call del corrispondente valido.");
     if (rxKey.length !== 8) return alert("⚠️ La Chiave Ricevuta deve contenere esattamente 8 caratteri.");
     if (!txKey) return alert("⚠️ Chiave di Trasmissione non ancora generata.");
 
