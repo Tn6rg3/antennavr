@@ -390,6 +390,13 @@
 
         <p id="loadingText" style="margin-bottom: 5px;">Connessione sicura in corso...</p>
 
+        <!-- BOTTONE ACCESSUALE BETA ACTIVITY - CWG (SOLO PER TESTER/ADMIN) -->
+        <div id="btnCwgActivityContainer" style="display:none; width:100%; margin-bottom: 10px;">
+            <button id="btnCwgActivityMode" onclick="window.openCwgActivityScreen()" class="btn-primary" style="width:100%; padding: 12px; font-weight:bold; font-size:1em; background: linear-gradient(135deg, #00bcd4, #008ba3); border:1px solid #00e5ff; color:#fff; box-shadow:0 3px 10px rgba(0,188,212,0.4); cursor:pointer;">
+                📻 ACTIVITY - CWG (BETA LOG & CHIAVI 4 MINUTI) 🧪
+            </button>
+        </div>
+
         <!-- BOTTONE RIENTRO PARTITA -->
         <div id="rejoinContainer" style="display:none; width:100%; margin-bottom: 10px;">
             <button id="rejoinGameBtn" class="btn-success" style="padding: 15px; font-size: 1.1em; animation: pulse 2s infinite;">🔄 RIENTRA NELLA PARTITA IN CORSO</button>
@@ -1682,6 +1689,19 @@
                 <button id="btnAdminSendAnnouncement" class="btn-success" style="width:100%; margin-top:5px; padding:8px; font-weight:bold;">PUBBLICA ANNUNCIO 🚀</button>
                 <button id="btnAdminClearAnnouncement" class="btn-danger" style="width:100%; margin-top:5px; padding:4px; font-size:0.8em;">Rimuovi Annuncio Attivo 🗑️</button>
             </div>
+
+            <!-- AREA ADMIN: GESTIONE BETA TESTER ACTIVITY - CWG -->
+            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; margin-top:10px;">
+                <h4 style="margin: 0 0 8px 0; color: #00bcd4; font-size: 0.9em;">🧪 Gestione Beta Tester (Activity - CWG)</h4>
+                <input type="text" id="adminCwgTesterInput" placeholder="ID o Alias dell'utente " style="width:100%; padding:8px; font-size:0.85em; background:rgba(0,0,0,0.2); border:1px solid #00bcd4; color:white; border-radius:4px; box-sizing: border-box; margin-bottom: 6px;">
+                <div style="display:flex; gap:6px; margin-bottom:6px;">
+                    <button id="btnAdminAddCwgTester" class="btn-success" style="flex:1; padding:8px; font-weight:bold; background:#00bcd4; border:none; cursor:pointer; color:#000;">ABILITA TESTER 🧪</button>
+                    <button id="btnAdminRemoveCwgTester" class="btn-danger" style="flex:1; padding:8px; font-weight:bold; cursor:pointer;">RIMUOVI TESTER ❌</button>
+                </div>
+                <div id="adminCwgTesterList" style="max-height: 100px; overflow-y: auto; font-size: 0.8em; color: var(--hint-color); background: rgba(0,0,0,0.2); padding: 5px; border-radius: 4px;">
+                    Caricamento lista tester...
+                </div>
+            </div>
         </div>
     </div>
     <div class="fixed-bottom-btns">
@@ -2132,7 +2152,100 @@
     </div>
 </div>
 
+<!-- SCHERMATA ACTIVITY - CWG (LOG & CHIAVI 4 MINUTI) -->
+<div id="cwgActivityScreen" class="screen" style="overflow-y: auto; display: none; flex-direction: column;">
+    <div class="screen-content" style="gap: 8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <h2 style="color:var(--champ-color); margin:0; font-size:1.1em; display:flex; align-items:center; gap:6px;">📻 Activity - CWG</h2>
+            <button onclick="goBackToMenu()" class="action-btn-small btn-secondary" style="padding:4px 10px; font-size:0.8em; font-weight:bold;">⬅️ Torna al Menu</button>
+        </div>
 
+        <!-- FORM COMPILAZIONE LOG QSO -->
+        <div class="box-panel" style="border-color: #00bcd4; background: rgba(0, 188, 212, 0.05); padding: 12px; text-align: left;">
+            <b style="color: #00bcd4; font-size: 0.9em; display:block; margin-bottom: 8px;">📝 Registrazione Log QSO</b>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                <div>
+                    <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">Call Corrispondente:</label>
+                    <input type="text" id="cwgLogPartnerCall" placeholder="es. IU2XYZ..." autocomplete="off" style="width:100%; padding:8px; font-size:0.9em; font-weight:bold; background:rgba(0,0,0,0.3); border:1px solid #00bcd4; color:white; border-radius:6px; box-sizing:border-box; text-transform:uppercase;">
+                </div>
+                <div>
+                    <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">Banda Radio:</label>
+                    <select id="cwgLogBandSelect" style="width:100%; padding:8px; font-size:0.9em; font-weight:bold; background:var(--sec-bg-color); color:white; border:1px solid #00bcd4; border-radius:6px; box-sizing:border-box;">
+                        <option value="160m">160m (1.8 MHz)</option>
+                        <option value="80m">80m (3.5 MHz)</option>
+                        <option value="40m" selected>40m (7 MHz)</option>
+                        <option value="30m">30m (10.1 MHz)</option>
+                        <option value="20m">20m (14 MHz)</option>
+                        <option value="17m">17m (18 MHz)</option>
+                        <option value="15m">15m (21 MHz)</option>
+                        <option value="12m">12m (24.9 MHz)</option>
+                        <option value="10m">10m (28 MHz)</option>
+                        <option value="6m">6m (50 MHz)</option>
+                        <option value="2m">2m (144 MHz)</option>
+                        <option value="70cm">70cm (432 MHz)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; margin-bottom: 10px;">
+                <div>
+                    <label style="font-size:0.7em; color:var(--hint-color); display:block; margin-bottom:2px;">Inizio:</label>
+                    <input type="time" id="cwgLogStartTime" style="width:100%; padding:6px; font-size:0.8em; background:rgba(0,0,0,0.3); border:1px solid var(--hint-color); color:white; border-radius:4px; box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="font-size:0.7em; color:var(--hint-color); display:block; margin-bottom:2px;">Fine:</label>
+                    <input type="time" id="cwgLogEndTime" style="width:100%; padding:6px; font-size:0.8em; background:rgba(0,0,0,0.3); border:1px solid var(--hint-color); color:white; border-radius:4px; box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="font-size:0.7em; color:var(--hint-color); display:block; margin-bottom:2px;">RST TX:</label>
+                    <input type="text" id="cwgLogRstTx" value="599" style="width:100%; padding:6px; font-size:0.8em; text-align:center; background:rgba(0,0,0,0.3); border:1px solid var(--hint-color); color:white; border-radius:4px; box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="font-size:0.7em; color:var(--hint-color); display:block; margin-bottom:2px;">RST RX:</label>
+                    <input type="text" id="cwgLogRstRx" value="599" style="width:100%; padding:6px; font-size:0.8em; text-align:center; background:rgba(0,0,0,0.3); border:1px solid var(--hint-color); color:white; border-radius:4px; box-sizing:border-box;">
+                </div>
+            </div>
+
+            <!-- CONTROLLO TIMER 4 MINUTI E CHIAVI -->
+            <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(0,188,212,0.3); border-radius: 8px; padding: 10px; margin-bottom: 10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                    <b style="font-size:0.85em; color:#ff9800;">⏱️ Tempo QSO Collegamento:</b>
+                    <strong id="cwgQsoTimerDisplay" style="font-size:1.1em; color:#00ff66;">00:00 / 04:00</strong>
+                </div>
+                <div id="cwgTimerProgressBar" style="width:100%; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden; margin-bottom:8px;">
+                    <div id="cwgTimerProgressFill" style="width:0%; height:100%; background:#00ff66; transition:width 1s linear;"></div>
+                </div>
+                <button id="btnCwgStartTimer" onclick="window.startCwgQsoTimer()" class="action-btn-small btn-primary" style="width:100%; padding:8px; font-weight:bold; font-size:0.85em; background:#00bcd4; border:none; color:#000;">
+                    ▶️ AVVIA QSO & TIMER 4 MINUTI
+                </button>
+            </div>
+
+            <!-- SEZIONE CHIAVI INCROCIATE (SBLOCCATE A 4 MINUTI) -->
+            <div id="cwgKeysSection" style="display:none; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px; margin-top:10px;">
+                <b style="color:var(--champ-color); font-size:0.85em; display:block; margin-bottom:6px;">🔐 Inserimento Chiavi di Sicurezza (Incorregibile)</b>
+
+                <div style="margin-bottom:8px;">
+                    <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">1. Inserisci la Chiave Ricevuta dal Corrispondente (8 Caratteri):</label>
+                    <input type="text" id="cwgRxKeyInput" placeholder="es. K9X2M7P4..." autocomplete="off" maxlength="8" oninput="window.onCwgRxKeyInputChanged()" style="width:100%; padding:8px; font-size:1em; font-family:monospace; font-weight:bold; text-transform:uppercase; background:#fff; color:#000; border:2px solid var(--champ-color); border-radius:6px; box-sizing:border-box;">
+                </div>
+
+                <div id="cwgTxKeyDisplayBox" style="display:none; background:rgba(76, 175, 80, 0.15); border:1px solid #4caf50; border-radius:8px; padding:10px; margin-bottom:10px; text-align:center;">
+                    <span style="font-size:0.75em; color:#a5d6a7; display:block;">2. La tua Chiave da Trasmettere al Corrispondente:</span>
+                    <b id="cwgTxKeyText" style="font-size:1.3em; font-family:monospace; color:#00ff66; letter-spacing:2px; display:block; margin:4px 0;">--</b>
+                    <small style="font-size:0.7em; color:var(--hint-color);">Trasmetti questa chiave in Morse al tuo corrispondente per la convalida reciproca!</small>
+                </div>
+
+                <button id="btnSaveCwgQso" onclick="window.saveCwgQsoLog()" class="btn-success" style="width:100%; padding:10px; font-size:0.95em; font-weight:bold; margin:0;" disabled>
+                    💾 SALVA E REGISTRA QSO (INCORREGIBILE)
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="fixed-bottom-btns">
+        <button onclick="goBackToMenu()" style="flex-shrink: 0;">Torna al Menu Principale</button>
+    </div>
+</div>
 
 <!-- AREA QSO P2P (SENZA DECODER) -->
 <div id="qsoArea" class="screen" style="overflow-y: auto; display: none; flex-direction: column;">
@@ -2627,6 +2740,7 @@
             "js/tone_test_manager.js",
             "js/qso_manager.js",
             "js/qso_audio_manager.js",
+            "js/cwg_activity_manager.js",
             "js/rating_manager.js",
             "js/game_core.js"
         ];
