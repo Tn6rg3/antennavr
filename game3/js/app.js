@@ -1749,6 +1749,27 @@ window.setupBugSystem = function() {
         });
     };
 
+    window.selectAdminCandidate = function(candidates, actionTitle = "selezionare") {
+        if (!candidates || candidates.length === 0) return null;
+        if (candidates.length === 1) return candidates[0];
+
+        let msg = `Trovati ${candidates.length} utenti corrispondenti:\n\n`;
+        candidates.forEach((c, idx) => {
+            const uNameStr = c.username ? ` (@${c.username})` : '';
+            msg += `${idx + 1}. ${c.name}${uNameStr} - ID: ${c.id}\n`;
+        });
+        msg += `\nInserisci il NUMERO dell'utente da ${actionTitle} (da 1 a ${candidates.length}):`;
+
+        const choice = prompt(msg);
+        if (!choice) return null;
+        const choiceNum = parseInt(choice);
+        if (isNaN(choiceNum) || choiceNum < 1 || choiceNum > candidates.length) {
+            alert("Selezione annullata o non valida.");
+            return null;
+        }
+        return candidates[choiceNum - 1];
+    };
+
     const btnAddTester = document.getElementById('btnAdminAddCwgTester');
     if (btnAddTester) {
         btnAddTester.onclick = async () => {
@@ -1760,8 +1781,10 @@ window.setupBugSystem = function() {
                 return alert(`Nessun utente trovato per '${inputVal}'. Assicurati che l'utente sia entrato almeno una volta nel gioco.`);
             }
 
-            const target = candidates[0];
-            if (confirm(`Abilitare ${target.name} (${target.id}) come Beta Tester per Activity - CWG?`)) {
+            const target = window.selectAdminCandidate(candidates, "abilitare come Beta Tester");
+            if (!target) return;
+
+            if (confirm(`Abilitare ${target.name} (ID: ${target.id}) come Beta Tester per Activity - CWG?`)) {
                 db.ref(`appConfig/cwg_beta_users/${target.id}`).set(true).then(() => {
                     showToast(`✅ ${target.name} abilitato come Beta Tester!`);
                     if (document.getElementById('adminCwgTesterInput')) document.getElementById('adminCwgTesterInput').value = "";
@@ -1782,8 +1805,10 @@ window.setupBugSystem = function() {
                 return alert(`Nessun utente trovato per '${inputVal}'.`);
             }
 
-            const target = candidates[0];
-            if (confirm(`Rimuovere ${target.name} (${target.id}) dai Beta Tester?`)) {
+            const target = window.selectAdminCandidate(candidates, "rimuovere dai Beta Tester");
+            if (!target) return;
+
+            if (confirm(`Rimuovere ${target.name} (ID: ${target.id}) dai Beta Tester?`)) {
                 db.ref(`appConfig/cwg_beta_users/${target.id}`).remove().then(() => {
                     showToast(`Tester ${target.name} rimosso.`);
                     if (document.getElementById('adminCwgTesterInput')) document.getElementById('adminCwgTesterInput').value = "";
