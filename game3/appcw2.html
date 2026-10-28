@@ -2165,14 +2165,18 @@
         <div class="box-panel" style="border-color: #00bcd4; background: rgba(0, 188, 212, 0.05); padding: 12px; text-align: left;">
             <b style="color: #00bcd4; font-size: 0.9em; display:block; margin-bottom: 8px;">📝 Registrazione Log QSO</b>
 
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px;">
                 <div>
-                    <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">Call Corrispondente:</label>
-                    <input type="text" id="cwgLogPartnerCall" placeholder="es. IU2XYZ..." autocomplete="off" oninput="window.listenToPartnerCwgTimerSync()" style="width:100%; padding:8px; font-size:0.9em; font-weight:bold; background:rgba(0,0,0,0.3); border:1px solid #00bcd4; color:white; border-radius:6px; box-sizing:border-box; text-transform:uppercase;">
+                    <label style="font-size:0.75em; color:var(--champ-color); font-weight:bold; display:block; margin-bottom:2px;">Il Tuo Call:</label>
+                    <input type="text" id="cwgLogMyCall" placeholder="es. IK1ABC..." autocomplete="off" oninput="window.checkCwgDoubleHandshakeMatch()" style="width:100%; padding:8px; font-size:0.9em; font-weight:bold; background:rgba(0,0,0,0.3); border:1px solid var(--champ-color); color:white; border-radius:6px; box-sizing:border-box; text-transform:uppercase;">
+                </div>
+                <div>
+                    <label style="font-size:0.75em; color:#00bcd4; font-weight:bold; display:block; margin-bottom:2px;">Call Corrispondente:</label>
+                    <input type="text" id="cwgLogPartnerCall" placeholder="es. IU2XYZ..." autocomplete="off" oninput="window.checkCwgDoubleHandshakeMatch()" style="width:100%; padding:8px; font-size:0.9em; font-weight:bold; background:rgba(0,0,0,0.3); border:1px solid #00bcd4; color:white; border-radius:6px; box-sizing:border-box; text-transform:uppercase;">
                 </div>
                 <div>
                     <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">Banda Radio:</label>
-                    <select id="cwgLogBandSelect" style="width:100%; padding:8px; font-size:0.9em; font-weight:bold; background:#ffffff; color:#000000; border:1px solid #00bcd4; border-radius:6px; box-sizing:border-box;">
+                    <select id="cwgLogBandSelect" onchange="window.checkCwgDoubleHandshakeMatch()" style="width:100%; padding:8px; font-size:0.9em; font-weight:bold; background:#ffffff; color:#000000; border:1px solid #00bcd4; border-radius:6px; box-sizing:border-box;">
                         <option value="160m" style="color:#000; background:#fff;">160m (1.8 MHz)</option>
                         <option value="80m" style="color:#000; background:#fff;">80m (3.5 MHz)</option>
                         <option value="40m" selected style="color:#000; background:#fff;">40m (7 MHz)</option>
@@ -2188,6 +2192,9 @@
                     </select>
                 </div>
             </div>
+
+            <!-- BOX STATO CORRISPONDENZA HANDSHAKE -->
+            <div id="cwgHandshakeStatusBox" style="display:none; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:8px; margin-bottom:8px; text-align:center;"></div>
 
             <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; margin-bottom: 10px;">
                 <div>
@@ -2229,7 +2236,8 @@
 
             <!-- SEZIONE CHIAVI INCROCIATE (SBLOCCATE A 4 MINUTI) -->
             <div id="cwgKeysSection" style="display:none; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px; margin-top:10px;">
-                <b style="color:var(--champ-color); font-size:0.85em; display:block; margin-bottom:6px;">🔐 Inserimento Chiavi di Sicurezza (Incorregibile)</b>
+                <b style="color:var(--champ-color); font-size:0.85em; display:block; margin-bottom:4px;">🔐 Inserimento Chiavi di Sicurezza (Incorregibile)</b>
+                <p id="cwgKeysStepHelpText" style="font-size:0.8em; font-weight:bold; margin:0 0 8px 0; color:#00bcd4;"></p>
 
                 <div style="margin-bottom:8px;">
                     <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">1. Inserisci la Chiave Ricevuta dal Corrispondente (8 Caratteri):</label>
