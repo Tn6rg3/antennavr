@@ -136,9 +136,10 @@ window.sendCwgCqSpotInChat = function() {
 
     if (!myCall || myCall.length < 2) return alert("⚠️ Inserisci prima il tuo Nominativo / Call.");
 
-    if (confirm(`Lanciare la chiamata "CQ Activity - CWG" per ${myCall} sulla banda ${band} nella Chat Globale?`)) {
+    if (confirm(`Lanciare la chiamata "CQ Activity - CWG" per ${myCall} sulla banda ${band} in Bacheca e Chat Globale?`)) {
         const text = `📡 [SPOT CQ ACTIVITY]: ${myCall} sta facendo chiamata CQ Activity - CWG sulla banda ${band}! 📻`;
 
+        // 1. Pubblica in Chat Globale
         db.ref('globalChat').push({
             senderId: window.myId,
             name: myCall,
@@ -148,11 +149,24 @@ window.sendCwgCqSpotInChat = function() {
             spotCall: myCall,
             spotBand: band,
             ts: firebase.database.ServerValue.TIMESTAMP
+        }).catch(() => {});
+
+        // 2. Pubblica in Bacheca Sfide (public_lobby_rooms)
+        const spotId = `cq_spot_${myCall}_${band}`;
+        db.ref(`public_lobby_rooms/${spotId}`).set({
+            isCqSpot: true,
+            status: 'waiting',
+            mode: 'cwg_activity',
+            spotCall: myCall,
+            spotBand: band,
+            hostName: myCall,
+            expiresAt: Date.now() + 3600000,
+            ts: firebase.database.ServerValue.TIMESTAMP
         }).then(() => {
-            if (typeof showToast === 'function') showToast(`📡 Chiamata CQ spottata sulla banda ${band}!`);
+            if (typeof showToast === 'function') showToast(`📡 Chiamata CQ spottata in Bacheca Sfide e Chat Globale!`);
         }).catch(err => {
             console.error("CQ Spot Error:", err);
-            alert("Errore invio spot.");
+            alert("Errore invio spot in bacheca.");
         });
     }
 };

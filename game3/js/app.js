@@ -1696,11 +1696,16 @@ window.setupBugSystem = function() {
 
     // --- GESTIONE BETA TESTER ACTIVITY - CWG ---
     window.isUserCwgBetaTester = async function() {
-        if (window.isAdmin) return true;
+        if (window.isAdmin) {
+            window.isCwgBetaCached = true;
+            return true;
+        }
         if (!db || !window.myId) return false;
         try {
             const snap = await db.ref(`appConfig/cwg_beta_users/${window.myId}`).once('value');
-            return snap.exists() && snap.val() === true;
+            const isBeta = snap.exists() && snap.val() === true;
+            window.isCwgBetaCached = isBeta;
+            return isBeta;
         } catch(e) {
             return false;
         }

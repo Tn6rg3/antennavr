@@ -163,6 +163,11 @@ window.setupChat = function(ref, containerId, limit = 50) {
             textSpan.style.wordBreak = 'break-word';
 
             if (m.isCqSpot && m.spotCall) {
+                const isBeta = window.isAdmin || window.isCwgBetaCached;
+                if (!isBeta) {
+                    div.style.display = "none";
+                    return;
+                }
                 textSpan.textContent = "";
                 const spotDiv = document.createElement('div');
                 spotDiv.style.cssText = "background: rgba(0, 188, 212, 0.15); border: 1px solid #00bcd4; border-radius: 8px; padding: 8px; margin-top: 4px; text-align: center;";
@@ -857,7 +862,7 @@ window.lastKnownRoomPlayersCount = window.lastKnownRoomPlayersCount || {};
 
 window.addOrUpdateRoomCard = function(code, room) {
     if (!els.waitingRoomsList || !room) return;
-    if (code.startsWith("TRN_") || (room.expiresAt && Date.now() > room.expiresAt) || room.status !== 'waiting' || room.type === 'single') {
+    if (code.startsWith("TRN_") || (room.expiresAt && Date.now() > room.expiresAt) || room.status !== 'waiting') {
         window.removeRoomCard(code);
         return;
     }
@@ -872,6 +877,36 @@ window.addOrUpdateRoomCard = function(code, room) {
     }
 
     li.innerHTML = '';
+
+    // Gestione speciale per i CQ Spot di Activity - CWG in Bacheca (Solo per Admin e Beta Tester)
+    if (room.isCqSpot && room.spotCall) {
+        const isBeta = window.isAdmin || window.isCwgBetaCached;
+        if (!isBeta) {
+            window.removeRoomCard(code);
+            return;
+        }
+        const span = document.createElement('span');
+        const bTitle = document.createElement('b');
+        bTitle.style.color = '#00bcd4';
+        bTitle.textContent = `📡 CQ Activity - CWG (${(room.spotBand || '40m').toUpperCase()})`;
+
+        const smallInfo = document.createElement('small');
+        smallInfo.style.color = 'var(--text-color)';
+        smallInfo.textContent = `Chiamata di: ${room.spotCall}`;
+
+        span.appendChild(bTitle);
+        span.appendChild(document.createElement('br'));
+        span.appendChild(smallInfo);
+        li.appendChild(span);
+
+        const btn = document.createElement('button');
+        btn.className = 'action-btn-small btn-primary';
+        btn.style.cssText = "background:#00bcd4; color:#000; font-weight:bold; border:none; cursor:pointer;";
+        btn.textContent = 'ENTRA 🚀';
+        btn.onclick = () => window.joinCqSpotActivity(room.spotCall, room.spotBand || '40m');
+        li.appendChild(btn);
+        return;
+    }
     const m = room.mode || 'standard';
     console.log(`Lobby: Rendering room ${code}, mode: ${m}`);
 
