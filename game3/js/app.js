@@ -3281,12 +3281,19 @@ window.openMaxWpmRecordsModal = function() {
     const container = document.getElementById('maxWpmRecordsList');
     if (!modal || !container) return;
 
+    const now = new Date();
+    const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthFormatted = now.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+
     modal.style.display = 'flex';
-    container.innerHTML = '<p style="text-align:center; font-size:0.85em; color:var(--hint-color); padding:10px;">Caricamento record di velocità...</p>';
+    container.innerHTML = `<p style="text-align:center; font-size:0.85em; color:var(--hint-color); padding:10px;">Caricamento record del mese (${currentMonthStr})...</p>`;
 
     if (!db) return;
 
-    const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+    const modalTitle = modal.querySelector('h3');
+    if (modalTitle) {
+        modalTitle.textContent = `⚡ Record Max WPM (${monthFormatted})`;
+    }
 
     const modesToFetch = [
         { id: 'standard', name: '🔤 Parole Comuni', path: 'leaderboard/standard' },
@@ -3309,12 +3316,21 @@ window.openMaxWpmRecordsModal = function() {
                         if (val && typeof val === 'object') {
                             if (val.wpm !== undefined || val.peakWpm !== undefined) {
                                 const w = Number(val.peakWpm || val.wpm || 0);
-                                if (w > maxWpm) {
+                                const recordDate = String(val.date || child.key || "");
+
+                                // Verifica se la data del record appartiene al mese corrente
+                                const isThisMonth = recordDate.includes(currentMonthStr) ||
+                                                    recordDate.includes(`/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`);
+
+                                if (isThisMonth && w > maxWpm) {
                                     maxWpm = w;
                                     bestName = val.name || "Telegrafista";
                                 }
                             } else {
-                                scanNode(child);
+                                const key = String(child.key || "");
+                                if (!key.includes('-') || key.startsWith(currentMonthStr)) {
+                                    scanNode(child);
+                                }
                             }
                         }
                     });
@@ -3341,7 +3357,7 @@ window.openMaxWpmRecordsModal = function() {
 
             const nameSpan = document.createElement('span');
             nameSpan.style.cssText = "font-size:0.75em; color:var(--hint-color); margin-top:2px;";
-            nameSpan.textContent = res.maxWpm > 0 ? `🥇 Recordman: ${res.bestName}` : `Nessun record salvato`;
+            nameSpan.textContent = res.maxWpm > 0 ? `🥇 Recordman: ${res.bestName}` : `Nessun record questo mese`;
 
             leftDiv.appendChild(modeB);
             leftDiv.appendChild(nameSpan);
