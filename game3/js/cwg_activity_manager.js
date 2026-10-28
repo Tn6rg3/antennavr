@@ -141,6 +141,7 @@ window.sendCwgCqSpotInChat = function() {
 
         db.ref('globalChat').push({
             senderId: window.myId,
+            name: myCall,
             senderName: myCall,
             text: text,
             isCqSpot: true,
@@ -224,11 +225,16 @@ window.checkCwgDoubleHandshakeMatch = function() {
 
         if (statusBox) {
             statusBox.style.display = "block";
-            let regNote = isRegistered
-                ? `<span style="color:#00ff66;"> (✅ Registrato nel gioco)</span>`
-                : `<span style="color:#ffb74d;"> (⚠️ Utente non ancora registrato nel gioco)</span>`;
+            statusBox.textContent = "";
 
-            statusBox.innerHTML = `<span style="color:#ff9800; font-size:0.85em; font-weight:bold;">⏳ STANDBY: In attesa che <b>${partnerCall}</b>${regNote} inserisca il tuo Call (<b>${myCall}</b>) sulla banda ${band.toUpperCase()} per avviare il QSO...</span>`;
+            const span = document.createElement('span');
+            span.style.fontSize = "0.85em";
+            span.style.fontWeight = "bold";
+            span.style.color = isRegistered ? "#ff9800" : "#ffb74d";
+
+            const regText = isRegistered ? " (✅ Registrato nel gioco)" : " (⚠️ Utente non ancora registrato nel gioco)";
+            span.textContent = `⏳ STANDBY: In attesa che ${partnerCall}${regText} inserisca il tuo Call (${myCall}) sulla banda ${band.toUpperCase()} per avviare il QSO...`;
+            statusBox.appendChild(span);
         }
     });
 
@@ -241,7 +247,14 @@ window.checkCwgDoubleHandshakeMatch = function() {
         if (Math.abs(nowTs - partnerTs) < 300000) {
             if (statusBox) {
                 statusBox.style.display = "block";
-                statusBox.innerHTML = `<span style="color:#00ff66; font-size:0.85em; font-weight:bold;">🟢 CORRISPONDENZA CONFERMATA CON ${partnerCall}! QSO AVVIATO!</span>`;
+                statusBox.textContent = "";
+
+                const span = document.createElement('span');
+                span.style.color = "#00ff66";
+                span.style.fontSize = "0.85em";
+                span.style.fontWeight = "bold";
+                span.textContent = `🟢 CORRISPONDENZA CONFERMATA CON ${partnerCall}! QSO AVVIATO!`;
+                statusBox.appendChild(span);
             }
 
             // IL TIMER PARTE UNICAMENTE ORA A CORRISPONDENZA CONFERMATA!

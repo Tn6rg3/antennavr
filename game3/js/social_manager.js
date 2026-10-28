@@ -126,7 +126,8 @@ window.setupChat = function(ref, containerId, limit = 50) {
         messages.forEach(m => {
             const div = document.createElement('div');
             div.className = 'chat-msg';
-            if (m.name === window.myName) div.classList.add('chat-msg-own');
+            const msgName = m.name || m.senderName || 'Telegrafista';
+            if (msgName === window.myName) div.classList.add('chat-msg-own');
             div.style.marginBottom = '6px';
 
             const header = document.createElement('div');
@@ -134,10 +135,7 @@ window.setupChat = function(ref, containerId, limit = 50) {
 
             const timeStr = new Date(m.ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
             const nameSpan = document.createElement('b');
-            nameSpan.textContent = m.name;
-
-            // PRIVACY: I nomi in chat non sono più link cliccabili a profili Telegram esterni
-            // Il collegamento è rimosso per tutti per massima sicurezza e semplicità.
+            nameSpan.textContent = msgName;
 
             const timeSpan = document.createElement('span');
             timeSpan.textContent = timeStr;
@@ -164,14 +162,39 @@ window.setupChat = function(ref, containerId, limit = 50) {
             const textSpan = document.createElement('div');
             textSpan.style.wordBreak = 'break-word';
 
-            const isCwActive = localStorage.getItem('cwgame_chat_cw_enabled') === 'true';
-            if (isCwActive) {
-                textSpan.className = 'cw-spoiler';
-                textSpan.textContent = m.text;
-                textSpan.title = "Clicca per svelare il testo";
-                textSpan.onclick = function() { this.classList.toggle('revealed'); };
+            if (m.isCqSpot && m.spotCall) {
+                textSpan.textContent = "";
+                const spotDiv = document.createElement('div');
+                spotDiv.style.cssText = "background: rgba(0, 188, 212, 0.15); border: 1px solid #00bcd4; border-radius: 8px; padding: 8px; margin-top: 4px; text-align: center;";
+
+                const titleB = document.createElement('b');
+                titleB.style.cssText = "color: #00bcd4; font-size: 0.9em; display:block; margin-bottom:4px;";
+                titleB.textContent = "📡 [CQ SPOT ACTIVITY CWG]";
+
+                const descSpan = document.createElement('span');
+                descSpan.style.cssText = "font-size:0.85em; color:var(--text-color); display:block; margin-bottom:6px;";
+                descSpan.textContent = `${m.spotCall} sta facendo chiamata CQ sulla banda ${(m.spotBand || '40m').toUpperCase()}! 📻`;
+
+                const joinBtn = document.createElement('button');
+                joinBtn.className = "action-btn-small btn-primary";
+                joinBtn.style.cssText = "padding:6px 12px; font-weight:bold; font-size:0.85em; background:#00bcd4; border:none; color:#000; cursor:pointer;";
+                joinBtn.textContent = "ENTRA IN ACTIVITY 🚀";
+                joinBtn.onclick = () => window.joinCqSpotActivity(m.spotCall, m.spotBand || '40m');
+
+                spotDiv.appendChild(titleB);
+                spotDiv.appendChild(descSpan);
+                spotDiv.appendChild(joinBtn);
+                textSpan.appendChild(spotDiv);
             } else {
-                textSpan.textContent = m.text;
+                const isCwActive = localStorage.getItem('cwgame_chat_cw_enabled') === 'true';
+                if (isCwActive) {
+                    textSpan.className = 'cw-spoiler';
+                    textSpan.textContent = m.text;
+                    textSpan.title = "Clicca per svelare il testo";
+                    textSpan.onclick = function() { this.classList.toggle('revealed'); };
+                } else {
+                    textSpan.textContent = m.text;
+                }
             }
             div.appendChild(textSpan);
             container.appendChild(div);
