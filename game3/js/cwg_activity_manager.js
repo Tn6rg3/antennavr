@@ -93,8 +93,8 @@ window.resetCwgForm = function() {
 
     if (statusBox) statusBox.style.display = "none";
     if (timerDisp) {
-        timerDisp.textContent = "00:00 / 04:00";
-        timerDisp.style.color = "#00ff66";
+        timerDisp.textContent = "00:00 / 04:00 (STANDBY)";
+        timerDisp.style.color = "#ff9800";
     }
     if (fillBar) fillBar.style.width = "0%";
     if (keysSec) keysSec.style.display = "none";
@@ -127,6 +127,53 @@ window.cancelCwgQso = function() {
         window.resetCwgForm();
         if (typeof showToast === 'function') showToast("QSO annullato.");
     }
+};
+
+window.sendCwgCqSpotInChat = function() {
+    if (!db || !window.myId) return alert("⚠️ Connessione non attiva.");
+    const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || window.myName || "");
+    const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toUpperCase();
+
+    if (!myCall || myCall.length < 2) return alert("⚠️ Inserisci prima il tuo Nominativo / Call.");
+
+    if (confirm(`Lanciare la chiamata "CQ Activity - CWG" per ${myCall} sulla banda ${band} nella Chat Globale?`)) {
+        const text = `📡 [SPOT CQ ACTIVITY]: ${myCall} sta facendo chiamata CQ Activity - CWG sulla banda ${band}! 📻`;
+
+        db.ref('globalChat').push({
+            senderId: window.myId,
+            senderName: myCall,
+            text: text,
+            isCqSpot: true,
+            spotCall: myCall,
+            spotBand: band,
+            ts: firebase.database.ServerValue.TIMESTAMP
+        }).then(() => {
+            if (typeof showToast === 'function') showToast(`📡 Chiamata CQ spottata sulla banda ${band}!`);
+        }).catch(err => {
+            console.error("CQ Spot Error:", err);
+            alert("Errore invio spot.");
+        });
+    }
+};
+
+window.joinCqSpotActivity = async function(spotCall, spotBand) {
+    if (!spotCall) return;
+    const isBeta = typeof window.isUserCwgBetaTester === 'function' ? await window.isUserCwgBetaTester() : false;
+    if (!isBeta) {
+        return alert("⚠️ La modalità Activity - CWG è attualmente riservata ai Beta Tester autorizzati.");
+    }
+
+    if (typeof window.openCwgActivityScreen === 'function') {
+        await window.openCwgActivityScreen();
+    }
+
+    const partnerInput = document.getElementById('cwgLogPartnerCall');
+    const bandSelect = document.getElementById('cwgLogBandSelect');
+
+    if (partnerInput) partnerInput.value = window.cleanCallsignString(spotCall);
+    if (bandSelect && spotBand) bandSelect.value = spotBand.toLowerCase();
+
+    window.checkCwgDoubleHandshakeMatch();
 };
 
 window.checkCwgDoubleHandshakeMatch = function() {
@@ -171,10 +218,19 @@ window.checkCwgDoubleHandshakeMatch = function() {
     const partnerPresenceRef = db.ref(`activity_cwg/handshake/${partnerPresenceKey}`);
     window.cwgLiveQsoListenerRef = partnerPresenceRef;
 
-    if (statusBox) {
-        statusBox.style.display = "block";
-        statusBox.innerHTML = `<span style="color:#ff9800; font-size:0.8em; font-weight:bold;">⏳ In attesa che <b>${partnerCall}</b> inserisca il tuo Call (<b>${myCall}</b>) sulla banda ${band.toUpperCase()} per avviare il QSO...</span>`;
-    }
+    // Verifica presenza utente nel database del gioco per avviso
+    db.ref('users').orderByChild('activity_call').equalTo(partnerCall).once('value', uSnap => {
+        let isRegistered = uSnap.exists();
+
+        if (statusBox) {
+            statusBox.style.display = "block";
+            let regNote = isRegistered
+                ? `<span style="color:#00ff66;"> (✅ Registrato nel gioco)</span>`
+                : `<span style="color:#ffb74d;"> (⚠️ Utente non ancora registrato nel gioco)</span>`;
+
+            statusBox.innerHTML = `<span style="color:#ff9800; font-size:0.85em; font-weight:bold;">⏳ STANDBY: In attesa che <b>${partnerCall}</b>${regNote} inserisca il tuo Call (<b>${myCall}</b>) sulla banda ${band.toUpperCase()} per avviare il QSO...</span>`;
+        }
+    });
 
     partnerPresenceRef.on('value', snap => {
         if (!snap.exists()) return;
@@ -188,6 +244,7 @@ window.checkCwgDoubleHandshakeMatch = function() {
                 statusBox.innerHTML = `<span style="color:#00ff66; font-size:0.85em; font-weight:bold;">🟢 CORRISPONDENZA CONFERMATA CON ${partnerCall}! QSO AVVIATO!</span>`;
             }
 
+            // IL TIMER PARTE UNICAMENTE ORA A CORRISPONDENZA CONFERMATA!
             if (!window.cwgQsoTimerInterval && window.cwgQsoTimerSeconds === 0) {
                 if (typeof showToast === 'function') {
                     showToast(`🟢 Corrispondenza confermata tra ${myCall} e ${partnerCall}! Timer 4 Minuti avviato.`);
@@ -195,20 +252,31 @@ window.checkCwgDoubleHandshakeMatch = function() {
 
                 // Determiniamo chi è Utente A (chi ha salvato la presenza prima)
                 const isInitiator = (nowTs <= partnerTs);
-                window.startCwgQsoTimer(0, isInitiator);
+                window.runCwgQsoTimerCountdown(0, isInitiator);
             }
         }
     });
 };
 
-window.startCwgQsoTimer = function(initialElapsedSeconds = 0, isInitiator = true) {
-    const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || "");
+window.startCwgQsoTimer = function() {
     const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
-
     if (!partnerCall || partnerCall.length < 2) {
         return alert("⚠️ Inserisci prima un Nominativo (Call) del corrispondente valido.");
     }
 
+    const cancelBtn = document.getElementById('btnCwgCancelQso');
+    const startBtn = document.getElementById('btnCwgStartTimer');
+    if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.textContent = "⏳ IN ATTESA DEL CORRISPONDENTE...";
+    }
+    if (cancelBtn) cancelBtn.style.display = "block";
+
+    // Attiviamo l'handshake e mettiamo il timer in STANDBY finché non c'è corrispondenza reciproca!
+    window.checkCwgDoubleHandshakeMatch();
+};
+
+window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator = true) {
     window.isCwgInitiator = isInitiator;
 
     // Compiliamo automaticamente l'Ora di Inizio con l'orario attuale se vuota
@@ -219,11 +287,6 @@ window.startCwgQsoTimer = function(initialElapsedSeconds = 0, isInitiator = true
     if (startTimeInput && (!startTimeInput.value || startTimeInput.value.trim() === "")) {
         startTimeInput.value = `${hh}:${mm}`;
     }
-
-    const startBtn = document.getElementById('btnCwgStartTimer');
-    const cancelBtn = document.getElementById('btnCwgCancelQso');
-    if (startBtn) startBtn.disabled = true;
-    if (cancelBtn) cancelBtn.style.display = "block";
 
     if (window.cwgQsoTimerInterval) clearInterval(window.cwgQsoTimerInterval);
     window.cwgQsoTimerSeconds = Number(initialElapsedSeconds) || 0;
@@ -236,10 +299,16 @@ window.startCwgQsoTimer = function(initialElapsedSeconds = 0, isInitiator = true
 
         const mins = String(Math.floor(currentSecs / 60)).padStart(2, '0');
         const secs = String(currentSecs % 60).padStart(2, '0');
-        if (timerDisp) timerDisp.textContent = `${mins}:${secs} / 04:00`;
+        if (timerDisp) {
+            timerDisp.textContent = `${mins}:${secs} / 04:00`;
+            timerDisp.style.color = "#00ff66";
+        }
 
         const perc = Math.min(100, (currentSecs / 240) * 100);
-        if (fillBar) fillBar.style.width = `${perc}%`;
+        if (fillBar) {
+            fillBar.style.width = `${perc}%`;
+            fillBar.style.background = "#00ff66";
+        }
 
         // Al raggiungimento dei 4 minuti (240s) sblocchiamo la fase scambio
         if (currentSecs >= 240) {
