@@ -520,9 +520,12 @@ window.loadRegolamento = async function() {
     }
 };
 
-if(document.getElementById('gameModeInput')) document.getElementById('gameModeInput').addEventListener('change', () => {
+if(document.getElementById('gameModeInput')) document.getElementById('gameModeInput').addEventListener('change', (e) => {
     window.checkGameTypeUI?.();
     if (typeof window.displayGlobalRatings === 'function') window.displayGlobalRatings();
+    if (e && e.target && e.target.value === 'cwg_activity') {
+        if (typeof window.openCwgActivityScreen === 'function') window.openCwgActivityScreen();
+    }
 });
 if(document.getElementById('gameTypeInput')) document.getElementById('gameTypeInput').addEventListener('change', () => {
     window.checkGameTypeUI?.();
@@ -1701,6 +1704,15 @@ window.setupBugSystem = function() {
         } catch(e) {
             return false;
         }
+    };
+
+    window.checkCwgBetaVisibility = async function() {
+        const container = document.getElementById('btnCwgActivityContainer');
+        const opt = document.getElementById('opt_cwg_activity');
+        const isBeta = typeof window.isUserCwgBetaTester === 'function' ? await window.isUserCwgBetaTester() : false;
+
+        if (container) container.style.display = isBeta ? 'block' : 'none';
+        if (opt) opt.style.display = isBeta ? 'block' : 'none';
     };
 
     window.loadAdminCwgTesterList = function() {
