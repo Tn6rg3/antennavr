@@ -140,7 +140,10 @@ window.sendCwgCqSpotInChat = function() {
         const text = `📡 [SPOT CQ ACTIVITY]: ${myCall} sta facendo chiamata CQ Activity - CWG sulla banda ${band}! 📻`;
 
         // 1. Pubblica in Chat Globale
-        db.ref('globalChat').push({
+        const chatRef = db.ref('globalChat').push();
+        window.lastCqSpotMsgKey = chatRef.key;
+
+        chatRef.set({
             senderId: window.myId,
             name: myCall,
             senderName: myCall,
@@ -163,11 +166,45 @@ window.sendCwgCqSpotInChat = function() {
             expiresAt: Date.now() + 3600000,
             ts: firebase.database.ServerValue.TIMESTAMP
         }).then(() => {
-            if (typeof showToast === 'function') showToast(`📡 Chiamata CQ spottata in Bacheca Sfide e Chat Globale!`);
+            if (typeof showToast === 'function') showToast(`📡 CQ SPOT inviato sulla banda ${band}!`);
         }).catch(err => {
             console.error("CQ Spot Error:", err);
-            alert("Errore invio spot in bacheca.");
+            alert("Errore invio spot.");
         });
+    }
+};
+
+window.removeCwgCqSpot = function() {
+    if (!db || !window.myId) return;
+    const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || window.myName || "");
+    const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toUpperCase();
+
+    if (!myCall || myCall.length < 2) return alert("⚠️ Inserisci prima il tuo Nominativo / Call.");
+
+    if (confirm(`Rimuovere lo Spot CQ per ${myCall} dalla Bacheca e dalla Chat Globale?`)) {
+        // 1. Rimuove dalla Bacheca Sfide (public_lobby_rooms)
+        const spotId = `cq_spot_${myCall}_${band}`;
+        db.ref(`public_lobby_rooms/${spotId}`).remove().catch(() => {});
+
+        // 2. Rimuove lo spot specifico dalla Chat Globale
+        if (window.lastCqSpotMsgKey) {
+            db.ref(`globalChat/${window.lastCqSpotMsgKey}`).remove().catch(() => {});
+            window.lastCqSpotMsgKey = null;
+        }
+
+        // Cerca e rimuove eventuali altri spot dello stesso utente per pulizia completa
+        db.ref('globalChat').orderByChild('spotCall').equalTo(myCall).once('value', snap => {
+            if (snap.exists()) {
+                snap.forEach(c => {
+                    const val = c.val();
+                    if (val && val.isCqSpot) {
+                        db.ref(`globalChat/${c.key}`).remove().catch(() => {});
+                    }
+                });
+            }
+        });
+
+        if (typeof showToast === 'function') showToast(`📡 Spot CQ rimosso con successo!`);
     }
 };
 

@@ -888,11 +888,11 @@ window.addOrUpdateRoomCard = function(code, room) {
         const span = document.createElement('span');
         const bTitle = document.createElement('b');
         bTitle.style.color = '#00bcd4';
-        bTitle.textContent = `📡 CQ Activity - CWG (${(room.spotBand || '40m').toUpperCase()})`;
+        bTitle.textContent = `📡 CWG ${(room.spotBand || '40m').toUpperCase()}`;
 
         const smallInfo = document.createElement('small');
         smallInfo.style.color = 'var(--text-color)';
-        smallInfo.textContent = `Chiamata di: ${room.spotCall}`;
+        smallInfo.textContent = room.spotCall;
 
         span.appendChild(bTitle);
         span.appendChild(document.createElement('br'));
