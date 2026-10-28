@@ -136,7 +136,10 @@ window.sendCwgCqSpotInChat = function() {
 
     if (!myCall || myCall.length < 2) return alert("⚠️ Inserisci prima il tuo Nominativo / Call.");
 
-    if (confirm(`Lanciare la chiamata "CQ Activity - CWG" per ${myCall} sulla banda ${band} in Bacheca e Chat Globale?`)) {
+    if (confirm(`Lanciare il CQ SPOT per ${myCall} sulla banda ${band} in Bacheca e Chat Globale?`)) {
+        // Pulizia preliminare di eventuali spot precedenti per la stessa banda per evitare duplicati
+        window.removeCwgCqSpot(true, band);
+
         const text = `📡 [SPOT CQ ACTIVITY]: ${myCall} sta facendo chiamata CQ Activity - CWG sulla banda ${band}! 📻`;
 
         // 1. Pubblica in Chat Globale
@@ -154,9 +157,13 @@ window.sendCwgCqSpotInChat = function() {
             ts: firebase.database.ServerValue.TIMESTAMP
         }).catch(() => {});
 
-        // 2. Pubblica in Bacheca Sfide (public_lobby_rooms)
+        // 2. Pubblica in Bacheca Sfide (public_lobby_rooms) con rimozione automatica alla disconnessione!
         const spotId = `cq_spot_${myCall}_${band}`;
-        db.ref(`public_lobby_rooms/${spotId}`).set({
+        const spotRef = db.ref(`public_lobby_rooms/${spotId}`);
+
+        spotRef.onDisconnect().remove(); // Cancella automaticamente se l'utente chiude l'app o si disconnette
+
+        spotRef.set({
             isCqSpot: true,
             status: 'waiting',
             mode: 'cwg_activity',
@@ -174,30 +181,46 @@ window.sendCwgCqSpotInChat = function() {
     }
 };
 
-window.removeCwgCqSpot = function() {
+window.removeCwgCqSpot = function(silent = false, targetBand = null) {
     if (!db || !window.myId) return;
     const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || window.myName || "");
-    const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toUpperCase();
+    const band = targetBand || (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toUpperCase();
 
-    if (!myCall || myCall.length < 2) return alert("⚠️ Inserisci prima il tuo Nominativo / Call.");
+    if (!myCall || myCall.length < 2) return;
 
-    if (confirm(`Rimuovere lo Spot CQ per ${myCall} dalla Bacheca e dalla Chat Globale?`)) {
-        // 1. Rimuove dalla Bacheca Sfide (public_lobby_rooms)
-        const spotId = `cq_spot_${myCall}_${band}`;
-        db.ref(`public_lobby_rooms/${spotId}`).remove().catch(() => {});
+    if (!silent && !confirm(`Rimuovere lo Spot CQ per ${myCall} dalla Bacheca e dalla Chat Globale?`)) {
+        return;
+    }
 
-        // 2. Rimuove lo spot specifico dalla Chat Globale
-        if (window.lastCqSpotMsgKey) {
-            db.ref(`globalChat/${window.lastCqSpotMsgKey}`).remove().catch(() => {});
-            window.lastCqSpotMsgKey = null;
+    // 1. Rimuove dalla Bacheca Sfide (public_lobby_rooms)
+    const spotId = `cq_spot_${myCall}_${band}`;
+    db.ref(`public_lobby_rooms/${spotId}`).remove().catch(() => {});
+
+    // 2. Rimuove lo spot specifico dalla Chat Globale
+    if (window.lastCqSpotMsgKey) {
+        db.ref(`globalChat/${window.lastCqSpotMsgKey}`).remove().catch(() => {});
+        window.lastCqSpotMsgKey = null;
+    }
+
+    // Cerca e rimuove eventuali altri spot dello stesso utente per pulizia completa
+    db.ref('globalChat').orderByChild('spotCall').equalTo(myCall).once('value', snap => {
+        if (snap.exists()) {
+            snap.forEach(c => {
+                const val = c.val();
+                if (val && val.isCqSpot && (!targetBand || val.spotBand === band)) {
+                    db.ref(`globalChat/${c.key}`).remove().catch(() => {});
+                }
+            });
         }
+    });
 
-        // Cerca e rimuove eventuali altri spot dello stesso utente per pulizia completa
-        db.ref('globalChat').orderByChild('spotCall').equalTo(myCall).once('value', snap => {
-            if (snap.exists()) {
-                snap.forEach(c => {
-                    const val = c.val();
-                    if (val && val.isCqSpot) {
+    if (!silent && typeof showToast === 'function') showToast(`📡 Spot CQ rimosso con successo!`);
+};
+
+// Listener per pulizia spot alla chiusura della scheda o dell'app
+window.addEventListener('beforeunload', () => {
+    try { window.removeCwgCqSpot(true); } catch(e) {}
+});
                         db.ref(`globalChat/${c.key}`).remove().catch(() => {});
                     }
                 });
