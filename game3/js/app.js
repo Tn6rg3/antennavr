@@ -1776,7 +1776,7 @@ window.setupBugSystem = function() {
             const inputVal = (document.getElementById('adminCwgTesterInput')?.value || "").trim();
             if (!inputVal) return alert("Inserisci l'ID Telegram, Alias o Username del Beta Tester da abilitare.");
 
-            const candidates = await window.findTargetUserCandidates(inputVal);
+            const candidates = await window.findAdminUserCandidates(inputVal);
             if (!candidates || candidates.length === 0) {
                 return alert(`Nessun utente trovato per '${inputVal}'. Assicurati che l'utente sia entrato almeno una volta nel gioco.`);
             }
@@ -1800,7 +1800,7 @@ window.setupBugSystem = function() {
             const inputVal = (document.getElementById('adminCwgTesterInput')?.value || "").trim();
             if (!inputVal) return alert("Inserisci l'ID Telegram, Alias o Username del Beta Tester da rimuovere.");
 
-            const candidates = await window.findTargetUserCandidates(inputVal);
+            const candidates = await window.findAdminUserCandidates(inputVal);
             if (!candidates || candidates.length === 0) {
                 return alert(`Nessun utente trovato per '${inputVal}'.`);
             }
