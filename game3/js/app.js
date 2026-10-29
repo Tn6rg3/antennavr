@@ -3326,12 +3326,7 @@ window.isDateInCurrentMonth = function(dateVal) {
     const yyyyMm = `${curYear}-${String(curMonth).padStart(2, '0')}`;
     return str.includes(yyyyMm);
 };
-        }
-    }
-
-    const yyyyMm = `${curYear}-${String(curMonth).padStart(2, '0')}`;
-    return str.includes(yyyyMm);
-};
+window.maxWpmRecordsCache = window.maxWpmRecordsCache || {};
 
 window.openMaxWpmRecordsModal = function() {
     const modal = document.getElementById('maxWpmRecordsModal');
@@ -3343,84 +3338,131 @@ window.openMaxWpmRecordsModal = function() {
     const monthFormatted = now.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
 
     modal.style.display = 'flex';
-    container.innerHTML = `<p style="text-align:center; font-size:0.85em; color:var(--hint-color); padding:10px;">Caricamento record del mese (${currentMonthStr})...</p>`;
-
-    if (!db) return;
 
     const modalTitle = modal.querySelector('h3');
     if (modalTitle) {
         modalTitle.textContent = `⚡ Record Max WPM (${monthFormatted})`;
     }
 
-    const modesToFetch = [
-        { id: 'standard', name: '🔤 Parole Comuni', path: 'leaderboard/standard' },
-        { id: 'standard_plus', name: '➕ Parole +', path: 'leaderboard/standard_plus' },
-        { id: 'daily_challenge', name: '📅 Sfida Giornaliera', path: 'leaderboard/daily_challenge' },
-        { id: 'tri_daily', name: '🏆 Sfida Tripla', path: 'leaderboard/tri_daily' },
-        { id: 'callsign', name: '🎙️ CW Freak (Nominativi)', path: 'leaderboard/callsign/global' }
-    ];
+    // OTTIMIZZAZIONE BANDWIDTH: Cache in memoria per 10 minuti (0 Download Firebase se riaperto)
+    if (window.maxWpmRecordsCache[currentMonthStr] && (Date.now() - window.maxWpmRecordsCache[currentMonthStr].ts < 600000)) {
+        container.innerHTML = window.maxWpmRecordsCache[currentMonthStr].html;
+        return;
+    }
 
-    const promises = modesToFetch.map(m => {
-        return db.ref(m.path).once('value').then(snap => {
-            let bestName = "Nessun Record";
-            let maxWpm = 0;
-            let bestScore = 0;
+    container.innerHTML = `<p style="text-align:center; font-size:0.85em; color:var(--hint-color); padding:10px;">Caricamento record del mese (${currentMonthStr})...</p>`;
 
-            if (snap.exists()) {
-                const scanNode = (node) => {
-                    if (!node) return;
-                    node.forEach(child => {
+    if (!db) return;
+
+    // OTTIMIZZAZIONE BANDWIDTH: Per Sfida Giornaliera e Tripla interroghiamo SOLO i giorni del mese corrente invece dell'intero storico!
+    const todayNum = now.getDate();
+    const currentMonthDailyPromises = [];
+    const currentMonthTriPromises = [];
+
+    for (let d = 1; d <= todayNum; d++) {
+        const dayStr = `${currentMonthStr}-${String(d).padStart(2, '0')}`;
+        currentMonthDailyPromises.push(db.ref(`leaderboard/daily_challenge/${dayStr}`).once('value').catch(() => null));
+        currentMonthTriPromises.push(db.ref(`leaderboard/tri_daily/${dayStr}`).once('value').catch(() => null));
+    }
+
+    const standardPromise = db.ref('leaderboard/standard').limitToLast(50).once('value').catch(() => null);
+    const standardPlusPromise = db.ref('leaderboard/standard_plus').limitToLast(50).once('value').catch(() => null);
+    const callsignPromise = db.ref('leaderboard/callsign/global').orderByChild('score').limitToLast(50).once('value').catch(() => null);
+
+    Promise.all([
+        Promise.all(currentMonthDailyPromises),
+        Promise.all(currentMonthTriPromises),
+        standardPromise,
+        standardPlusPromise,
+        callsignPromise
+    ]).then(([dailySnaps, triSnaps, stdSnap, stdPlusSnap, callsignSnap]) => {
+        const results = [];
+
+        const scanRecords = (snapsList, modeName, wpmField = 'wpm') => {
+            let maxW = 0, bName = "Nessun Record", bScore = 0;
+            snapsList.forEach(snap => {
+                if (snap && snap.exists()) {
+                    snap.forEach(child => {
                         const val = child.val();
                         if (val && typeof val === 'object') {
-                            // Escludiamo rigorosamente le partite in singolo giocate con parametri personalizzati (Semplice/FixedSpeed/Spaziatura)
-                            const isCustomParamMatch = !!val.isEasyMode || !!val.isFixedSpeed || !!val.hasCustomParams ||
-                                                       (val.charSpaceWpm && Number(val.charSpaceWpm) > 0) ||
-                                                       (val.wordSpaceMult && Number(val.wordSpaceMult) !== 1.0);
-
-                            if (val.wpm !== undefined || val.peakWpm !== undefined) {
-                                if (!isCustomParamMatch) {
-                                    const w = Number(val.peakWpm || val.wpm || 0);
-                                    const recordDate = String(val.date || child.key || "");
-
-                                    if (window.isDateInCurrentMonth(recordDate) && w > maxWpm) {
-                                        maxWpm = w;
-                                        bestName = val.name || "Telegrafista";
-                                        bestScore = val.score || val.totalScore || 0;
-                                    }
-                                }
-                            } else {
-                                const key = String(child.key || "");
-                                if (!key.includes('-') || key.startsWith(currentMonthStr)) {
-                                    scanNode(child);
+                            const isCustom = !!val.isEasyMode || !!val.isFixedSpeed || !!val.hasCustomParams || (val.charSpaceWpm && Number(val.charSpaceWpm) > 0) || (val.wordSpaceMult && Number(val.wordSpaceMult) !== 1.0);
+                            if (!isCustom) {
+                                const w = Number(val[wpmField] || val.wpm || val.peakWpm || 0);
+                                if (w > maxW) {
+                                    maxW = w;
+                                    bName = val.name || "Telegrafista";
+                                    bScore = val.score || val.totalScore || 0;
                                 }
                             }
                         }
                     });
+                }
+            });
+            return { name: modeName, bestName: bName, maxWpm: maxW, bestScore: bScore };
+        };
+
+        const scanTreeNode = (snap, modeName) => {
+            let maxW = 0, bName = "Nessun Record", bScore = 0;
+            if (snap && snap.exists()) {
+                const scan = (node) => {
+                    if (!node) return;
+                    node.forEach(child => {
+                        const val = child.val();
+                        if (val && typeof val === 'object') {
+                            if (val.wpm !== undefined || val.peakWpm !== undefined) {
+                                const isCustom = !!val.isEasyMode || !!val.isFixedSpeed || !!val.hasCustomParams || (val.charSpaceWpm && Number(val.charSpaceWpm) > 0) || (val.wordSpaceMult && Number(val.wordSpaceMult) !== 1.0);
+                                if (!isCustom) {
+                                    const w = Number(val.peakWpm || val.wpm || 0);
+                                    const recordDate = String(val.date || child.key || "");
+                                    if (window.isDateInCurrentMonth(recordDate) && w > maxW) {
+                                        maxW = w;
+                                        bName = val.name || "Telegrafista";
+                                        bScore = val.score || val.totalScore || 0;
+                                    }
+                                }
+                            } else {
+                                scan(child);
+                            }
+                        }
+                    });
                 };
-                scanNode(snap);
+                scan(snap);
             }
+            return { name: modeName, bestName: bName, maxWpm: maxW, bestScore: bScore };
+        };
 
-            return { name: m.name, bestName, maxWpm, bestScore };
-        }).catch(() => ({ name: m.name, bestName: "Nessun Record", maxWpm: 0, bestScore: 0 }));
-    });
+        results.push(scanTreeNode(stdSnap, '🔤 Parole Comuni'));
+        results.push(scanTreeNode(stdPlusSnap, '➕ Parole +'));
+        results.push(scanRecords(dailySnaps, '📅 Sfida Giornaliera', 'wpm'));
+        results.push(scanRecords(triSnaps, '🏆 Sfida Tripla', 'peakWpm'));
+        results.push(scanTreeNode(callsignSnap, '🎙️ CW Freak (Nominativi)'));
 
-    Promise.all(promises).then(results => {
-        container.innerHTML = '';
+        let html = '';
         results.forEach(res => {
-            const row = document.createElement('div');
-            row.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;";
-
-            const leftDiv = document.createElement('div');
-            leftDiv.style.cssText = "display:flex; flex-direction:column;";
-
-            const modeB = document.createElement('b');
-            modeB.style.cssText = "font-size:0.85em; color:var(--text-color);";
-            modeB.textContent = res.name;
-
             const extraScoreStr = (res.bestScore > 0) ? ` • ${res.bestScore} pt` : '';
-            const nameSpan = document.createElement('span');
-            nameSpan.style.cssText = "font-size:0.75em; color:var(--hint-color); margin-top:2px;";
-            nameSpan.textContent = res.maxWpm > 0 ? `🥇 Recordman: ${res.bestName}${extraScoreStr}` : `Nessun record questo mese`;
+            html += `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
+                    <div style="display:flex; flex-direction:column;">
+                        <b style="font-size:0.85em; color:var(--text-color);">${res.name}</b>
+                        <span style="font-size:0.75em; color:var(--hint-color); margin-top:2px;">${res.maxWpm > 0 ? `🥇 Recordman: ${res.bestName}${extraScoreStr}` : 'Nessun record questo mese'}</span>
+                    </div>
+                    <b style="font-size:1em; color:#ff9800; font-weight:bold;">${res.maxWpm > 0 ? res.maxWpm + ' WPM' : '--'}</b>
+                </div>
+            `;
+        });
+
+        // Salva la cache in memoria per 10 minuti
+        window.maxWpmRecordsCache[currentMonthStr] = {
+            ts: Date.now(),
+            html: html
+        };
+
+        container.innerHTML = html;
+    }).catch(err => {
+        console.error("Max WPM Modal Error:", err);
+        container.innerHTML = '<p style="text-align:center; font-size:0.85em; color:var(--hint-color); padding:10px;">Errore caricamento record.</p>';
+    });
+};
 
             leftDiv.appendChild(modeB);
             leftDiv.appendChild(nameSpan);
