@@ -3464,20 +3464,6 @@ window.openMaxWpmRecordsModal = function() {
     });
 };
 
-            leftDiv.appendChild(modeB);
-            leftDiv.appendChild(nameSpan);
-
-            const rightB = document.createElement('b');
-            rightB.style.cssText = "font-size:1em; color:#ff9800; font-weight:bold;";
-            rightB.textContent = res.maxWpm > 0 ? `${res.maxWpm} WPM` : `--`;
-
-            row.appendChild(leftDiv);
-            row.appendChild(rightB);
-            container.appendChild(row);
-        });
-    });
-};
-
 window.inviteFriendsToRoom = function() {
     if (!roomCode) return showToast("Nessuna stanza attiva.");
     const url = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}/${WEBAPP_NAME}?startapp=room_${roomCode}`)}&text=${encodeURIComponent(`📻 Unisciti alla mia stanza su Sfida Telegrafia!\nCodice Stanza: #${roomCode}`)}`;
