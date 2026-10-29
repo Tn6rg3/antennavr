@@ -8,6 +8,7 @@ window.cwgGeneratedTxKey = "";
 window.cwgLiveQsoListenerRef = null;
 window.isCwgInitiator = false; // true se l'utente è Utente A (chi avvia per primo)
 window.cwgMyHandshakeTs = 0;
+window.cwgQsoStartTimestamp = 0;
 
 window.cleanCallsignString = function(str) {
     if (!str) return "";
@@ -31,7 +32,6 @@ window.openCwgActivityScreenImpl = async function() {
         return alert("⚠️ Questa modalità è attualmente riservata ai Beta Tester autorizzati.");
     }
 
-    // Verifica / Richiesta obbligatoria del Nominativo Activity (SENZA mai usare lo username Telegram)
     let myActivityCall = localStorage.getItem('cwgame_activity_call');
 
     if (!myActivityCall && db && window.myId) {
@@ -58,6 +58,32 @@ window.openCwgActivityScreenImpl = async function() {
         window.showScreen('cwgActivityScreen');
     }
 
+    // Controlliamo se c'è una sessione QSO già attiva da ripristinare anziché azzerare
+    const activeSessionRaw = localStorage.getItem('cwgame_active_qso_session');
+    if (activeSessionRaw) {
+        try {
+            const session = JSON.parse(activeSessionRaw);
+            const elapsed = Math.floor((Date.now() - session.qsoStartTs) / 1000);
+
+            if (elapsed < 360) { // Entro i 6 minuti totali (4 min QSO + 2 min Scambio)
+                if (document.getElementById('cwgLogMyCall')) document.getElementById('cwgLogMyCall').value = session.myCall;
+                if (document.getElementById('cwgLogPartnerCall')) document.getElementById('cwgLogPartnerCall').value = session.partnerCall;
+                if (document.getElementById('cwgLogBandSelect')) document.getElementById('cwgLogBandSelect').value = session.band;
+                if (document.getElementById('cwgLogStartTime')) document.getElementById('cwgLogStartTime').value = session.startTime;
+
+                if (elapsed < 240) {
+                    window.runCwgQsoTimerCountdown(elapsed, session.isInitiator);
+                } else {
+                    window.isCwgInitiator = session.isInitiator;
+                    window.startCwgKeysExchangePhase();
+                }
+                return;
+            }
+        } catch(e) {
+            localStorage.removeItem('cwgame_active_qso_session');
+        }
+    }
+
     window.resetCwgForm();
 };
 
@@ -76,6 +102,8 @@ window.resetCwgForm = function() {
     window.cwgExchangeSecondsLeft = 120;
     window.cwgGeneratedTxKey = "";
     window.isCwgInitiator = false;
+    window.cwgQsoStartTimestamp = 0;
+    localStorage.removeItem('cwgame_active_qso_session');
 
     if (window.cwgLiveQsoListenerRef) {
         try { window.cwgLiveQsoListenerRef.off(); } catch(e) {}
@@ -139,12 +167,11 @@ window.sendCwgCqSpotInChat = function() {
     if (!myCall || myCall.length < 2) return alert("⚠️ Inserisci prima il tuo Nominativo / Call.");
 
     if (confirm(`Lanciare il CQ SPOT per ${myCall} sulla banda ${band} in Bacheca e Chat Globale?`)) {
-        // Pulizia preliminare di eventuali spot precedenti per la stessa banda per evitare duplicati
+        // Pulizia preliminare di eventuali spot precedenti per la stessa banda
         window.removeCwgCqSpot(true, band);
 
         const text = `📡 [SPOT CQ ACTIVITY]: ${myCall} sta facendo chiamata CQ Activity - CWG sulla banda ${band}! 📻`;
 
-        // 1. Pubblica in Chat Globale
         const chatRef = db.ref('globalChat').push();
         window.lastCqSpotMsgKey = chatRef.key;
 
@@ -159,11 +186,10 @@ window.sendCwgCqSpotInChat = function() {
             ts: firebase.database.ServerValue.TIMESTAMP
         }).catch(() => {});
 
-        // 2. Pubblica in Bacheca Sfide (public_lobby_rooms) con rimozione automatica alla disconnessione!
         const spotId = `cq_spot_${myCall}_${band}`;
         const spotRef = db.ref(`public_lobby_rooms/${spotId}`);
 
-        spotRef.onDisconnect().remove(); // Cancella automaticamente se l'utente chiude l'app o si disconnette
+        spotRef.onDisconnect().remove();
 
         spotRef.set({
             isCqSpot: true,
@@ -194,17 +220,14 @@ window.removeCwgCqSpot = function(silent = false, targetBand = null) {
         return;
     }
 
-    // 1. Rimuove dalla Bacheca Sfide (public_lobby_rooms)
     const spotId = `cq_spot_${myCall}_${band}`;
     db.ref(`public_lobby_rooms/${spotId}`).remove().catch(() => {});
 
-    // 2. Rimuove lo spot specifico dalla Chat Globale
     if (window.lastCqSpotMsgKey) {
         db.ref(`globalChat/${window.lastCqSpotMsgKey}`).remove().catch(() => {});
         window.lastCqSpotMsgKey = null;
     }
 
-    // Cerca e rimuove eventuali altri spot dello stesso utente per pulizia completa
     db.ref('globalChat').orderByChild('spotCall').equalTo(myCall).once('value', snap => {
         if (snap.exists()) {
             snap.forEach(c => {
@@ -219,7 +242,6 @@ window.removeCwgCqSpot = function(silent = false, targetBand = null) {
     if (!silent && typeof showToast === 'function') showToast(`📡 Spot CQ rimosso con successo!`);
 };
 
-// Listener per pulizia spot alla chiusura della scheda o dell'app
 window.addEventListener('beforeunload', () => {
     try { window.removeCwgCqSpot(true); } catch(e) {}
 });
@@ -271,7 +293,6 @@ window.checkCwgDoubleHandshakeMatch = function() {
     const nowTs = Date.now();
     window.cwgMyHandshakeTs = nowTs;
 
-    // Registriamo su Firebase che noi (myCall) stiamo collegando partnerCall sulla banda selezionata
     const myPresenceKey = `${myCall}_${partnerCall}_${band}`;
     const myPresenceRef = db.ref(`activity_cwg/handshake/${myPresenceKey}`);
     myPresenceRef.set({
@@ -281,12 +302,10 @@ window.checkCwgDoubleHandshakeMatch = function() {
         ts: nowTs
     }).catch(() => {});
 
-    // Ascoltiamo se anche il partnerCall ha registrato che sta collegando myCall sulla stessa banda
     const partnerPresenceKey = `${partnerCall}_${myCall}_${band}`;
     const partnerPresenceRef = db.ref(`activity_cwg/handshake/${partnerPresenceKey}`);
     window.cwgLiveQsoListenerRef = partnerPresenceRef;
 
-    // Verifica presenza utente nel database del gioco per avviso
     db.ref('users').orderByChild('activity_call').equalTo(partnerCall).once('value', uSnap => {
         let isRegistered = uSnap.exists();
 
@@ -310,7 +329,6 @@ window.checkCwgDoubleHandshakeMatch = function() {
         const data = snap.val() || {};
         const partnerTs = data.ts || 0;
 
-        // Se la richiesta del partner è recente (ultimi 5 minuti)
         if (Math.abs(nowTs - partnerTs) < 300000) {
             if (statusBox) {
                 statusBox.style.display = "block";
@@ -324,13 +342,11 @@ window.checkCwgDoubleHandshakeMatch = function() {
                 statusBox.appendChild(span);
             }
 
-            // IL TIMER PARTE UNICAMENTE ORA A CORRISPONDENZA CONFERMATA!
             if (!window.cwgQsoTimerInterval && window.cwgQsoTimerSeconds === 0) {
                 if (typeof showToast === 'function') {
                     showToast(`🟢 Corrispondenza confermata tra ${myCall} e ${partnerCall}! Timer 4 Minuti avviato.`);
                 }
 
-                // Determiniamo chi è Utente A (chi ha salvato la presenza prima)
                 const isInitiator = (nowTs <= partnerTs);
                 window.runCwgQsoTimerCountdown(0, isInitiator);
             }
@@ -352,14 +368,16 @@ window.startCwgQsoTimer = function() {
     }
     if (cancelBtn) cancelBtn.style.display = "block";
 
-    // Attiviamo l'handshake e mettiamo il timer in STANDBY finché non c'è corrispondenza reciproca!
     window.checkCwgDoubleHandshakeMatch();
 };
 
 window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator = true) {
     window.isCwgInitiator = isInitiator;
 
-    // Compiliamo automaticamente l'Ora di Inizio con l'orario attuale se vuota
+    const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || "");
+    const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
+    const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
+
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
@@ -367,6 +385,19 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
     if (startTimeInput && (!startTimeInput.value || startTimeInput.value.trim() === "")) {
         startTimeInput.value = `${hh}:${mm}`;
     }
+
+    // Salviamo lo stato della sessione attiva in localStorage per ripristino istantaneo!
+    const qsoStartTs = Date.now() - (Number(initialElapsedSeconds) * 1000);
+    window.cwgQsoStartTimestamp = qsoStartTs;
+
+    localStorage.setItem('cwgame_active_qso_session', JSON.stringify({
+        myCall: myCall,
+        partnerCall: partnerCall,
+        band: band,
+        startTime: startTimeInput ? startTimeInput.value : `${hh}:${mm}`,
+        qsoStartTs: qsoStartTs,
+        isInitiator: isInitiator
+    }));
 
     if (window.cwgQsoTimerInterval) clearInterval(window.cwgQsoTimerInterval);
     window.cwgQsoTimerSeconds = Number(initialElapsedSeconds) || 0;
@@ -390,7 +421,6 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
             fillBar.style.background = "#00ff66";
         }
 
-        // Al raggiungimento dei 4 minuti (240s) sblocchiamo la fase scambio
         if (currentSecs >= 240) {
             if (window.cwgQsoTimerInterval) {
                 clearInterval(window.cwgQsoTimerInterval);
@@ -405,7 +435,6 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
                 endTimeInput.value = `${endHh}:${endMm}`;
             }
 
-            // AVVIO FASE SCAMBIO CHIAVI CON TIMER LIMITE DI 2 MINUTI (120s)
             window.startCwgKeysExchangePhase();
         }
     };
@@ -422,21 +451,23 @@ window.startCwgKeysExchangePhase = function() {
     const timerDisp = document.getElementById('cwgQsoTimerDisplay');
     const fillBar = document.getElementById('cwgTimerProgressFill');
     const stepHelp = document.getElementById('cwgKeysStepHelpText');
+    const txBox = document.getElementById('cwgTxKeyDisplayBox');
 
     if (keysSec) keysSec.style.display = "block";
-    window.cwgExchangeSecondsLeft = 120; // 2 minuti esatti
+    window.cwgExchangeSecondsLeft = 120;
 
     if (window.isCwgInitiator) {
-        // UTENTE A (Iniziatore): Genera e mostra SUBITO la propria Chiave TX da trasmettere
+        // UTENTE A: Genera e mostra SUBITO la propria Chiave TX da trasmettere
         window.requestCwgTxKey();
         if (stepHelp) {
             stepHelp.textContent = "① Trasmetti la tua Chiave TX in Morse a B, e scrivi qui sotto la Chiave RX che B ti invierà entro 2 minuti!";
             stepHelp.style.color = "#00bcd4";
         }
     } else {
-        // UTENTE B (Partner): Deve prima inserire la chiave di A per sbloccare la propria Chiave TX
+        // UTENTE B: La propria Chiave TX rimane NASCOSTA finché B non inserisce la chiave di A!
+        if (txBox) txBox.style.display = "none";
         if (stepHelp) {
-            stepHelp.textContent = "① Ricevi la Chiave Morse di A ed inseriscila nel campo qui sotto entro 2 minuti!";
+            stepHelp.textContent = "① Ricevi la Chiave Morse di A ed inseriscila nel campo qui sotto entro 2 minuti per sbloccare la tua Chiave TX!";
             stepHelp.style.color = "#ff9800";
         }
     }
@@ -461,7 +492,6 @@ window.startCwgKeysExchangePhase = function() {
             fillBar.style.background = left < 30 ? "#f44336" : "#ff9800";
         }
 
-        // SCADENZA TIMER 2 MINUTI SCAMBIO
         if (left <= 0) {
             clearInterval(window.cwgExchangeTimerInterval);
             window.cwgExchangeTimerInterval = null;
@@ -470,7 +500,6 @@ window.startCwgKeysExchangePhase = function() {
             const rxKey = rxInput ? rxInput.value.trim() : "";
 
             if (rxKey.length === 8) {
-                // Se la chiave è stata inserita in tempo, salva automaticamente
                 showToast("⏱️ Tempo di scambio scaduto. Salvataggio automatico del Log...");
                 window.saveCwgQsoLog();
             } else {
@@ -487,8 +516,8 @@ window.onCwgRxKeyInputChanged = function() {
     const saveBtn = document.getElementById('btnSaveCwgQso');
 
     if (rxKey.length === 8) {
-        // Se siamo Utente B e non avevamo ancora generato la nostra chiave TX, la generiamo ORA!
-        if (!window.isCwgInitiator && !window.cwgGeneratedTxKey) {
+        // Quando Utente B inserisce la chiave ricevuta da A, sblocchiamo e mostriamo la Chiave TX di B!
+        if (!window.isCwgInitiator || !window.cwgGeneratedTxKey) {
             window.requestCwgTxKey();
         }
         if (saveBtn) saveBtn.disabled = false;
