@@ -25,7 +25,7 @@ window.saveMyActivityCallPreference = function(newCall) {
     }
 };
 
-window.openCwgActivityScreen = async function() {
+window.openCwgActivityScreenImpl = async function() {
     const isBeta = typeof window.isUserCwgBetaTester === 'function' ? await window.isUserCwgBetaTester() : false;
     if (!isBeta) {
         return alert("⚠️ Questa modalità è attualmente riservata ai Beta Tester autorizzati.");
@@ -60,6 +60,8 @@ window.openCwgActivityScreen = async function() {
 
     window.resetCwgForm();
 };
+
+window.openCwgActivityScreen = window.openCwgActivityScreenImpl;
 
 window.resetCwgForm = function() {
     if (window.cwgQsoTimerInterval) {

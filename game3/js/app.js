@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.255";
+const APP_VERSION = "20260807.256";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -3273,6 +3273,11 @@ window.checkAndTriggerTriDailySlotNotifications = function() {
             });
         });
     });
+};
+
+window.openCourseTab = function() {
+    if (typeof window.showProfileScreen === 'function') window.showProfileScreen();
+    if (typeof window.switchProfileTab === 'function') window.switchProfileTab('course');
 };
 
 // --- CONDIVISIONE ---
