@@ -223,15 +223,6 @@ window.removeCwgCqSpot = function(silent = false, targetBand = null) {
 window.addEventListener('beforeunload', () => {
     try { window.removeCwgCqSpot(true); } catch(e) {}
 });
-                        db.ref(`globalChat/${c.key}`).remove().catch(() => {});
-                    }
-                });
-            }
-        });
-
-        if (typeof showToast === 'function') showToast(`📡 Spot CQ rimosso con successo!`);
-    }
-};
 
 window.joinCqSpotActivity = async function(spotCall, spotBand) {
     if (!spotCall) return;
