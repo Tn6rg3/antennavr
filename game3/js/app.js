@@ -1696,18 +1696,25 @@ window.setupBugSystem = function() {
 
     // --- GESTIONE BETA TESTER ACTIVITY - CWG ---
     window.isUserCwgBetaTester = async function() {
-        if (window.isAdmin) {
-            window.isCwgBetaCached = true;
-            return true;
-        }
         if (!db || !window.myId) return false;
         try {
             const snap = await db.ref(`appConfig/cwg_beta_users/${window.myId}`).once('value');
-            const isBeta = snap.exists() && snap.val() === true;
-            window.isCwgBetaCached = isBeta;
-            return isBeta;
-        } catch(e) {
+            if (snap.exists()) {
+                const isBeta = (snap.val() === true);
+                window.isCwgBetaCached = isBeta;
+                return isBeta;
+            }
+            // Se l'ID non è esplicitamente presente in cwg_beta_users, consentiamo l'accesso all'Admin solo se il nodo cwg_beta_users è vuoto
+            const rootBetaSnap = await db.ref('appConfig/cwg_beta_users').once('value');
+            if (!rootBetaSnap.exists() && window.isAdmin) {
+                window.isCwgBetaCached = true;
+                return true;
+            }
+            window.isCwgBetaCached = false;
             return false;
+        } catch(e) {
+            window.isCwgBetaCached = !!window.isAdmin;
+            return !!window.isAdmin;
         }
     };
 
@@ -3287,7 +3294,7 @@ window.shareAppToFriends = function() {
 };
 
 window.isDateInCurrentMonth = function(dateVal) {
-    if (!dateVal) return true;
+    if (!dateVal) return false;
     const now = new Date();
     const curYear = now.getFullYear();
     const curMonth = now.getMonth() + 1;
@@ -3298,19 +3305,27 @@ window.isDateInCurrentMonth = function(dateVal) {
     if (str.includes('-')) {
         const parts = str.split('-');
         if (parts.length >= 2) {
-            const y = parseInt(parts[0]);
-            const m = parseInt(parts[1]);
+            let y = parseInt(parts[0]);
+            let m = parseInt(parts[1]);
+            if (y < 100) y += 2000;
             return (y === curYear && m === curMonth);
         }
     }
 
-    // Formato IT: DD/MM/YYYY
+    // Formato IT: DD/MM/YYYY o DD/MM/YY
     if (str.includes('/')) {
         const parts = str.split('/');
         if (parts.length >= 3) {
-            const m = parseInt(parts[1]);
-            const y = parseInt(parts[2]);
+            let m = parseInt(parts[1]);
+            let y = parseInt(parts[2]);
+            if (y < 100) y += 2000;
             return (y === curYear && m === curMonth);
+        }
+    }
+
+    const yyyyMm = `${curYear}-${String(curMonth).padStart(2, '0')}`;
+    return str.includes(yyyyMm);
+};
         }
     }
 
