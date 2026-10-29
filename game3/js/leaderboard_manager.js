@@ -711,15 +711,21 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
             window.renderPlayersListHTML(players, els.leaderboardContainer, true);
         });
     } else {
-        // Se 'all', dobbiamo comunque limitare per non scaricare tutto
-        db.ref(dbPath).once('value', snapshot => {
+        // OTTIMIZZAZIONE BANDWIDTH: Se 'all', interroghiamo solo i top 30 per categoria invece dell'intero albero storico!
+        Promise.all([
+            db.ref(`${dbPath}/single_10`).orderByChild('score').limitToLast(30).once('value').catch(() => null),
+            db.ref(`${dbPath}/single_20`).orderByChild('score').limitToLast(30).once('value').catch(() => null),
+            db.ref(`${dbPath}/single_30`).orderByChild('score').limitToLast(30).once('value').catch(() => null),
+            db.ref(`${dbPath}/single_50`).orderByChild('score').limitToLast(30).once('value').catch(() => null)
+        ]).then(snaps => {
             let players = [];
-            snapshot.forEach(wordCountNode => {
-                const wcKey = wordCountNode.key;
-                if (wcKey.startsWith('single_')) {
-                    wordCountNode.forEach(userNode => {
+            const wcKeys = ['single_10', 'single_20', 'single_30', 'single_50'];
+            snaps.forEach((snap, idx) => {
+                if (snap && snap.exists()) {
+                    const wcKey = wcKeys[idx];
+                    snap.forEach(userNode => {
                         let p = userNode.val();
-                        if (players.length < 200) { // Limite di sicurezza
+                        if (p) {
                             p.id = userNode.key;
                             p.dbPath = `${dbPath}/${wcKey}/${userNode.key}`;
                             players.push(p);

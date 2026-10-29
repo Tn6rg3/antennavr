@@ -319,6 +319,8 @@ window.refreshOnlineUsersList = function() {
     });
 };
 
+window.bannedUsersCache = window.bannedUsersCache || {};
+
 window.renderOrUpdateUserListItem = async function(userId, u) {
     const isValId = (typeof window.isValidTelegramId === 'function') ? window.isValidTelegramId(userId) : (userId && userId !== 'undefined' && userId !== 'null' && userId !== '0');
 
@@ -327,15 +329,18 @@ window.renderOrUpdateUserListItem = async function(userId, u) {
         return;
     }
 
-    // FILTRO RIGIDO BLACKLIST: mai mostrare utenti in blacklist
+    // FILTRO RIGIDO BLACKLIST: con cache in memoria per evitare query Firebase ad ogni heartbeat!
     try {
         if (db) {
-            const [banConfigSnap, banRootSnap] = await Promise.all([
-                db.ref(`appConfig/bannedUsers/${userId}`).once('value').catch(() => null),
-                db.ref(`bannedUsers/${userId}`).once('value').catch(() => null)
-            ]);
-
-            const isBanned = (banConfigSnap && banConfigSnap.val() === true) || (banRootSnap && banRootSnap.val() === true);
+            let isBanned = window.bannedUsersCache[userId];
+            if (isBanned === undefined) {
+                const [banConfigSnap, banRootSnap] = await Promise.all([
+                    db.ref(`appConfig/bannedUsers/${userId}`).once('value').catch(() => null),
+                    db.ref(`bannedUsers/${userId}`).once('value').catch(() => null)
+                ]);
+                isBanned = (banConfigSnap && banConfigSnap.val() === true) || (banRootSnap && banRootSnap.val() === true);
+                window.bannedUsersCache[userId] = isBanned;
+            }
 
             if (isBanned) {
                 window.removeUserListItem(userId);
