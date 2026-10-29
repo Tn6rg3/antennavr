@@ -34,10 +34,21 @@ window.fetchDictionary = async function(url, lang) {
 };
 
 window.updateDictionary = function() {
-    window.masterDictionary = (currentLang === 'en' && window.enDictionary.length > 0) ? window.enDictionary : window.itDictionary;
+    // Uniamo 'parole.txt' e 'parole2.txt' in un unico master dictionary italiano completo e ricchissimo
+    const combinedIt = Array.from(new Set([
+        ...(window.itDictionary || []),
+        ...(window.arcadeDictionary || []),
+        ...(typeof FALLBACK_WORDS_IT !== 'undefined' ? FALLBACK_WORDS_IT.map(w => w.toLowerCase()) : [])
+    ])).filter(w => w && w.length >= 2);
+
+    window.itDictionaryCombined = combinedIt;
+    window.masterDictionary = (currentLang === 'en' && window.enDictionary && window.enDictionary.length > 0)
+        ? window.enDictionary
+        : combinedIt;
 };
 
 window.getDailyWords = function(num) {
+    window.updateDictionary();
     // 1. Data locale formattata YYYYMMDD per garantire che tutti gli utenti nello stesso giorno abbiano lo stesso seed
     const d = new Date();
     const year = d.getFullYear();
@@ -49,7 +60,9 @@ window.getDailyWords = function(num) {
 
     // 2. Base Dizionario Fisso ed Ordinato Alfabeticamente (Indipendente dalle impostazioni lingua dell'utente)
     let baseDict = [];
-    if (window.itDictionary && window.itDictionary.length > 0) {
+    if (window.itDictionaryCombined && window.itDictionaryCombined.length > 0) {
+        baseDict = [...window.itDictionaryCombined];
+    } else if (window.itDictionary && window.itDictionary.length > 0) {
         baseDict = [...window.itDictionary];
     } else if (typeof FALLBACK_WORDS_IT !== 'undefined' && FALLBACK_WORDS_IT.length > 0) {
         baseDict = [...FALLBACK_WORDS_IT].map(w => w.toLowerCase());
@@ -76,6 +89,7 @@ window.getDailyWords = function(num) {
 };
 
 window.getTriDailyWords = function(num) {
+    window.updateDictionary();
     const d = new Date();
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -94,7 +108,9 @@ window.getTriDailyWords = function(num) {
     const prng = mulberry32(numericSeed);
 
     let baseDict = [];
-    if (window.itDictionary && window.itDictionary.length > 0) {
+    if (window.itDictionaryCombined && window.itDictionaryCombined.length > 0) {
+        baseDict = [...window.itDictionaryCombined];
+    } else if (window.itDictionary && window.itDictionary.length > 0) {
         baseDict = [...window.itDictionary];
     } else if (typeof FALLBACK_WORDS_IT !== 'undefined' && FALLBACK_WORDS_IT.length > 0) {
         baseDict = [...FALLBACK_WORDS_IT].map(w => w.toLowerCase());
