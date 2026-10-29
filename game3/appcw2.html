@@ -24,6 +24,14 @@
 <body>
 
 <script>
+    window.openCwgActivityScreen = function() {
+        if (typeof window.openCwgActivityScreenImpl === 'function') {
+            window.openCwgActivityScreenImpl();
+        } else {
+            if (typeof showToast === 'function') showToast("Caricamento in corso...");
+        }
+    };
+
     // FUNZIONE GLOBALE SALVATAGGIO CONFIGURAZIONE FIREBASE
     window.saveFirebaseConfigUrl = function(key, newUrl) {
         if (!key || !newUrl) return;
@@ -377,7 +385,7 @@
                     <span id="txt_profile_btn_label">👤 Profilo</span>
                     <span id="missionsBadge" class="badge-counter" style="display: none;">0</span>
                 </button>
-                <button class="action-btn-small" onclick="window.showProfileScreen(); if (typeof window.switchProfileTab === 'function') window.switchProfileTab('course');" id="txt_course_tab_btn" style="flex:1.2; position: relative; overflow: visible !important;">
+                <button class="action-btn-small" onclick="window.openCourseTab()" id="txt_course_tab_btn" style="flex:1.2; position: relative; overflow: visible !important;">
                     <span id="txt_course_btn_label">📻 Corso</span>
                     <span id="courseMessageBadge" class="badge-counter" style="display: none; background: #4caf50; color: white; left: -5px; right: auto;">M</span>
                     <span id="courseEnrollmentBadgeGlobal" class="badge-counter" style="display: none;">0</span>
@@ -393,7 +401,7 @@
         <!-- BOTTONE ACCESSUALE BETA ACTIVITY - CWG (SOLO PER TESTER/ADMIN) -->
         <div id="btnCwgActivityContainer" style="display:none; width:100%; margin-bottom: 10px;">
             <button id="btnCwgActivityMode" onclick="window.openCwgActivityScreen()" class="btn-primary" style="width:100%; padding: 12px; font-weight:bold; font-size:1em; background: linear-gradient(135deg, #00bcd4, #008ba3); border:1px solid #00e5ff; color:#fff; box-shadow:0 3px 10px rgba(0,188,212,0.4); cursor:pointer;">
-                📻 ACTIVITY - CWG (BETA) 🧪
+                📻 ACTIVITY - CWG (BETA LOG & CHIAVI 4 MINUTI) 🧪
             </button>
         </div>
 
@@ -2738,6 +2746,7 @@
         const BUILD_VERSION = "fix_" + Date.now();
         const scripts = [
             "js/app.js",
+            "js/cwg_activity_manager.js",
             "js/quiz_data.js",
             "js/games_config.js",
             "js/i18n_data.js",
@@ -2764,7 +2773,6 @@
             "js/tone_test_manager.js",
             "js/qso_manager.js",
             "js/qso_audio_manager.js",
-            "js/cwg_activity_manager.js",
             "js/rating_manager.js",
             "js/game_core.js"
         ];
