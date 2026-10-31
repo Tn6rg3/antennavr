@@ -56,13 +56,12 @@ window.populateGameModesUI = function() {
         select.appendChild(opt);
     });
 
-    // Ripristiniamo il valore se ancora valido, altrimenti standard
-    if (window.GAME_MODES && window.GAME_MODES[currentVal]) {
-        if (isSingle && currentVal === 'pingpong') select.value = 'standard';
-        else if (isTx && currentVal !== 'standard' && currentVal !== 'code_groups' && currentVal !== 'groups_tx' && currentVal !== 'real_tx' && currentVal !== 'qso_audio_search') select.value = 'standard';
-        else select.value = currentVal;
+    // Ripristiniamo il valore se ancora valido nella nuova lista, altrimenti impostiamo la prima opzione valida
+    const validOptionExists = Array.from(select.options).some(opt => opt.value === currentVal);
+    if (validOptionExists) {
+        select.value = currentVal;
     } else {
-        select.value = 'standard';
+        select.value = select.options[0] ? select.options[0].value : 'standard';
     }
 };
 
