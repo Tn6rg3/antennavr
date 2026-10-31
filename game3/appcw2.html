@@ -2280,6 +2280,18 @@
                     💾 SALVA E REGISTRA QSO (INCORREGIBILE)
                 </button>
             </div>
+
+            <!-- CHAT PRIVATA TEMPORANEA DI SERVIZIO QSO -->
+            <div id="cwgPrivateChatSection" style="display:none; background:rgba(0,0,0,0.3); border:1px solid #00bcd4; border-radius:8px; padding:10px; margin-top:10px;">
+                <b style="color:#00bcd4; font-size:0.85em; display:block; margin-bottom:6px;">💬 Chat Privata QSO (Scomparirà a fine QSO)</b>
+                <div id="cwgPrivateChatMessages" style="max-height:110px; overflow-y:auto; font-size:0.8em; margin-bottom:8px; background:rgba(0,0,0,0.2); border-radius:6px; padding:6px; border:1px solid rgba(255,255,255,0.05);">
+                    <p style="color:var(--hint-color); text-align:center; margin:4px 0;">Chat di servizio aperta tra i due operatori.</p>
+                </div>
+                <div style="display:flex; gap:6px;">
+                    <input type="text" id="cwgPrivateChatInput" placeholder="Messaggio di servizio..." autocomplete="off" onkeypress="if(event.key==='Enter') window.sendCwgPrivateChatMessage()" style="flex:1; padding:6px 8px; font-size:0.85em; background:rgba(255,255,255,0.1); border:1px solid var(--hint-color); color:white; border-radius:4px; box-sizing:border-box;">
+                    <button onclick="window.sendCwgPrivateChatMessage()" class="action-btn-small btn-primary" style="padding:6px 12px; font-weight:bold; font-size:0.8em; background:#00bcd4; border:none; color:#000; cursor:pointer;">Invia</button>
+                </div>
+            </div>
         </div>
     </div>
     <div class="fixed-bottom-btns">
