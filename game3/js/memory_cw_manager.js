@@ -81,10 +81,10 @@ window.updateMemoryUI = function() {
 
     if (!gridContainer) return;
 
-    // Regoliamo dinamicità colonne ed altezza carte per far entrare la griglia al 100% nello schermo
+    // Proporzioni classiche carta da gioco (Rapporto verticale 2:3) con colonne responsive
     const totalCardsCount = window.memoryCards.length;
-    const colCount = totalCardsCount <= 10 ? 5 : 4;
-    const cardHeightCss = totalCardsCount <= 10 ? "clamp(55px, 18vh, 90px)" : (totalCardsCount <= 16 ? "clamp(48px, 11vh, 70px)" : "clamp(42px, 9vh, 60px)");
+    const colCount = (totalCardsCount === 10 || totalCardsCount === 20) ? 5 : 4;
+    const maxCardHeight = totalCardsCount <= 10 ? "110px" : (totalCardsCount <= 16 ? "88px" : "75px");
 
     gridContainer.style.cssText = `display:grid; grid-template-columns: repeat(${colCount}, 1fr); gap:6px; margin-top:4px; padding:2px; max-height:62vh; align-content:center; box-sizing:border-box;`;
     gridContainer.innerHTML = '';
@@ -93,7 +93,9 @@ window.updateMemoryUI = function() {
         const cardBtn = document.createElement('button');
         cardBtn.className = 'memory-card-btn';
         cardBtn.style.cssText = `
-            height: ${cardHeightCss};
+            aspect-ratio: 2 / 3;
+            width: 100%;
+            max-height: ${maxCardHeight};
             border-radius: 8px;
             font-weight: bold;
             font-size: 0.85em;
@@ -102,9 +104,10 @@ window.updateMemoryUI = function() {
             justify-content: center;
             align-items: center;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
             box-sizing: border-box;
             padding: 3px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.35);
         `;
 
         if (card.isMatched) {
