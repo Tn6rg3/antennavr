@@ -133,28 +133,38 @@ window.updateMemoryUI = function() {
     });
 };
 
-window.onMemoryCardClicked = function(index) {
+window.onMemoryCardClicked = async function(index) {
     if (window.isMemoryLockGrid) return;
     const card = window.memoryCards[index];
     if (!card || card.isFlipped || card.isMatched) return;
 
-    // Fai ascoltare l'audio Morse della parola della carta
+    // Blocchiamo la griglia durante la riproduzione audio Morse della carta corrente
+    window.isMemoryLockGrid = true;
+
     const wpmInput = document.getElementById('startWpmInput');
     const wpm = wpmInput ? (parseInt(wpmInput.value) || 20) : 20;
-
-    if (typeof window.stopAllMorseAudio === 'function') window.stopAllMorseAudio();
-    if (typeof window.playMorseAudio === 'function') {
-        window.playMorseAudio(card.word, wpm, true);
-    }
 
     card.isFlipped = true;
     window.memorySelectedCards.push({ card, index });
     window.updateMemoryUI();
 
-    // Se sono state scoperte 2 carte
+    // Riproduce l'audio Morse ed attende la FINE completa della trasmissione!
+    if (typeof window.stopAllMorseAudio === 'function') window.stopAllMorseAudio();
+    if (typeof window.playMorseAudio === 'function') {
+        try {
+            await window.playMorseAudio(card.word, wpm, true);
+        } catch(e) {}
+    }
+
+    // Se è stata scoperta soltanto la PRIMA carta: sblocchiamo per permettere la scelta della SECONDA carta!
+    if (window.memorySelectedCards.length === 1) {
+        window.isMemoryLockGrid = false;
+        return;
+    }
+
+    // Se sono state scoperte ed ascoltate entrambe le 2 carte, procediamo al confronto
     if (window.memorySelectedCards.length === 2) {
         window.memoryAttempts++;
-        window.isMemoryLockGrid = true;
 
         const first = window.memorySelectedCards[0];
         const second = window.memorySelectedCards[1];
@@ -178,7 +188,7 @@ window.onMemoryCardClicked = function(index) {
                 setTimeout(() => window.finishMemoryCwGame(), 300);
             }
         } else {
-            // DIVERSE: Ripristiniamo coperte dopo 1.2s
+            // DIVERSE: Ripristiniamo coperte dopo una breve pausa
             const statusEl = document.getElementById('memoryStatusText');
             if (statusEl) statusEl.textContent = "❌ Carte diverse. Ascolta e riprova...";
 
@@ -189,7 +199,7 @@ window.onMemoryCardClicked = function(index) {
                 window.isMemoryLockGrid = false;
                 if (statusEl) statusEl.textContent = "Clicca su una carta per ascoltare il suo suono in codice Morse! 🎧";
                 window.updateMemoryUI();
-            }, 1200);
+            }, 1000);
         }
     }
 };
