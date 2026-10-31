@@ -81,17 +81,20 @@ window.updateMemoryUI = function() {
 
     if (!gridContainer) return;
 
-    // Regoliamo le colonne in base al numero di carte
-    const colCount = window.memoryCards.length <= 10 ? 5 : 4;
-    gridContainer.style.gridTemplateColumns = `repeat(${colCount}, 1fr)`;
+    // Regoliamo dinamicità colonne ed altezza carte per far entrare la griglia al 100% nello schermo
+    const totalCardsCount = window.memoryCards.length;
+    const colCount = totalCardsCount <= 10 ? 5 : 4;
+    const cardHeightCss = totalCardsCount <= 10 ? "clamp(55px, 18vh, 90px)" : (totalCardsCount <= 16 ? "clamp(48px, 11vh, 70px)" : "clamp(42px, 9vh, 60px)");
+
+    gridContainer.style.cssText = `display:grid; grid-template-columns: repeat(${colCount}, 1fr); gap:6px; margin-top:4px; padding:2px; max-height:62vh; align-content:center; box-sizing:border-box;`;
     gridContainer.innerHTML = '';
 
     window.memoryCards.forEach((card, index) => {
         const cardBtn = document.createElement('button');
         cardBtn.className = 'memory-card-btn';
         cardBtn.style.cssText = `
-            height: 75px;
-            border-radius: 10px;
+            height: ${cardHeightCss};
+            border-radius: 8px;
             font-weight: bold;
             font-size: 0.85em;
             display: flex;
@@ -101,7 +104,7 @@ window.updateMemoryUI = function() {
             cursor: pointer;
             transition: all 0.2s ease;
             box-sizing: border-box;
-            padding: 4px;
+            padding: 3px;
         `;
 
         if (card.isMatched) {
