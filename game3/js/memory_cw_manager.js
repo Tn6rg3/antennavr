@@ -114,12 +114,12 @@ window.updateMemoryUI = function() {
             cardBtn.style.background = "rgba(0, 188, 212, 0.3)";
             cardBtn.style.border = "2px solid #00e5ff";
             cardBtn.style.color = "#ffffff";
-            cardBtn.innerHTML = `<span>📻</span><b style="font-size:0.8em; margin-top:2px;">${card.word}</b>`;
+            cardBtn.innerHTML = `<span style="font-size:1.3em;">🔊</span><small style="font-size:0.65em; color:#00e5ff; font-weight:bold; margin-top:2px;">Ascolta...</small>`;
         } else {
-            cardBtn.style.background = "var(--sec-bg-color)";
+            cardBtn.style.background = "url('css/carta.jpg') center/cover no-repeat, var(--sec-bg-color)";
             cardBtn.style.border = "2px solid var(--link-color)";
-            cardBtn.style.color = "var(--link-color)";
-            cardBtn.innerHTML = `<span style="font-size:1.4em;">❓</span>`;
+            cardBtn.style.color = "transparent";
+            cardBtn.innerHTML = ``;
         }
 
         cardBtn.onclick = () => window.onMemoryCardClicked(index);
