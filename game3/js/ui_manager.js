@@ -217,7 +217,13 @@ window.checkGameTypeUI = function() {
         if (isArcadeType) {
             if (selectedMode === 'la_torre') {
                 containers.arcadeBtn.textContent = currentLang === 'it' ? "SCALA LA TORRE 🗼" : "CLIMB THE TOWER 🗼";
+            } else if (selectedMode === 'memory_cw') {
+                containers.arcadeBtn.textContent = currentLang === 'it' ? "GIOCA MEMORY CW 🧩" : "PLAY MEMORY CW 🧩";
             } else {
+                containers.arcadeBtn.textContent = currentLang === 'it' ? "GIOCA SUBITO ARCADE 🕹️" : "PLAY ARCADE NOW 🕹️";
+            }
+        }
+    }
                 containers.arcadeBtn.textContent = currentLang === 'it' ? "GIOCA SUBITO ARCADE 🕹️" : "PLAY ARCADE NOW 🕹️";
             }
         }

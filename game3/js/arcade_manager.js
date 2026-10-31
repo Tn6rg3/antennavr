@@ -371,6 +371,8 @@ if (els.startArcadeBtn) {
         const mode = document.getElementById('gameModeInput')?.value;
         if (mode === 'la_torre') {
             if (typeof window.startTowerSequence === 'function') window.startTowerSequence();
+        } else if (mode === 'memory_cw') {
+            if (typeof window.startMemoryCwGame === 'function') window.startMemoryCwGame();
         } else {
             window.startArcadeSequence();
         }
