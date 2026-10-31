@@ -475,6 +475,14 @@
                     <label>Lezione:</label>
                     <select id="setupKochLevelInput" style="width:100%; padding:5px;"></select>
                 </div>
+                <div id="memoryCardCountContainer" style="display:none;">
+                    <label>Num. Carte:</label>
+                    <select id="memoryCardCountInput" style="padding: 4px; border-radius: 4px; background: var(--sec-bg-color); color: var(--text-color); border: 1px solid #00bcd4;">
+                        <option value="10">10 Carte (5 Coppie)</option>
+                        <option value="16" selected>16 Carte (8 Coppie)</option>
+                        <option value="20">20 Carte (10 Coppie)</option>
+                    </select>
+                </div>
                 <div id="timeoutDiv" style="display: none;"><label id="txt_room_timeout">Scad.</label> <input type="number" id="roomTimerInput" value="5" min="1" max="60"></div>
             </div>
 
@@ -2279,6 +2287,53 @@
     </div>
 </div>
 
+<!-- SCHERMATA MEMORY CW (GIOCO DELLE COPPIE) -->
+<div id="memoryCwScreen" class="screen" style="overflow-y: auto; display: none; flex-direction: column;">
+    <div class="screen-content" style="gap: 8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <h2 style="color:var(--champ-color); margin:0; font-size:1.1em; display:flex; align-items:center; gap:6px;">🧩 Gioco delle Coppie (Memory CW)</h2>
+            <button onclick="goBackToMenu()" class="action-btn-small btn-secondary" style="padding:4px 10px; font-size:0.8em; font-weight:bold;">⬅️ Torna al Menu</button>
+        </div>
+
+        <!-- INDICATORI DI PARTITA (COPPIE, TEMPO, PUNTEGGIO, TENTATIVI) -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:6px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); text-align:center;">
+            <div>
+                <span style="font-size:0.7em; color:var(--hint-color); display:block;">Coppie</span>
+                <b id="memoryPairsDisplay" style="font-size:1.05em; color:#00ff66;">0 / 8</b>
+            </div>
+            <div>
+                <span style="font-size:0.7em; color:var(--hint-color); display:block;">Tempo</span>
+                <strong id="memoryTimerDisplay" style="font-size:1.05em; color:#00bcd4;">00:00</strong>
+            </div>
+            <div>
+                <span style="font-size:0.7em; color:var(--hint-color); display:block;">Tentativi</span>
+                <b id="memoryAttemptsDisplay" style="font-size:1.05em; color:#ff9800;">0</b>
+            </div>
+            <div>
+                <span style="font-size:0.7em; color:var(--hint-color); display:block;">Punti</span>
+                <b id="memoryScoreDisplay" style="font-size:1.05em; color:var(--champ-color);">0 pt</b>
+            </div>
+        </div>
+
+        <p id="memoryStatusText" style="font-size:0.8em; color:var(--hint-color); margin:2px 0; text-align:center;">Clicca su una carta per ascoltare il suo suono in codice Morse! 🎧</p>
+
+        <!-- GRIGLIA RESPONSIVE CARTE -->
+        <div id="memoryGridContainer" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin-top:4px; padding:4px;">
+            <!-- Popolato dinamicamente da memory_cw_manager.js -->
+        </div>
+
+        <!-- CONTROLLI IN BASSO -->
+        <div style="display:flex; gap:8px; margin-top:8px;">
+            <button onclick="window.startMemoryCwGame()" class="btn-success" style="flex:2; padding:10px; font-weight:bold; font-size:0.9em; margin:0;">
+                🔄 NUOVA PARTITA
+            </button>
+            <button onclick="goBackToMenu()" class="btn-secondary" style="flex:1; padding:10px; font-size:0.85em; margin:0;">
+                🏠 Menu
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- AREA QSO P2P (SENZA DECODER) -->
 <div id="qsoArea" class="screen" style="overflow-y: auto; display: none; flex-direction: column;">
     <div class="header-stats" style="background: #2c3e50; border-bottom: 2px solid #ff9800; flex-shrink: 0; display:flex; justify-content:space-between; align-items:center; padding: 8px 15px; position: sticky; top: 0; z-index: 10;">
@@ -2762,6 +2817,7 @@
             "js/br_manager.js",
             "js/coop_manager.js",
             "js/arcade_manager.js",
+            "js/memory_cw_manager.js",
             "js/course_manager.js",
             "js/course_ui.js",
             "js/transmission_manager.js",
