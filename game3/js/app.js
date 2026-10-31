@@ -3368,14 +3368,16 @@ window.openMaxWpmRecordsModal = function() {
     const standardPromise = db.ref('leaderboard/standard').limitToLast(50).once('value').catch(() => null);
     const standardPlusPromise = db.ref('leaderboard/standard_plus').limitToLast(50).once('value').catch(() => null);
     const callsignPromise = db.ref('leaderboard/callsign/global').orderByChild('score').limitToLast(50).once('value').catch(() => null);
+    const memoryCwPromise = db.ref('leaderboard/arcade/memory_cw').orderByChild('score').limitToLast(50).once('value').catch(() => null);
 
     Promise.all([
         Promise.all(currentMonthDailyPromises),
         Promise.all(currentMonthTriPromises),
         standardPromise,
         standardPlusPromise,
-        callsignPromise
-    ]).then(([dailySnaps, triSnaps, stdSnap, stdPlusSnap, callsignSnap]) => {
+        callsignPromise,
+        memoryCwPromise
+    ]).then(([dailySnaps, triSnaps, stdSnap, stdPlusSnap, callsignSnap, memorySnap]) => {
         const results = [];
 
         const scanRecords = (snapsList, modeName, wpmField = 'wpm') => {
@@ -3436,6 +3438,7 @@ window.openMaxWpmRecordsModal = function() {
         results.push(scanRecords(dailySnaps, '📅 Sfida Giornaliera', 'wpm'));
         results.push(scanRecords(triSnaps, '🏆 Sfida Tripla', 'peakWpm'));
         results.push(scanTreeNode(callsignSnap, '🎙️ CW Freak (Nominativi)'));
+        results.push(scanTreeNode(memorySnap, '🧩 Memory CW (Coppie)'));
 
         let html = '';
         results.forEach(res => {

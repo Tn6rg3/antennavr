@@ -32,6 +32,7 @@ window.lbGroups = {
     special: [
         { val: 'la_torre', it: '🗼 La Torre (Scalata)', en: '🗼 The Tower (Climb)' },
         { val: 'arcade', it: '🕹️ Arcade Interception', en: '🕹️ Arcade Interception' },
+        { val: 'memory_cw', it: '🧩 Gioco delle Coppie (Memory CW)', en: '🧩 Memory CW (Card Pairs)' },
         { val: 'cwfreak', it: '🎙️ Nominativi (CW Freak)', en: '🎙️ Callsigns (CW Freak)' }
     ],
     ratings: [
@@ -675,6 +676,24 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
             // Ordinamento: Piano (score) decrescente
             players.sort((a, b) => (Number(b.score) - Number(a.score)));
             window.renderPlayersListHTML(players, els.leaderboardContainer, false, false, false, true);
+        });
+        return;
+    }
+
+    // 4d. MEMORY CW (GIOCO DELLE COPPIE)
+    if (tabType === 'memory_cw') {
+        db.ref('leaderboard/arcade/memory_cw').orderByChild('score').limitToLast(100).once('value', snapshot => {
+            let players = [];
+            snapshot.forEach(child => {
+                let p = child.val();
+                if (p) {
+                    p.id = child.key;
+                    p.dbPath = `leaderboard/arcade/memory_cw/${child.key}`;
+                    players.push(p);
+                }
+            });
+            players.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+            window.renderPlayersListHTML(players, els.leaderboardContainer, false);
         });
         return;
     }
