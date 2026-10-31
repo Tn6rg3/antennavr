@@ -223,10 +223,6 @@ window.checkGameTypeUI = function() {
             }
         }
     }
-                containers.arcadeBtn.textContent = currentLang === 'it' ? "GIOCA SUBITO ARCADE 🕹️" : "PLAY ARCADE NOW 🕹️";
-            }
-        }
-    }
 
     if (containers.btn) {
         if (isArcadeType) {
