@@ -448,6 +448,19 @@ window.GAME_MODES = {
         spacingConfigurable: false,
         generateWords: function(num, dicts) { return []; }
     },
+    "memory_cw": {
+        id: "memory_cw",
+        titleIt: "Gioco delle Coppie (Memory CW) 🧩",
+        titleEn: "Memory CW (Card Pairs) 🧩",
+        icon: "🧩",
+        defaultWpm: 20,
+        defaultWordCount: 16,
+        wpmConfigurable: true,
+        wordCountConfigurable: true,
+        fixedSpeedAllowed: false,
+        spacingConfigurable: false,
+        generateWords: function(num, dicts) { return []; }
+    },
     "code_groups": {
         id: "code_groups",
         titleIt: "Gruppi di 5 Caratteri",

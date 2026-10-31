@@ -3655,6 +3655,10 @@ if (els.createRoomBtn) {
 
         if (gType === 'tournament') { window.showScreen('teamsScreen'); return; }
         if (gMode === 'custom' && window.customDictionary.length === 0) return showToast("Carica un file!");
+        if (gMode === 'memory_cw') {
+            if (typeof window.startMemoryCwGame === 'function') window.startMemoryCwGame();
+            return;
+        }
 
         window.resetGameState();
 

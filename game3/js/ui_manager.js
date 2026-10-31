@@ -21,11 +21,11 @@ window.populateGameModesUI = function() {
 
         // --- LOGICA FILTRI ---
         if (isSingle) {
-            // QSO, modalità Tx/Rx e Gruppi 5 Chars (riservato a Tx/Rx) non sono ammesse in Solo
-            if (mode.id === 'qso' || mode.id === 'code_groups' || mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'qso_audio_search' || mode.id === 'addestra_ia') return;
+            // QSO, modalità Arcade (Pioggia, Torre, Memory CW), Tx/Rx e Gruppi non sono ammesse in Solo
+            if (mode.id === 'qso' || mode.id === 'code_groups' || mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'memory_cw' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'qso_audio_search' || mode.id === 'addestra_ia') return;
         } else if (isMulti) {
             // Modalità ammesse in Multi
-            if (mode.id === 'code_groups' || mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'qso_audio_search' || mode.id === 'addestra_ia') return;
+            if (mode.id === 'code_groups' || mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'memory_cw' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'qso_audio_search' || mode.id === 'addestra_ia') return;
         } else if (isCoop) {
             if (mode.id !== 'conquest') return;
         } else if (isTx) {
@@ -101,8 +101,9 @@ window.checkGameTypeUI = function() {
         modeInput.innerHTML = `
             <option value="arcade">${currentLang === 'it' ? "Pioggia (Arcade) 🕹️" : "Rain (Arcade) 🕹️"}</option>
             <option value="la_torre">${currentLang === 'it' ? "La Torre (Scalata) 🗼" : "The Tower (Climb) 🗼"}</option>
+            <option value="memory_cw">${currentLang === 'it' ? "Gioco delle Coppie (Memory CW) 🧩" : "Memory CW (Card Pairs) 🧩"}</option>
         `;
-        if (currentVal === 'la_torre') modeInput.value = "la_torre";
+        if (currentVal === 'la_torre' || currentVal === 'memory_cw') modeInput.value = currentVal;
         else modeInput.value = "arcade";
     } else if (isTrn) {
         const trnOptions = [
@@ -142,6 +143,7 @@ window.checkGameTypeUI = function() {
         wordLen: document.getElementById('wordLengthContainer'),
         groupCharSet: document.getElementById('groupCharSetContainer'),
         koch: document.getElementById('setupKochLevelContainer'),
+        memoryCards: document.getElementById('memoryCardCountContainer'),
         keyer: document.getElementById('mainMenuKeyerConfig')
     };
 
@@ -160,6 +162,7 @@ window.checkGameTypeUI = function() {
     if (containers.wordsPerGroup) containers.wordsPerGroup.style.display = (selectedMode === 'standard_plus') ? 'block' : 'none';
     if (containers.wordLen) containers.wordLen.style.display = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection') ? 'block' : 'none';
     if (containers.groupCharSet) containers.groupCharSet.style.display = (selectedMode === 'code_groups') ? 'block' : 'none';
+    if (containers.memoryCards) containers.memoryCards.style.display = (selectedMode === 'memory_cw') ? 'block' : 'none';
 
     // --- NUOVA LOGICA ASCOLTO (TTS) + RISPOSTA VOCALE + AVANZAMENTO AUTO ---
     const isSpeakAvailable = isSingle && (selectedMode === 'standard');
