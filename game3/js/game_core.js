@@ -1362,7 +1362,8 @@ window.finishGame = function() {
                     score: window.totalScore,
                     finalWpm: window.currentWpm,
                     peakWpm: window.peakWpm,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    resumeData: null
                 }).then(() => {
                     db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}`).once('value', attemptSnap => {
                         const attempt = attemptSnap.val() || {};
@@ -2295,6 +2296,19 @@ window.handleWordSubmission = function(userWord) {
         usedReplay: !!usedReplay
     };
     matchDetailsArray.push(lastEntry);
+
+    // Salva lo stato di avanzamento in tempo reale per la Sfida Tripla
+    if (window.currentMode === 'tri_daily' && window.currentTriDailySlotId && db && window.myId) {
+        const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+        db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}/${window.currentTriDailySlotId}/resumeData`).set({
+            wordIndex: wordIndex,
+            totalScore: totalScore,
+            currentWpm: currentWpm,
+            peakWpm: peakWpm,
+            matchDetailsArray: matchDetailsArray,
+            ts: Date.now()
+        }).catch(() => {});
+    }
 
     // UI Tabella
     if (window.currentMode !== 'pingpong') {

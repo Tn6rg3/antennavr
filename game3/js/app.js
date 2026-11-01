@@ -2769,15 +2769,18 @@ window.renderTriDailyHubCards = function() {
 
             const badgeSpan = document.createElement('span');
             badgeSpan.style.cssText = "font-weight:bold; font-size:0.8em; float:right;";
+            const resumeData = slotObj.resumeData || null;
+            const resumeNextIndex = resumeData ? (Number(resumeData.wordIndex) + 2) : 1;
+
             if (isWithdrawn) {
                 badgeSpan.style.color = "#f44336";
                 badgeSpan.textContent = "🏃 Rinunciata";
             } else if (isCompleted) {
                 badgeSpan.style.color = "#4caf50";
                 badgeSpan.textContent = `✅ ${score} pt (${finalWpm} WPM)`;
-            } else if (isInterrupted) {
+            } else if (isPlayed) {
                 badgeSpan.style.color = "#ff9800";
-                badgeSpan.textContent = "⚠️ Interrotta (Riprendi)";
+                badgeSpan.textContent = `⚠️ Interrotta (Riprendi da ${resumeNextIndex}/${s.words})`;
             } else if (currentSlot.id === s.id) {
                 badgeSpan.style.color = "#ff9800";
                 badgeSpan.style.animation = "pulse 1.5s infinite";
@@ -2797,15 +2800,21 @@ window.renderTriDailyHubCards = function() {
             infoDiv.textContent = `${s.words} Parole | Incremento WPM: ${s.step}`;
             card.appendChild(infoDiv);
 
-            if (currentSlot.id === s.id && (!isCompleted || isInterrupted) && !isWithdrawn) {
+            if (currentSlot.id === s.id && !isCompleted && !isWithdrawn) {
                 const btnDiv = document.createElement('div');
                 btnDiv.style.cssText = "display:flex; gap:8px; margin-top:10px;";
 
                 const startBtnEl = document.createElement('button');
                 startBtnEl.className = "btn-success";
                 startBtnEl.style.cssText = "flex:2; padding:8px; font-size:0.85em; margin:0;";
-                startBtnEl.textContent = isInterrupted ? `🔄 RIPRENDI SESSIONE (${s.words} PAROLE) 🚀` : `INIZIA SESSIONE (${s.words} PAROLE) 🚀`;
-                startBtnEl.onclick = () => window.showTriDailyPreview(s.id);
+
+                if (isPlayed && resumeData) {
+                    startBtnEl.textContent = `🔄 RIPRENDI DA PAROLA ${resumeNextIndex} / ${s.words} 🚀`;
+                    startBtnEl.onclick = () => window.resumeTriDailySession(s.id, resumeData);
+                } else if (!isPlayed) {
+                    startBtnEl.textContent = `INIZIA SESSIONE (${s.words} PAROLE) 🚀`;
+                    startBtnEl.onclick = () => window.showTriDailyPreview(s.id);
+                }
 
                 const withdrawBtnEl = document.createElement('button');
                 withdrawBtnEl.className = "btn-danger";
@@ -2813,9 +2822,11 @@ window.renderTriDailyHubCards = function() {
                 withdrawBtnEl.textContent = "🏃 Ritirati";
                 withdrawBtnEl.onclick = () => window.withdrawTriDailySession(s.id);
 
-                btnDiv.appendChild(startBtnEl);
-                btnDiv.appendChild(withdrawBtnEl);
-                card.appendChild(btnDiv);
+                if (startBtnEl.textContent) {
+                    btnDiv.appendChild(startBtnEl);
+                    btnDiv.appendChild(withdrawBtnEl);
+                    card.appendChild(btnDiv);
+                }
             }
 
             cardsContainer.appendChild(card);
@@ -2922,15 +2933,84 @@ window.withdrawTriDailySession = function(slotId) {
     });
 };
 
+window.resumeTriDailySession = function(slotId, resumeData) {
+    if (!resumeData) return;
+    window.resetGameState();
+
+    const todayStr = window.getLocalDateString();
+    const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { wordCount: 10, defaultWpm: 15 };
+
+    const nextWordIndex = (Number(resumeData.wordIndex) || 0) + 1; // Salta la parola interrotta e passa alla successiva
+    const totalWordsCount = slotInfo.wordCount || 10;
+
+    if (nextWordIndex >= totalWordsCount) {
+        window.finishGame();
+        return;
+    }
+
+    window.currentMode = 'tri_daily';
+    window.currentTriDailySlotId = slotId;
+    window.isSinglePlayer = true;
+    window.currentWpm = window.baseWpm = resumeData.currentWpm || 15;
+    window.peakWpm = Math.max(resumeData.peakWpm || 15, window.currentWpm);
+    window.totalScore = resumeData.totalScore || 0;
+    window.wordIndex = nextWordIndex;
+    window.requestedWordCount = totalWordsCount;
+    window.matchDetailsArray = resumeData.matchDetailsArray || [];
+    window.currentTone = parseInt(localStorage.getItem(STORAGE_PREF_TONE)) || 600;
+
+    roomCode = "SOLO_TRI_" + window.myId;
+    gameWords = window.getTriDailyWords(window.requestedWordCount);
+
+    if (typeof window.showScreen === 'function') {
+        window.showScreen('gameScreen');
+    }
+
+    // Ricostruiamo la tabella delle parole già svolte
+    if (els.tableBody) {
+        els.tableBody.innerHTML = '';
+        window.matchDetailsArray.forEach(row => {
+            const tr = document.createElement('tr');
+            const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed || "-";
+            const tdReal = document.createElement('td'); window.renderDiffSecure(tdReal, row.real, row.typed);
+            const tdWpm = document.createElement('td'); tdWpm.textContent = `${row.wpm || window.currentWpm} WPM`;
+            const tdPoints = document.createElement('td'); tdPoints.textContent = `+${row.points || 0}`;
+            tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdWpm); tr.appendChild(tdPoints);
+            els.tableBody.appendChild(tr);
+        });
+    }
+
+    if (els.scoreDisplay) els.scoreDisplay.textContent = `${window.totalScore} pt`;
+    if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${window.currentWpm}`;
+    if (els.wordIndexDisplay) els.wordIndexDisplay.textContent = `${nextWordIndex + 1} / ${totalWordsCount}`;
+
+    showToast(`🔄 Sessione ripresa dalla Parola ${nextWordIndex + 1} di ${totalWordsCount}! (+${window.totalScore} pt salvati)`);
+
+    setTimeout(() => {
+        if (typeof playMorseAudio === 'function') {
+            playMorseAudio(gameWords[nextWordIndex].toUpperCase(), window.currentWpm);
+        }
+    }, 600);
+};
+
 window.startTriDailySession = function(slotId) {
     window.resetGameState();
 
     const todayStr = window.getLocalDateString();
-    localStorage.setItem(`cwgame_tri_played_${todayStr}_${slotId}`, "true");
     const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { wordCount: 10, defaultWpm: 15 };
 
     db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}`).once('value', snap => {
         const attemptData = snap.val() || {};
+        const currentSlotData = attemptData[slotId] || {};
+
+        // BLOCCO ANTIFRODE: Se la sessione è già stata giocata, completata, ritirata o interrotta, IMPEDISCI IL RIPETERE!
+        if (currentSlotData.played || currentSlotData.completed || currentSlotData.withdrawn) {
+            alert("⚠️ Sessione già avviata o interrotta in precedenza!\n\nNon è consentito ripetere una sessione della Sfida Tripla già iniziata.");
+            return;
+        }
+
+        localStorage.setItem(`cwgame_tri_played_${todayStr}_${slotId}`, "true");
+
         let inheritedWpm = 15;
 
         if (slotId === 'afternoon') {
