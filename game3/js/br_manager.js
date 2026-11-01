@@ -151,48 +151,59 @@ window.checkBattleTime = function() {
 };
 
 window.listenToBattleRoyaleRoom = function() {
-    db.ref(`rooms/${brRoomCode}`).on('value', snap => {
+    if (!brRoomCode) return;
+    const roomRef = db.ref(`rooms/${brRoomCode}`);
+
+    // 1. Ascolto mirato dello STATO della stanza (20 Byte)
+    roomRef.child('status').on('value', snap => {
         if (!snap.exists()) {
             showScreen('setupScreen');
             alert("La Battaglia è stata annullata o è terminata.");
             return;
         }
-        const rData = snap.val();
+        const status = snap.val();
 
-        window.renderBRPlayers(rData.players || {});
-
-        if (rData.status === 'cancelled') {
+        if (status === 'cancelled') {
             if (els.brStatusText) els.brStatusText.textContent = "Annullata: Giocatori insufficienti (<5).";
             setTimeout(() => { showScreen('setupScreen'); activeTab = "room"; }, 4000);
             return;
         }
 
-        if (rData.status === 'playing') {
+        if (status === 'playing') {
             brIsPlaying = true;
-            if (els.brWpmDisplay) els.brWpmDisplay.textContent = rData.wpm + " WPM";
+        }
 
-            const myData = rData.players[myId];
-            brAmIAlive = myData && myData.lives > 0;
+        if (status === 'finished') {
+            brIsPlaying = false;
+            lastBRRoundPlayed = -1;
+            roomRef.child('winner').once('value', wSnap => {
+                if (els.brStatusText) els.brStatusText.textContent = `Partita Conclusa! Vincitore: ${wSnap.val() || 'Nessuno'}`;
+            });
+            if (els.brInputArea) els.brInputArea.style.display = 'none';
+            if (els.brTimerContainer) els.brTimerContainer.style.display = 'none';
+        }
+    });
 
-            const hearts = ["💀 ELIMINATO", "❤️", "❤️❤️", "❤️❤️❤️", "❤️❤️❤️❤️", "❤️❤️❤️❤️❤️"];
-            let safeLives = myData && myData.lives ? parseInt(myData.lives) : 0;
-            if (safeLives < 0) safeLives = 0;
-            if (safeLives > 5) safeLives = 5;
-            if (els.brLivesDisplay) els.brLivesDisplay.textContent = brAmIAlive ? hearts[safeLives] : "💀 ELIMINATO";
-
+    // 2. Ascolto mirato della parola corrente di round
+    roomRef.child('currentWord').on('value', snap => {
+        if (!snap.exists() || !brIsPlaying) return;
+        roomRef.once('value', rSnap => {
+            const rData = rSnap.val() || {};
             if (rData.roundEndTime && rData.currentWord && rData.round !== lastBRRoundPlayed) {
                 lastBRRoundPlayed = rData.round;
                 window.handleBRRound(rData);
             }
-        }
+        });
+    });
 
-        if (rData.status === 'finished') {
-            brIsPlaying = false;
-            lastBRRoundPlayed = -1;
-            if (els.brStatusText) els.brStatusText.textContent = `Partita Conclusa! Vincitore: ${rData.winner || 'Nessuno'}`;
-            if (els.brInputArea) els.brInputArea.style.display = 'none';
-            if (els.brTimerContainer) els.brTimerContainer.style.display = 'none';
-        }
+    // 3. Ascolto mirato delle proprie vite (20 Byte)
+    roomRef.child(`players/${myId}/lives`).on('value', snap => {
+        if (!snap.exists()) return;
+        let safeLives = parseInt(snap.val()) || 0;
+        brAmIAlive = safeLives > 0;
+        const hearts = ["💀 ELIMINATO", "❤️", "❤️❤️", "❤️❤️❤️", "❤️❤️❤️❤️", "❤️❤️❤️❤️❤️"];
+        if (safeLives < 0) safeLives = 0; if (safeLives > 5) safeLives = 5;
+        if (els.brLivesDisplay) els.brLivesDisplay.textContent = brAmIAlive ? hearts[safeLives] : "💀 ELIMINATO";
     });
 };
 

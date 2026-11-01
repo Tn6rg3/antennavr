@@ -325,3 +325,16 @@ window.toggleQsoEcho = function() {
         if (typeof window.stopRemoteTone === 'function') window.stopRemoteTone();
     }
 };
+
+window.closeQsoPlayer = function() {
+    if (window.roomCode) {
+        try { db.ref("rooms/" + window.roomCode + "/qso_state/relay_active").off(); } catch(e) {}
+        try { db.ref("rooms/" + window.roomCode + "/players").off(); } catch(e) {}
+        try { db.ref("rooms/" + window.roomCode + "/qso_relay/" + window.myId).off(); } catch(e) {}
+    }
+    if (window.qsoState && window.qsoState.peer) {
+        try { window.qsoState.peer.destroy(); } catch(e) {}
+    }
+    window.qsoState = { peer: null, conn: null, partnerId: null, isRelayMode: false, echoListener: null };
+    if (typeof goBackToMenu === 'function') goBackToMenu();
+};
