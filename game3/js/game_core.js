@@ -1448,6 +1448,11 @@ window.finishGame = function() {
                             date: todayDateStr,
                             privacyLeaderboard: !!window.myPrivacyLeaderboard
                         });
+
+                        if (baseFolder && window.requestedWordCount) {
+                            db.ref(`leaderboard/categories/${baseFolder}/${window.requestedWordCount}`).set(true).catch(() => {});
+                        }
+
                         window.showToast(currentLang === 'it' ? "🏆 Nuovo Record in Classifica!" : "🏆 New Leaderboard Record!");
                     } else {
                         // Anche se non è record, aggiorniamo il livello se è cambiato

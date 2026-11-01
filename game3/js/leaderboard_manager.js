@@ -256,18 +256,37 @@ window.populateDynamicFilters = function(modePath, subTypeFilter = "") {
     const currentValue = els.lbWordFilter.value;
     const isIt = (typeof currentLang === 'undefined' || currentLang === 'it');
 
-    const options = [
-        `<option value="all">${isIt ? 'Tutte le quantità' : 'All quantities'}</option>`,
-        `<option value="10">10 ${isIt ? 'Parole' : 'Words'}</option>`,
-        `<option value="20">20 ${isIt ? 'Parole' : 'Words'}</option>`,
-        `<option value="30">30 ${isIt ? 'Parole' : 'Words'}</option>`,
-        `<option value="50">50 ${isIt ? 'Parole' : 'Words'}</option>`
-    ];
+    const cleanMode = modePath.replace('recent_matches/', '').replace('_multi', '').replace('standard_plus', 'standard');
 
-    els.lbWordFilter.innerHTML = options.join('');
-    if (['10', '20', '30', '50', 'all'].includes(currentValue)) {
-        els.lbWordFilter.value = currentValue;
-    }
+    db.ref(`leaderboard/categories/${cleanMode}`).once('value', snap => {
+        let options = [`<option value="all">${isIt ? 'Tutte le quantità' : 'All quantities'}</option>`];
+        let counts = [];
+
+        if (snap.exists()) {
+            snap.forEach(c => {
+                if (c.key && !counts.includes(c.key)) counts.push(c.key);
+            });
+        }
+
+        // Se non ci sono ancora categorie registrate per questa modalità, aggiungiamo i valori standard di default
+        if (counts.length === 0) {
+            counts = ['3', '5', '10', '15', '20', '25', '30', '40', '50', '100'];
+        }
+
+        counts.sort((a,b) => parseInt(a) - parseInt(b)).forEach(c => {
+            options.push(`<option value="${c}">${c} ${isIt ? 'Parole' : 'Words'}</option>`);
+        });
+
+        els.lbWordFilter.innerHTML = options.join('');
+        if (counts.includes(currentValue) || currentValue === 'all') {
+            els.lbWordFilter.value = currentValue;
+        }
+    }).catch(() => {
+        const fallbackCounts = ['3', '5', '10', '15', '20', '25', '30', '40', '50', '100'];
+        let options = [`<option value="all">${isIt ? 'Tutte le quantità' : 'All quantities'}</option>`];
+        fallbackCounts.forEach(c => options.push(`<option value="${c}">${c} ${isIt ? 'Parole' : 'Words'}</option>`));
+        els.lbWordFilter.innerHTML = options.join('');
+    });
 };
 
 window.fetchAndRenderTriDailyLeaderboard = function() {
