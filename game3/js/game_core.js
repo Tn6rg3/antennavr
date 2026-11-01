@@ -1326,6 +1326,7 @@ window.finishGame = function() {
         window.lastFinishedRoomCode = roomCode; // Salviamo l'ultimo codice per la leaderboard
         const myPlayerRef = db.ref(`rooms/${roomCode}/players/${myId}`);
         myPlayerRef.update({ finished: true, score: totalScore, wpm: peakWpm, matchDetails: matchDetailsArray });
+        myPlayerRef.child('matchDetailsFull').set(matchDetailsArray).catch(() => {});
         myPlayerRef.onDisconnect().cancel();
     }
 
@@ -2072,15 +2073,13 @@ window.handleWordSubmission = function(userWord) {
 
         const lastEntry = { real: currentWord, typed: userWord, points: isCorrect ? 1 : 0, wpm: currentWpm };
         matchDetailsArray.push(lastEntry);
-        if (roomCode) {
+        if (roomCode && !window.isSinglePlayer) {
             db.ref(`rooms/${roomCode}/players/${myId}`).update({
                 score: window.courseData?.progress?.total_xp || 0,
                 wpm: currentWpm,
                 wordIndex: wordIndex + 1,
-                matchDetails: matchDetailsArray,
                 lastUpdate: lastEntry
             });
-            db.ref(`rooms/${roomCode}/players/${myId}/matchDetailsFull`).set(matchDetailsArray);
         }
 
         tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints);
@@ -2362,16 +2361,14 @@ window.handleWordSubmission = function(userWord) {
             wordIndex++;
             window.perfectionWordsDone++;
         }
-        if (roomCode) {
-            // Sincronizziamo punteggio, parola corrente, timestamp dell'ultima azione e dettagli
+        if (roomCode && !window.isSinglePlayer) {
+            // Sincronizziamo in tempo reale solo i dati essenziali (40 Byte) per il multiplayer
             db.ref(`rooms/${roomCode}/players/${myId}`).update({
                 score: totalScore,
                 wpm: currentWpm,
                 wordIndex: wordIndex,
-                lastActive: Date.now(),
-                lastUpdate: lastEntry
+                lastActive: Date.now()
             });
-            db.ref(`rooms/${roomCode}/players/${myId}/matchDetailsFull`).set(matchDetailsArray);
         }
 
         usedReplay = false;
