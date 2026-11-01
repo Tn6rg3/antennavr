@@ -319,13 +319,25 @@ window.initCwgPrivateChat = function(myCall, partnerCall, band) {
 };
 
 window.sendCwgPrivateChatMessage = function() {
+    const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || window.myName || "");
+    const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
+    const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
+
+    if (!myCall || !partnerCall) {
+        if (typeof showToast === 'function') showToast("⚠️ Inserisci prima il Call del corrispondente per chattare.");
+        return;
+    }
+
+    if (!window.cwgPrivateChatRef && db) {
+        window.initCwgPrivateChat(myCall, partnerCall, band);
+    }
+
     if (!window.cwgPrivateChatRef) return;
 
     const input = document.getElementById('cwgPrivateChatInput');
     const txt = input ? input.value.trim() : "";
     if (!txt) return;
 
-    const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || window.myName || "");
     const rxInput = document.getElementById('cwgRxKeyInput');
     const rxKey = rxInput ? rxInput.value.trim().toUpperCase() : "";
     const txKey = window.cwgGeneratedTxKey ? window.cwgGeneratedTxKey.toUpperCase() : "";
@@ -380,6 +392,11 @@ window.checkCwgDoubleHandshakeMatch = function() {
     if (!myCall || myCall.length < 2 || !partnerCall || partnerCall.length < 2 || myCall === partnerCall) {
         if (statusBox) statusBox.style.display = "none";
         return;
+    }
+
+    // Inizializza immediatamente la Chat Privata tra i due Call
+    if (typeof window.initCwgPrivateChat === 'function') {
+        window.initCwgPrivateChat(myCall, partnerCall, band);
     }
 
     if (window.cwgLiveQsoListenerRef) {
