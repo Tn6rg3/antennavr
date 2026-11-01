@@ -528,7 +528,7 @@ window.fetchAndRenderCwgActivityMonthlyLeaderboard = async function() {
             const rank = idx + 1;
             const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
             const isMe = (p.id === window.myId);
-            const name = p.name || 'Telegrafista';
+            const name = (typeof window.escapeHtml === 'function') ? window.escapeHtml(p.name || 'Telegrafista') : (p.name || 'Telegrafista');
 
             html += `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.05); ${isMe ? 'background:rgba(0,188,212,0.18); font-weight:bold;' : ''}">
