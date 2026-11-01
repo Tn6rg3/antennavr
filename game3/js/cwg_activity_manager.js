@@ -747,6 +747,7 @@ window.onCwgRxKeyInputChanged = function() {
 window.requestCwgTxKey = async function() {
     const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
     const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
+    const startTime = (document.getElementById('cwgLogStartTime')?.value || "").trim();
 
     if (!partnerCall || partnerCall.length < 2) return;
 
@@ -761,7 +762,7 @@ window.requestCwgTxKey = async function() {
         : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
 
     try {
-        const url = `${serverUrl}?action=generate_cwg_key&userId=${window.myId}&partnerCall=${encodeURIComponent(partnerCall)}&band=${encodeURIComponent(band)}`;
+        const url = `${serverUrl}?action=generate_cwg_key&userId=${window.myId}&partnerCall=${encodeURIComponent(partnerCall)}&band=${encodeURIComponent(band)}&startTime=${encodeURIComponent(startTime)}`;
         const resp = await fetch(url);
         const data = await resp.json();
 
@@ -828,6 +829,9 @@ window.saveCwgQsoLog = async function() {
         const resData = await resp.json();
 
         if (resData && resData.status === 'ok') {
+            window.monthlyLeaderboardCache = {};
+            window.maxWpmRecordsCache = {};
+
             alert(`✅ QSO CONVALIDATO E SALVATO!\n\nPunti Assegnati: +${resData.points || 1} pt\n\n${resData.message || ""}`);
             window.resetCwgForm();
             if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
