@@ -3426,7 +3426,8 @@ window.openMaxWpmRecordsModal = function() {
 
     // OTTIMIZZAZIONE BANDWIDTH: Cache in memoria per 10 minuti (0 Download Firebase se riaperto)
     if (window.maxWpmRecordsCache[currentMonthStr] && (Date.now() - window.maxWpmRecordsCache[currentMonthStr].ts < 600000)) {
-        container.innerHTML = window.maxWpmRecordsCache[currentMonthStr].html;
+        container.innerHTML = '';
+        container.appendChild(window.maxWpmRecordsCache[currentMonthStr].fragment.cloneNode(true));
         return;
     }
 
@@ -3520,27 +3521,49 @@ window.openMaxWpmRecordsModal = function() {
         results.push(scanTreeNode(callsignSnap, '🎙️ CW Freak (Nominativi)'));
         results.push(scanTreeNode(memorySnap, '🧩 Memory CW (Coppie)'));
 
-        let html = '';
+        container.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+
         results.forEach(res => {
+            const row = document.createElement('div');
+            row.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;";
+
+            const leftDiv = document.createElement('div');
+            leftDiv.style.cssText = "display:flex; flex-direction:column;";
+
+            const modeB = document.createElement('b');
+            modeB.style.cssText = "font-size:0.85em; color:var(--text-color);";
+            modeB.textContent = res.name;
+
             const extraScoreStr = (res.bestScore > 0) ? ` • ${res.bestScore} pt` : '';
-            html += `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
-                    <div style="display:flex; flex-direction:column;">
-                        <b style="font-size:0.85em; color:var(--text-color);">${res.name}</b>
-                        <span style="font-size:0.75em; color:var(--hint-color); margin-top:2px;">${res.maxWpm > 0 ? `🥇 Recordman: ${res.bestName}${extraScoreStr}` : 'Nessun record questo mese'}</span>
-                    </div>
-                    <b style="font-size:1em; color:#ff9800; font-weight:bold;">${res.maxWpm > 0 ? res.maxWpm + ' WPM' : '--'}</b>
-                </div>
-            `;
+            const nameSpan = document.createElement('span');
+            nameSpan.style.cssText = "font-size:0.75em; color:var(--hint-color); margin-top:2px;";
+
+            if (res.maxWpm > 0) {
+                nameSpan.textContent = `🥇 Recordman: ${res.bestName}${extraScoreStr}`;
+            } else {
+                nameSpan.textContent = "Nessun record questo mese";
+            }
+
+            leftDiv.appendChild(modeB);
+            leftDiv.appendChild(nameSpan);
+
+            const rightB = document.createElement('b');
+            rightB.style.cssText = "font-size:1em; color:#ff9800; font-weight:bold;";
+            rightB.textContent = res.maxWpm > 0 ? `${res.maxWpm} WPM` : '--';
+
+            row.appendChild(leftDiv);
+            row.appendChild(rightB);
+            fragment.appendChild(row);
         });
+
+        container.appendChild(fragment);
 
         // Salva la cache in memoria per 10 minuti
         window.maxWpmRecordsCache[currentMonthStr] = {
             ts: Date.now(),
-            html: html
+            fragment: fragment.cloneNode(true)
         };
-
-        container.innerHTML = html;
     }).catch(err => {
         console.error("Max WPM Modal Error:", err);
         container.innerHTML = '<p style="text-align:center; font-size:0.85em; color:var(--hint-color); padding:10px;">Errore caricamento record.</p>';
