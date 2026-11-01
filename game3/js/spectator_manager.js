@@ -41,27 +41,16 @@ window.watchSpecificRoom = function(code, targetName) {
     const liveAudioRef = db.ref(`rooms/${roomCode}/liveAudio`);
     let lastUpdateRef = null;
 
-    const onStatusChange = roomRef.on('value', snap => {
+    // OTTIMIZZAZIONE BANDWIDTH: Ascoltiamo solo il nodo status invece dell'intera stanza!
+    const onStatusChange = roomRef.child('status').on('value', snap => {
         if (currentMode !== 'spectator') return;
 
-        if (!snap.exists()) {
-            showToast("⚠️ Il giocatore ha terminato o abbandonato la partita.");
-            window.stopWatchingCleanly();
-            return;
-        }
-
-        const roomData = snap.val();
-        const hostId = roomData.hostId;
-        const players = roomData.players || {};
-        const hostData = players[hostId] || Object.values(players)[0];
-
-        if (roomData.tone) currentTone = roomData.tone;
-
-        if (!hostData || hostData.finished) {
+        if (!snap.exists() || snap.val() === 'finished' || snap.val() === 'closed') {
             showToast("🏁 La partita che stavi osservando è terminata!");
             window.stopWatchingCleanly();
             return;
         }
+    });
 
         // --- SINCRONIZZAZIONE TABELLA (MATCH DETAILS) ---
         if (!lastUpdateRef && hostId) {

@@ -907,10 +907,10 @@ async function initGame() {
     auth = window.auth;
 
     // --- CONTROLLO MANUTENZIONE (Firebase) ---
-    db.ref('appConfig/maintenance').on('value', snap => {
+    db.ref('appConfig/maintenance').once('value', snap => {
         if (snap.val() === true) {
             console.warn("App: Modalità manutenzione attiva.");
-            window.appIsReady = true; // Ferma il bootstrap watchdog
+            window.appIsReady = true;
             if (window.bootstrapTimer) clearTimeout(window.bootstrapTimer);
 
             const screens = document.querySelectorAll('.screen');
@@ -1379,7 +1379,7 @@ window.initMandatoryAliasHandlers = function() {
         updateVers();
         setTimeout(updateVers, 1500); // Forza dopo caricamento altri script
 
-        db.ref('appConfig/latestVersion').on('value', snap => {
+        db.ref('appConfig/latestVersion').once('value', snap => {
             const latestStr = snap.val() ? String(snap.val()).trim() : "";
             const currentStr = String(APP_VERSION).trim();
             if (latestStr && latestStr !== currentStr) {
@@ -1412,7 +1412,7 @@ window.initMandatoryAliasHandlers = function() {
 window.initAdminAnnouncementListener = function() {
     if (!db) return;
 
-    db.ref('admin_announcement').on('value', snap => {
+    db.ref('admin_announcement').once('value', snap => {
         const data = snap.val();
         if (!data || !data.active || !data.text) {
             if (els.adminAnnouncementModal) els.adminAnnouncementModal.style.display = 'none';

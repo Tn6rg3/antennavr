@@ -121,7 +121,8 @@ window.activateQsoRelayMode = function() {
 
 window.listenForQsoPartner = function() {
     if (!window.roomCode) return;
-    db.ref("rooms/" + window.roomCode + "/players").on('value', function(snap) {
+    const qsoPlayersRef = db.ref("rooms/" + window.roomCode + "/players");
+    qsoPlayersRef.on('value', function(snap) {
         var players = snap.val() || {};
         for (var pId in players) {
             if (pId !== window.myId) {
@@ -134,6 +135,7 @@ window.listenForQsoPartner = function() {
                 if (players[pId].peerId && !window.qsoState.conn) {
                     var connection = window.qsoState.peer.connect(players[pId].peerId, { reliable: false, metadata: { name: window.myName, pNow: performance.now() } });
                     window.setupQsoDataChannel(connection, partnerName);
+                    try { qsoPlayersRef.off(); } catch(e) {}
 
                     var partnerRelayRef = db.ref("rooms/" + window.roomCode + "/qso_relay/" + partnerId);
                     var relayBuffer = {
