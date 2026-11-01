@@ -401,7 +401,7 @@
         <!-- BOTTONE ACCESSUALE BETA ACTIVITY - CWG (SOLO PER TESTER/ADMIN) -->
         <div id="btnCwgActivityContainer" style="display:none; width:100%; margin-bottom: 10px;">
             <button id="btnCwgActivityMode" onclick="window.openCwgActivityScreen()" class="btn-primary" style="width:100%; padding: 12px; font-weight:bold; font-size:1em; background: linear-gradient(135deg, #00bcd4, #008ba3); border:1px solid #00e5ff; color:#fff; box-shadow:0 3px 10px rgba(0,188,212,0.4); cursor:pointer;">
-                📻 ACTIVITY - CWG 🧪
+                📻 ACTIVITY - CWG (BETA LOG & CHIAVI 4 MINUTI) 🧪
             </button>
         </div>
 
@@ -2210,7 +2210,7 @@
             </div>
 
             <!-- BOX STATO CORRISPONDENZA HANDSHAKE -->
-            <div id="cwgHandshakeStatusBox" style="display:none; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:8px; margin-bottom:8px; text-align:center;"></div>
+            <div id="cwgHandshakeStatusBox" style="display:none; background:#ffffff; border:2px solid #00bcd4; border-radius:6px; padding:8px; margin-bottom:8px; text-align:center;"></div>
 
             <!-- PULSANTI CQ SPOT E RIMUOVI SPOT -->
             <div style="display:flex; gap:6px; margin-bottom:10px;">
@@ -2270,10 +2270,10 @@
                     <input type="text" id="cwgRxKeyInput" placeholder="es. K9X2M7P4..." autocomplete="off" maxlength="8" oninput="window.onCwgRxKeyInputChanged()" style="width:100%; padding:8px; font-size:1em; font-family:monospace; font-weight:bold; text-transform:uppercase; background:#fff; color:#000; border:2px solid var(--champ-color); border-radius:6px; box-sizing:border-box;">
                 </div>
 
-                <div id="cwgTxKeyDisplayBox" style="display:none; background:rgba(76, 175, 80, 0.15); border:1px solid #4caf50; border-radius:8px; padding:10px; margin-bottom:10px; text-align:center;">
-                    <span style="font-size:0.75em; color:#a5d6a7; display:block;">2. La tua Chiave da Trasmettere al Corrispondente:</span>
-                    <b id="cwgTxKeyText" style="font-size:1.3em; font-family:monospace; color:#00ff66; letter-spacing:2px; display:block; margin:4px 0;">--</b>
-                    <small style="font-size:0.7em; color:var(--hint-color);">Trasmetti questa chiave in Morse al tuo corrispondente per la convalida reciproca!</small>
+                <div id="cwgTxKeyDisplayBox" style="display:none; background:#ffffff; border:2px solid #4caf50; border-radius:8px; padding:10px; margin-bottom:10px; text-align:center;">
+                    <span style="font-size:0.75em; color:#2e7d32; font-weight:bold; display:block;">2. La tua Chiave da Trasmettere al Corrispondente:</span>
+                    <b id="cwgTxKeyText" style="font-size:1.4em; font-family:monospace; color:#000000; letter-spacing:2px; display:block; margin:4px 0;">--</b>
+                    <small style="font-size:0.7em; color:#000000; font-weight:bold;">Trasmetti questa chiave in Morse al tuo corrispondente per la convalida reciproca!</small>
                 </div>
 
                 <button id="btnSaveCwgQso" onclick="window.saveCwgQsoLog()" class="btn-success" style="width:100%; padding:10px; font-size:0.95em; font-weight:bold; margin:0;" disabled>
