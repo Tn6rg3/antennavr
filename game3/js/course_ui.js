@@ -279,11 +279,11 @@ window.showStudentDetailedStats = function(uid, name) {
     if (historyCont) historyCont.innerHTML = '';
     if (trendCont) trendCont.innerHTML = '';
 
-    // Carichiamo l'intero nodo del corso e lo storico utente
+    // Carichiamo lo stato del corso e lo storico utente recente
     Promise.all([
         db.ref(`users/${uid}/course`).once('value'),
-        db.ref(`users/${uid}/history`).once('value'),
-        db.ref(`users/${uid}/course/history`).once('value')
+        db.ref(`users/${uid}/history`).limitToLast(50).once('value'),
+        db.ref(`users/${uid}/course/history`).limitToLast(50).once('value')
     ]).then(([courseSnap, histSnap, courseHistSnap]) => {
         const courseData = courseSnap.val() || {};
 

@@ -775,8 +775,13 @@ window.lastGlobalInactivityCheck = 0;
 
 window.checkAllInactiveStudents = function() {
     if (!db || !window.myId) return;
+
+    // OTTIMIZZAZIONE MASSIVA BANDA: Il controllo inattività degli studenti viene eseguito SOLO dagli Admin o Tutor!
+    const isTutorOrAdmin = window.isAdmin || (window.courseData && window.courseData.role === 'tutor');
+    if (!isTutorOrAdmin) return;
+
     const now = Date.now();
-    // Eseguiamo il controllo globale al massimo una volta ogni 10 minuti per client
+    // Eseguiamo il controllo globale al massimo una volta ogni 10 minuti
     if (now - window.lastGlobalInactivityCheck < 600000) return;
     window.lastGlobalInactivityCheck = now;
 
