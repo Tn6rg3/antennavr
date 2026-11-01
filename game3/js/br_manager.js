@@ -96,14 +96,11 @@ window.checkBattleTime = function() {
             };
         }
 
-        db.ref(`rooms/${brRoomCode}/players`).on('value', snap => {
-            const players = snap.val() || {};
-            const count = Object.keys(players).length;
+        // Ascolto mirato del solo stato di iscrizione del singolo utente (20 Byte)
+        db.ref(`rooms/${brRoomCode}/players/${myId}`).on('value', snap => {
+            const isEnrolled = snap.exists();
 
-            if (els.brEnrolledCount) els.brEnrolledCount.textContent = count;
-            if (els.brEnrolledCountCompact) els.brEnrolledCountCompact.textContent = count;
-
-            if (players[myId]) {
+            if (isEnrolled) {
                 if (els.brBanner) {
                     els.brBanner.style.backgroundColor = '#4caf50';
                     els.brBanner.style.borderColor = '#81c784';
