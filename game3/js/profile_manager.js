@@ -1189,16 +1189,15 @@ window.updateUserInAllLeaderboards = async function(newName, newUsername, privLb
     }
 
     const categories = ['standard', 'standard_plus', 'code_groups', 'chars', 'quiz', 'pingpong'];
+    const wordCounts = ['10', '20', '30', '50'];
+
     for (const cat of categories) {
-        db.ref(`leaderboard/${cat}`).once('value').then(catSnap => {
-            if (catSnap.exists()) {
-                catSnap.forEach(subNode => {
-                    if (subNode.hasChild(myId)) {
-                        subNode.child(myId).ref.update(updates);
-                    }
-                });
-            }
-        }).catch(e => console.warn(`Clean LB ${cat} error:`, e));
+        for (const wc of wordCounts) {
+            const p = `leaderboard/${cat}/single_${wc}/${myId}`;
+            db.ref(p).once('value').then(snap => {
+                if (snap.exists()) db.ref(p).update(updates);
+            }).catch(() => {});
+        }
     }
 };
 
@@ -1420,20 +1419,18 @@ if (els.deleteDataBtn) {
                 }
             } catch(e) {}
 
-            // FASE 1: Pulizia Classifiche e Leaderboard (Mentre uid_mapping e attivo al 100%)
-            const categories = ['standard', 'standard_plus', 'code_groups', 'chars', 'quiz', 'pingpong', 'callsign', 'arcade', 'la_torre'];
+            // FASE 1: Pulizia Classifiche e Leaderboard (Mirata per ID utente)
+            const categories = ['standard', 'standard_plus', 'code_groups', 'chars', 'quiz', 'pingpong'];
+            const wordCounts = ['10', '20', '30', '50'];
             for (const cat of categories) {
-                try {
-                    const catSnap = await db.ref(`leaderboard/${cat}`).once('value');
-                    if (catSnap.exists()) {
-                        catSnap.forEach(subNode => {
-                            if (subNode.hasChild(window.myId)) {
-                                safeRemove(subNode.child(window.myId).ref);
-                            }
-                        });
-                    }
-                } catch(e) {}
+                for (const wc of wordCounts) {
+                    safeRemove(db.ref(`leaderboard/${cat}/single_${wc}/${window.myId}`));
+                }
             }
+            safeRemove(db.ref(`leaderboard/callsign/global/${window.myId}`));
+            safeRemove(db.ref(`leaderboard/arcade/all/${window.myId}`));
+            safeRemove(db.ref(`leaderboard/arcade/memory_cw/${window.myId}`));
+            safeRemove(db.ref(`leaderboard/la_torre/all/${window.myId}`));
 
             // FASE 2: Pulizia Richieste Tutor e Attivita
             try {

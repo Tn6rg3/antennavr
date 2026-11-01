@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.257";
+const APP_VERSION = "20260807.258";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1975,18 +1975,18 @@ window.setupBugSystem = function() {
 
             const safeRemove = (ref) => ref.remove().catch(e => console.warn("Safe remove note:", e));
 
-            // 1. Pulizia Classifiche e Leaderboard
-            const categories = ['standard', 'chars', 'quiz', 'pingpong', 'callsign', 'arcade', 'la_torre'];
+            // 1. Pulizia Classifiche e Leaderboard (Mirata per ID)
+            const categories = ['standard', 'standard_plus', 'code_groups', 'chars', 'quiz', 'pingpong'];
+            const wordCounts = ['10', '20', '30', '50'];
             for (const cat of categories) {
-                try {
-                    const catSnap = await db.ref(`leaderboard/${cat}`).once('value');
-                    if (catSnap.exists()) {
-                        catSnap.forEach(subNode => {
-                            if (subNode.hasChild(targetId)) safeRemove(subNode.child(targetId).ref);
-                        });
-                    }
-                } catch(e) {}
+                for (const wc of wordCounts) {
+                    safeRemove(db.ref(`leaderboard/${cat}/single_${wc}/${targetId}`));
+                }
             }
+            safeRemove(db.ref(`leaderboard/callsign/global/${targetId}`));
+            safeRemove(db.ref(`leaderboard/arcade/all/${targetId}`));
+            safeRemove(db.ref(`leaderboard/arcade/memory_cw/${targetId}`));
+            safeRemove(db.ref(`leaderboard/la_torre/all/${targetId}`));
 
             // 2. Pulizia Nodi Utente
             await Promise.all([
@@ -2653,7 +2653,7 @@ window.reopenDailyChallenge = function() {
     const today = window.getLocalDateString();
 
     Promise.all([
-        db.ref(`users/${window.myId}/history`).once('value'),
+        db.ref(`users/${window.myId}/history`).limitToLast(50).once('value'),
         db.ref(`users/${window.myId}/daily_attempt`).once('value')
     ]).then(([historySnap, attemptSnap]) => {
         const history = historySnap.val() || {};
