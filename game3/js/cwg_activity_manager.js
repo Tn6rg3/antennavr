@@ -408,14 +408,16 @@ window.checkCwgDoubleHandshakeMatch = function() {
 
         if (statusBox) {
             statusBox.style.display = "block";
+            statusBox.style.background = "#ffffff";
+            statusBox.style.border = "2px solid #ff9800";
             statusBox.textContent = "";
 
             const span = document.createElement('span');
             span.style.fontSize = "0.85em";
             span.style.fontWeight = "bold";
-            span.style.color = isRegistered ? "#ff9800" : "#ffb74d";
+            span.style.color = "#000000";
 
-            const regText = isRegistered ? " (✅ Registrato nel gioco)" : " (⚠️ Utente non ancora registrato nel gioco)";
+            const regText = isRegistered ? " (✅ Registrato)" : " (⚠️ Non ancora registrato)";
             span.textContent = `⏳ STANDBY: In attesa che ${partnerCall}${regText} inserisca il tuo Call (${myCall}) sulla banda ${band.toUpperCase()} per avviare il QSO...`;
             statusBox.appendChild(span);
         }
@@ -429,10 +431,12 @@ window.checkCwgDoubleHandshakeMatch = function() {
         if (Math.abs(nowTs - partnerTs) < 300000) {
             if (statusBox) {
                 statusBox.style.display = "block";
+                statusBox.style.background = "#ffffff";
+                statusBox.style.border = "2px solid #4caf50";
                 statusBox.textContent = "";
 
                 const span = document.createElement('span');
-                span.style.color = "#00ff66";
+                span.style.color = "#000000";
                 span.style.fontSize = "0.85em";
                 span.style.fontWeight = "bold";
                 span.textContent = `🟢 CORRISPONDENZA CONFERMATA CON ${partnerCall}! QSO AVVIATO!`;
@@ -561,13 +565,13 @@ window.startCwgKeysExchangePhase = function() {
         window.requestCwgTxKey();
         if (stepHelp) {
             stepHelp.textContent = "① Trasmetti la tua Chiave TX in Morse a B, e scrivi qui sotto la Chiave RX che B ti invierà entro 2 minuti!";
-            stepHelp.style.color = "#00bcd4";
+            stepHelp.style.color = "#ffffff";
         }
     } else {
         if (txBox) txBox.style.display = "none";
         if (stepHelp) {
             stepHelp.textContent = "① Ricevi la Chiave Morse di A ed inseriscila nel campo qui sotto entro 2 minuti per sbloccare la tua Chiave TX!";
-            stepHelp.style.color = "#ff9800";
+            stepHelp.style.color = "#ffffff";
         }
     }
 
@@ -583,7 +587,7 @@ window.startCwgKeysExchangePhase = function() {
 
         if (timerDisp) {
             timerDisp.textContent = `⏱️ SCAMBIO CHIAVI: ${mins}:${secs}`;
-            timerDisp.style.color = left < 30 ? "#f44336" : "#ff9800";
+            timerDisp.style.color = left < 30 ? "#ff5252" : "#ffffff";
         }
 
         const perc = Math.max(0, (left / 120) * 100);
