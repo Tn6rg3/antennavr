@@ -1214,15 +1214,15 @@ window.initMandatoryAliasHandlers = function() {
                     db.ref('courseChat').remove();
                     db.ref('courseChats').remove();
 
-                    // 2. Pulizia stanze orfane o scadute
-                    db.ref('rooms').once('value', roomsSnap => {
+                    // 2. Pulizia stanze orfane o scadute (limitata alle ultime 50 stanze)
+                    db.ref('rooms').limitToLast(50).once('value', roomsSnap => {
                         if (!roomsSnap.exists()) return;
                         roomsSnap.forEach(rSnap => {
                             const r = rSnap.val();
                             const players = r.players || {};
                             const hasPlayers = Object.keys(players).length > 0;
                             const isExpired = r.expiresAt && now > r.expiresAt;
-                            const isVeryOld = r.createdAt && (now - r.createdAt) > (ONE_DAY_MS * 2); // Più di 48h
+                            const isVeryOld = r.createdAt && (now - r.createdAt) > (ONE_DAY_MS * 2);
 
                             if (!hasPlayers || isExpired || isVeryOld) {
                                 console.log(`GC: Rimuovo stanza ${rSnap.key} (Motivo: Orfana/Scaduta)`);
@@ -1232,8 +1232,8 @@ window.initMandatoryAliasHandlers = function() {
                         });
                     });
 
-                    // 3. Pulizia lobby pubblica (stanze fantasma senza corrispondenza in /rooms)
-                    db.ref('public_lobby_rooms').once('value', lobbySnap => {
+                    // 3. Pulizia lobby pubblica
+                    db.ref('public_lobby_rooms').limitToLast(50).once('value', lobbySnap => {
                         if (!lobbySnap.exists()) return;
                         lobbySnap.forEach(lSnap => {
                             db.ref(`rooms/${lSnap.key}`).once('value', rCheck => {

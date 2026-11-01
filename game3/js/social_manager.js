@@ -577,15 +577,19 @@ window.openTeamInviteModal = async function(targetId, targetName) {
     }
 
     try {
-        const teamsSnap = await db.ref('teams').once('value');
+        const teamIdSnap = await db.ref(`users/${targetId}/teamId`).once('value');
         let tName = null, inTeam = false;
-        teamsSnap.forEach(tSnap => {
-            const t = tSnap.val();
-            if (t.status !== 'retired' && t.members && t.members[targetId]) {
-                inTeam = true;
-                tName = t.name;
+
+        if (teamIdSnap.exists() && teamIdSnap.val()) {
+            const teamSnap = await db.ref(`teams/${teamIdSnap.val()}`).once('value');
+            if (teamSnap.exists()) {
+                const tData = teamSnap.val() || {};
+                if (tData.status !== 'retired') {
+                    inTeam = true;
+                    tName = tData.name || "Squadra";
+                }
             }
-        });
+        }
 
         if (els.recruitmentStatusText) {
             els.recruitmentStatusText.innerHTML = "";

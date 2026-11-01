@@ -253,27 +253,21 @@ window.fetchAndRenderMyHistory = function() {
 
 window.populateDynamicFilters = function(modePath, subTypeFilter = "") {
     if (!els.lbWordFilter) return;
-    console.log("LB: Populating filters for path:", modePath, "filter:", subTypeFilter);
     const currentValue = els.lbWordFilter.value;
+    const isIt = (typeof currentLang === 'undefined' || currentLang === 'it');
 
-    db.ref(`leaderboard/${modePath}`).once('value', snapshot => {
-        let options = [`<option value="all">${currentLang==='it'?'Tutte le categorie':'All categories'}</option>`];
-        let counts = [];
-        snapshot.forEach(node => {
-            const key = node.key;
-            if (modePath.startsWith('recent_matches')) {
-                if (key !== 'unknown' && !counts.includes(key)) counts.push(key);
-            } else {
-                if (!subTypeFilter || key.startsWith(subTypeFilter + "_")) {
-                    const count = key.split('_').pop();
-                    if (!counts.includes(count)) counts.push(count);
-                }
-            }
-        });
-        counts.sort((a,b) => parseInt(a) - parseInt(b)).forEach(c => options.push(`<option value="${c}">${c} ${currentLang==='it'?'Stringhe':'Strings'}</option>`));
-        els.lbWordFilter.innerHTML = options.join('');
-        if (counts.includes(currentValue) || currentValue === 'all') els.lbWordFilter.value = currentValue;
-    });
+    const options = [
+        `<option value="all">${isIt ? 'Tutte le quantità' : 'All quantities'}</option>`,
+        `<option value="10">10 ${isIt ? 'Parole' : 'Words'}</option>`,
+        `<option value="20">20 ${isIt ? 'Parole' : 'Words'}</option>`,
+        `<option value="30">30 ${isIt ? 'Parole' : 'Words'}</option>`,
+        `<option value="50">50 ${isIt ? 'Parole' : 'Words'}</option>`
+    ];
+
+    els.lbWordFilter.innerHTML = options.join('');
+    if (['10', '20', '30', '50', 'all'].includes(currentValue)) {
+        els.lbWordFilter.value = currentValue;
+    }
 };
 
 window.fetchAndRenderTriDailyLeaderboard = function() {
