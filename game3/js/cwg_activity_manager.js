@@ -6,6 +6,7 @@ window.cwgQsoTimerSeconds = 0;
 window.cwgExchangeSecondsLeft = 120; // 2 Minuti per lo scambio chiavi
 window.cwgGeneratedTxKey = "";
 window.cwgLiveQsoListenerRef = null;
+window.cwgCqAcceptedListenerRef = null;
 window.cwgPrivateChatRef = null;
 window.isCwgInitiator = false; // true se l'utente è Utente A (chi avvia per primo)
 window.cwgMyHandshakeTs = 0;
@@ -111,6 +112,11 @@ window.resetCwgForm = function() {
         window.cwgLiveQsoListenerRef = null;
     }
 
+    if (window.cwgCqAcceptedListenerRef) {
+        try { window.cwgCqAcceptedListenerRef.off(); } catch(e) {}
+        window.cwgCqAcceptedListenerRef = null;
+    }
+
     window.cleanCwgPrivateChat();
 
     const timerDisp = document.getElementById('cwgQsoTimerDisplay');
@@ -208,6 +214,43 @@ window.sendCwgCqSpotInChat = function() {
             console.error("CQ Spot Error:", err);
             alert("Errore invio spot.");
         });
+
+        // ASCOLTO IN TEMPO REALE: Ascoltiamo quando qualcuno risponde al nostro Spot CQ per inserirlo automaticamente!
+        if (window.cwgCqAcceptedListenerRef) {
+            try { window.cwgCqAcceptedListenerRef.off(); } catch(e) {}
+        }
+
+        const acceptedRef = db.ref(`activity_cwg/cq_accepted/${myCall}_${band}`);
+        window.cwgCqAcceptedListenerRef = acceptedRef;
+
+        acceptedRef.on('value', snap => {
+            if (!snap.exists()) return;
+            const data = snap.val() || {};
+            const responderCall = data.responderCall;
+
+            if (responderCall && responderCall !== myCall) {
+                console.log(`CWG: Spot accepted by ${responderCall}! Auto-filling partnerCall and triggering handshake.`);
+
+                const partnerInput = document.getElementById('cwgLogPartnerCall');
+                if (partnerInput) {
+                    partnerInput.value = responderCall;
+                }
+
+                if (typeof showToast === 'function') {
+                    showToast(`📡 ${responderCall} ha risposto al tuo Spot CQ su ${band}! Avvio QSO...`);
+                }
+
+                const startBtn = document.getElementById('btnCwgStartTimer');
+                const cancelBtn = document.getElementById('btnCwgCancelQso');
+                if (startBtn) {
+                    startBtn.disabled = true;
+                    startBtn.textContent = "⏳ IN ATTESA DEL CORRISPONDENTE...";
+                }
+                if (cancelBtn) cancelBtn.style.display = "block";
+
+                window.checkCwgDoubleHandshakeMatch();
+            }
+        });
     }
 };
 
@@ -224,6 +267,12 @@ window.removeCwgCqSpot = function(silent = false, targetBand = null) {
 
     const spotId = `cq_spot_${myCall}_${band}`;
     db.ref(`public_lobby_rooms/${spotId}`).remove().catch(() => {});
+    db.ref(`activity_cwg/cq_accepted/${myCall}_${band}`).remove().catch(() => {});
+
+    if (window.cwgCqAcceptedListenerRef) {
+        try { window.cwgCqAcceptedListenerRef.off(); } catch(e) {}
+        window.cwgCqAcceptedListenerRef = null;
+    }
 
     if (window.lastCqSpotMsgKey) {
         db.ref(`globalChat/${window.lastCqSpotMsgKey}`).remove().catch(() => {});
@@ -258,8 +307,21 @@ window.joinCqSpotActivity = async function(spotCall, spotBand) {
 
     const cleanSpotCall = window.cleanCallsignString(spotCall);
     const cleanSpotBand = (spotBand || "40m").trim().toLowerCase();
+    const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || localStorage.getItem('cwgame_activity_call') || window.myName || "");
 
-    // Rimuoviamo immediatamente lo spot spottato sia dalla Bacheca che dalla Chat Globale!
+    // 1. Notifichiamo l'ideatore dello spot (spotCall) che NOI (myCall) abbiamo accettato la sua chiamata!
+    if (db && myCall) {
+        const acceptedRef = db.ref(`activity_cwg/cq_accepted/${cleanSpotCall}_${cleanSpotBand.toUpperCase()}`);
+        acceptedRef.onDisconnect().remove();
+        acceptedRef.set({
+            responderCall: myCall,
+            spotCall: cleanSpotCall,
+            band: cleanSpotBand,
+            ts: Date.now()
+        }).catch(() => {});
+    }
+
+    // 2. Rimuoviamo immediatamente lo spot spottato sia dalla Bacheca che dalla Chat Globale!
     if (db) {
         const spotId = `cq_spot_${cleanSpotCall}_${cleanSpotBand.toUpperCase()}`;
         db.ref(`public_lobby_rooms/${spotId}`).remove().catch(() => {});
@@ -646,7 +708,7 @@ window.startCwgKeysExchangePhase = function() {
         const perc = Math.max(0, (left / 120) * 100);
         if (fillBar) {
             fillBar.style.width = `${perc}%`;
-            fillBar.style.background = left < 30 ? "#f44336" : "#ff9800";
+            fillBar.style.background = left < 30 ? "#ff5252" : "#ffffff";
         }
 
         if (left <= 0) {
