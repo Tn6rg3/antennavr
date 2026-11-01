@@ -2652,8 +2652,11 @@ window.reopenDailyChallenge = function() {
 
     const today = window.getLocalDateString();
 
-    db.ref(`users/${window.myId}/history`).once('value').then(snap => {
-        const history = snap.val() || {};
+    Promise.all([
+        db.ref(`users/${window.myId}/history`).once('value'),
+        db.ref(`users/${window.myId}/daily_attempt`).once('value')
+    ]).then(([historySnap, attemptSnap]) => {
+        const history = historySnap.val() || {};
         let playedAndScoredToday = false;
 
         Object.values(history).forEach(m => {
@@ -2663,27 +2666,24 @@ window.reopenDailyChallenge = function() {
             }
         });
 
+        const attemptVal = attemptSnap.exists() ? attemptSnap.val() : null;
+        const localStatus = localStorage.getItem(STORAGE_DAILY_STATUS_KEY);
+
         if (playedAndScoredToday) {
             alert("🏆 Hai già completato la Sfida Giornaliera di oggi!\nI record della Sfida Giornaliera si calcolano su una singola prova al giorno.");
             return;
         }
 
-        // Resettiamo il flag di rifiuto/annullamento accidentale
-        localStorage.removeItem(STORAGE_DAILY_STATUS_KEY);
-        db.ref(`users/${window.myId}/daily_attempt`).remove().then(() => {
-            showToast("📅 Sfida Giornaliera riattivata! Preparati...");
-            if (typeof window.loadDailyYesterdayPodium === 'function') window.loadDailyYesterdayPodium();
-            const modal = document.getElementById('dailyChallengeModal');
-            if (modal) {
-                modal.style.display = 'flex';
-            }
-        });
-    }).catch(err => {
-        console.error("Reopen Daily Challenge Error:", err);
-        localStorage.removeItem(STORAGE_DAILY_STATUS_KEY);
-        db.ref(`users/${window.myId}/daily_attempt`).remove();
+        if (attemptVal === today || localStatus === today) {
+            alert("⚠️ Tentativo per la Sfida Giornaliera di oggi già utilizzato o interrotto!\nNon è consentito ricominciare da capo una sfida già avviata.");
+            return;
+        }
+
+        if (typeof window.loadDailyYesterdayPodium === 'function') window.loadDailyYesterdayPodium();
         const modal = document.getElementById('dailyChallengeModal');
         if (modal) modal.style.display = 'flex';
+    }).catch(err => {
+        console.error("Reopen Daily Challenge Error:", err);
     });
 };
 
