@@ -267,6 +267,8 @@ window.finishCoopGame = function(won) {
         });
     }
 
+    window.stopCoopStateListener();
+
     showScreen('leaderboardScreen');
     if (els.tableWrapper) els.tableWrapper.style.display = 'block';
     if (els.coopArea) els.coopArea.style.display = 'none';
