@@ -256,6 +256,26 @@ window.joinCqSpotActivity = async function(spotCall, spotBand) {
         return alert("⚠️ La modalità Activity - CWG è attualmente riservata ai Beta Tester autorizzati.");
     }
 
+    const cleanSpotCall = window.cleanCallsignString(spotCall);
+    const cleanSpotBand = (spotBand || "40m").trim().toLowerCase();
+
+    // Rimuoviamo immediatamente lo spot spottato sia dalla Bacheca che dalla Chat Globale!
+    if (db) {
+        const spotId = `cq_spot_${cleanSpotCall}_${cleanSpotBand.toUpperCase()}`;
+        db.ref(`public_lobby_rooms/${spotId}`).remove().catch(() => {});
+
+        db.ref('globalChat').orderByChild('spotCall').equalTo(cleanSpotCall).once('value', snap => {
+            if (snap.exists()) {
+                snap.forEach(c => {
+                    const val = c.val();
+                    if (val && val.isCqSpot && val.spotBand === cleanSpotBand.toUpperCase()) {
+                        db.ref(`globalChat/${c.key}`).remove().catch(() => {});
+                    }
+                });
+            }
+        }).catch(() => {});
+    }
+
     if (typeof window.openCwgActivityScreen === 'function') {
         await window.openCwgActivityScreen();
     }
@@ -263,8 +283,16 @@ window.joinCqSpotActivity = async function(spotCall, spotBand) {
     const partnerInput = document.getElementById('cwgLogPartnerCall');
     const bandSelect = document.getElementById('cwgLogBandSelect');
 
-    if (partnerInput) partnerInput.value = window.cleanCallsignString(spotCall);
-    if (bandSelect && spotBand) bandSelect.value = spotBand.toLowerCase();
+    if (partnerInput) partnerInput.value = cleanSpotCall;
+    if (bandSelect && cleanSpotBand) bandSelect.value = cleanSpotBand;
+
+    const startBtn = document.getElementById('btnCwgStartTimer');
+    const cancelBtn = document.getElementById('btnCwgCancelQso');
+    if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.textContent = "⏳ IN ATTESA DEL CORRISPONDENTE...";
+    }
+    if (cancelBtn) cancelBtn.style.display = "block";
 
     window.checkCwgDoubleHandshakeMatch();
 };
@@ -508,6 +536,14 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
     if (startTimeInput && (!startTimeInput.value || startTimeInput.value.trim() === "")) {
         startTimeInput.value = `${hh}:${mm}`;
     }
+
+    const startBtn = document.getElementById('btnCwgStartTimer');
+    const cancelBtn = document.getElementById('btnCwgCancelQso');
+    if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.textContent = "🟢 QSO IN CORSO...";
+    }
+    if (cancelBtn) cancelBtn.style.display = "block";
 
     const qsoStartTs = Date.now() - (Number(initialElapsedSeconds) * 1000);
     window.cwgQsoStartTimestamp = qsoStartTs;
