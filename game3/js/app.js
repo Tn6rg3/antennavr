@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.258";
+const APP_VERSION = "20260807.259";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1339,6 +1339,10 @@ window.initMandatoryAliasHandlers = function() {
                 if (alreadyPlayedToday) {
                     // Aggiorniamo il cache locale se Firebase dice che abbiamo giocato
                     localStorage.setItem(STORAGE_DAILY_STATUS_KEY, today);
+                } else {
+                    // Se Firebase conferma che NON abbiamo giocato (es. sbloccati dall'Admin), puliamo la cache locale!
+                    localStorage.removeItem(STORAGE_DAILY_STATUS_KEY);
+                    localStorage.removeItem("cwgame_daily_status");
                 }
             });
         });
@@ -2667,6 +2671,13 @@ window.reopenDailyChallenge = function() {
         });
 
         const attemptVal = attemptSnap.exists() ? attemptSnap.val() : null;
+
+        // Se l'Admin ha sbloccato l'utente su Firebase (attemptVal è null e non ha giocate in history), puliamo la memoria locale del telefono!
+        if (!attemptVal && !playedAndScoredToday) {
+            localStorage.removeItem(STORAGE_DAILY_STATUS_KEY);
+            localStorage.removeItem("cwgame_daily_status");
+        }
+
         const localStatus = localStorage.getItem(STORAGE_DAILY_STATUS_KEY);
 
         if (playedAndScoredToday) {
