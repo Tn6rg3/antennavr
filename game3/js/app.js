@@ -3446,91 +3446,101 @@ window.openMaxWpmRecordsModal = function() {
 
     if (!db) return;
 
-    // OTTIMIZZAZIONE BANDWIDTH: Per Sfida Giornaliera e Tripla interroghiamo SOLO i giorni del mese corrente invece dell'intero storico!
-    const todayNum = now.getDate();
-    const currentMonthDailyPromises = [];
-    const currentMonthTriPromises = [];
+    // 1. Leggiamo il nodo dedicato dei Record Max WPM del Mese
+    db.ref(`leaderboard/max_wpm_records/${currentMonthStr}`).once('value', maxMonthSnap => {
+        const monthMaxData = maxMonthSnap.exists() ? maxMonthSnap.val() : {};
 
-    for (let d = 1; d <= todayNum; d++) {
-        const dayStr = `${currentMonthStr}-${String(d).padStart(2, '0')}`;
-        currentMonthDailyPromises.push(db.ref(`leaderboard/daily_challenge/${dayStr}`).once('value').catch(() => null));
-        currentMonthTriPromises.push(db.ref(`leaderboard/tri_daily/${dayStr}`).once('value').catch(() => null));
-    }
+        const todayNum = now.getDate();
+        const currentMonthDailyPromises = [];
+        const currentMonthTriPromises = [];
 
-    const standardPromise = db.ref('leaderboard/standard').limitToLast(50).once('value').catch(() => null);
-    const standardPlusPromise = db.ref('leaderboard/standard_plus').limitToLast(50).once('value').catch(() => null);
-    const callsignPromise = db.ref('leaderboard/callsign/global').orderByChild('score').limitToLast(50).once('value').catch(() => null);
-    const memoryCwPromise = db.ref('leaderboard/arcade/memory_cw').orderByChild('score').limitToLast(50).once('value').catch(() => null);
+        for (let d = 1; d <= todayNum; d++) {
+            const dayStr = `${currentMonthStr}-${String(d).padStart(2, '0')}`;
+            currentMonthDailyPromises.push(db.ref(`leaderboard/daily_challenge/${dayStr}`).once('value').catch(() => null));
+            currentMonthTriPromises.push(db.ref(`leaderboard/tri_daily/${dayStr}`).once('value').catch(() => null));
+        }
 
-    Promise.all([
-        Promise.all(currentMonthDailyPromises),
-        Promise.all(currentMonthTriPromises),
-        standardPromise,
-        standardPlusPromise,
-        callsignPromise,
-        memoryCwPromise
-    ]).then(([dailySnaps, triSnaps, stdSnap, stdPlusSnap, callsignSnap, memorySnap]) => {
-        const results = [];
+        const standardPromise = db.ref('leaderboard/standard').limitToLast(50).once('value').catch(() => null);
+        const standardPlusPromise = db.ref('leaderboard/standard_plus').limitToLast(50).once('value').catch(() => null);
+        const callsignPromise = db.ref('leaderboard/callsign/global').orderByChild('score').limitToLast(50).once('value').catch(() => null);
+        const memoryCwPromise = db.ref('leaderboard/arcade/memory_cw').orderByChild('score').limitToLast(50).once('value').catch(() => null);
 
-        const scanRecords = (snapsList, modeName, wpmField = 'wpm') => {
-            let maxW = 0, bName = "Nessun Record", bScore = 0;
-            snapsList.forEach(snap => {
-                if (snap && snap.exists()) {
-                    snap.forEach(child => {
-                        const val = child.val();
-                        if (val && typeof val === 'object') {
-                            const isCustom = !!val.isEasyMode || !!val.isFixedSpeed || !!val.hasCustomParams || (val.charSpaceWpm && Number(val.charSpaceWpm) > 0) || (val.wordSpaceMult && Number(val.wordSpaceMult) !== 1.0);
-                            if (!isCustom) {
-                                const w = Number(val[wpmField] || val.wpm || val.peakWpm || 0);
-                                if (w > maxW) {
-                                    maxW = w;
-                                    bName = val.name || "Telegrafista";
-                                    bScore = val.score || val.totalScore || 0;
-                                }
-                            }
-                        }
-                    });
+        Promise.all([
+            Promise.all(currentMonthDailyPromises),
+            Promise.all(currentMonthTriPromises),
+            standardPromise,
+            standardPlusPromise,
+            callsignPromise,
+            memoryCwPromise
+        ]).then(([dailySnaps, triSnaps, stdSnap, stdPlusSnap, callsignSnap, memorySnap]) => {
+            const results = [];
+
+            const getBestForMode = (modeKey, snapsList, fallbackSnap, modeName, wpmField = 'wpm') => {
+                // Se c'è il record dedicato registrato da qualsiasi partita nel mese, USALO SUBITO!
+                if (monthMaxData[modeKey] && Number(monthMaxData[modeKey].wpm) > 0) {
+                    return {
+                        name: modeName,
+                        bestName: monthMaxData[modeKey].name || "Telegrafista",
+                        maxWpm: Number(monthMaxData[modeKey].wpm || 0),
+                        bestScore: Number(monthMaxData[modeKey].score || 0)
+                    };
                 }
-            });
-            return { name: modeName, bestName: bName, maxWpm: maxW, bestScore: bScore };
-        };
 
-        const scanTreeNode = (snap, modeName) => {
-            let maxW = 0, bName = "Nessun Record", bScore = 0;
-            if (snap && snap.exists()) {
-                const scan = (node) => {
-                    if (!node) return;
-                    node.forEach(child => {
-                        const val = child.val();
-                        if (val && typeof val === 'object') {
-                            if (val.wpm !== undefined || val.peakWpm !== undefined) {
-                                const isCustom = !!val.isEasyMode || !!val.isFixedSpeed || !!val.hasCustomParams || (val.charSpaceWpm && Number(val.charSpaceWpm) > 0) || (val.wordSpaceMult && Number(val.wordSpaceMult) !== 1.0);
-                                if (!isCustom) {
-                                    const w = Number(val.peakWpm || val.wpm || 0);
-                                    const recordDate = String(val.date || child.key || "");
-                                    if (window.isDateInCurrentMonth(recordDate) && w > maxW) {
-                                        maxW = w;
-                                        bName = val.name || "Telegrafista";
-                                        bScore = val.score || val.totalScore || 0;
+                // Altrimenti, fallback scansionando i nodi tradizionali
+                let maxW = 0, bName = "Nessun Record", bScore = 0;
+                if (snapsList) {
+                    snapsList.forEach(snap => {
+                        if (snap && snap.exists()) {
+                            snap.forEach(child => {
+                                const val = child.val();
+                                if (val && typeof val === 'object') {
+                                    const isCustom = !!val.isEasyMode || !!val.isFixedSpeed || !!val.hasCustomParams || (val.charSpaceWpm && Number(val.charSpaceWpm) > 0) || (val.wordSpaceMult && Number(val.wordSpaceMult) !== 1.0);
+                                    if (!isCustom) {
+                                        const w = Number(val[wpmField] || val.wpm || val.peakWpm || 0);
+                                        if (w > maxW) {
+                                            maxW = w;
+                                            bName = val.name || "Telegrafista";
+                                            bScore = val.score || val.totalScore || 0;
+                                        }
                                     }
                                 }
-                            } else {
-                                scan(child);
-                            }
+                            });
                         }
                     });
-                };
-                scan(snap);
-            }
-            return { name: modeName, bestName: bName, maxWpm: maxW, bestScore: bScore };
-        };
+                } else if (fallbackSnap && fallbackSnap.exists()) {
+                    const scan = (node) => {
+                        if (!node) return;
+                        node.forEach(child => {
+                            const val = child.val();
+                            if (val && typeof val === 'object') {
+                                if (val.wpm !== undefined || val.peakWpm !== undefined) {
+                                    const isCustom = !!val.isEasyMode || !!val.isFixedSpeed || !!val.hasCustomParams || (val.charSpaceWpm && Number(val.charSpaceWpm) > 0) || (val.wordSpaceMult && Number(val.wordSpaceMult) !== 1.0);
+                                    if (!isCustom) {
+                                        const w = Number(val.peakWpm || val.wpm || 0);
+                                        const recordDate = String(val.date || child.key || "");
+                                        if (window.isDateInCurrentMonth(recordDate) && w > maxW) {
+                                            maxW = w;
+                                            bName = val.name || "Telegrafista";
+                                            bScore = val.score || val.totalScore || 0;
+                                        }
+                                    }
+                                } else {
+                                    scan(child);
+                                }
+                            }
+                        });
+                    };
+                    scan(fallbackSnap);
+                }
+                return { name: modeName, bestName: bName, maxWpm: maxW, bestScore: bScore };
+            };
 
-        results.push(scanTreeNode(stdSnap, '🔤 Parole Comuni'));
-        results.push(scanTreeNode(stdPlusSnap, '➕ Parole +'));
-        results.push(scanRecords(dailySnaps, '📅 Sfida Giornaliera', 'wpm'));
-        results.push(scanRecords(triSnaps, '🏆 Sfida Tripla', 'peakWpm'));
-        results.push(scanTreeNode(callsignSnap, '🎙️ CW Freak (Nominativi)'));
-        results.push(scanTreeNode(memorySnap, '🧩 Memory CW (Coppie)'));
+            results.push(getBestForMode('standard', null, stdSnap, '🔤 Parole Comuni'));
+            results.push(getBestForMode('standard_plus', null, stdPlusSnap, '➕ Parole +'));
+            results.push(getBestForMode('daily_challenge', dailySnaps, null, '📅 Sfida Giornaliera', 'wpm'));
+            results.push(getBestForMode('tri_daily', triSnaps, null, '🏆 Sfida Tripla', 'peakWpm'));
+            results.push(getBestForMode('callsign', null, callsignSnap, '🎙️ CW Freak (Nominativi)'));
+            results.push(getBestForMode('memory_cw', null, memorySnap, '🧩 Memory CW (Coppie)'));
 
         container.innerHTML = '';
         const fragment = document.createDocumentFragment();

@@ -1417,6 +1417,29 @@ window.finishGame = function() {
                 (window.wordSpaceMult && Number(window.wordSpaceMult) !== 1.0)
             );
 
+            // --- AGGIORNAMENTO RECORD MAX WPM MENSILE PER QUALSIASI PARTITA VALIDA ---
+            if (!hasCustomParameters && window.peakWpm > 0) {
+                const now = new Date();
+                const curMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                const modeKey = window.currentMode || 'standard';
+                const maxWpmPath = `leaderboard/max_wpm_records/${curMonthStr}/${modeKey}`;
+
+                db.ref(maxWpmPath).once('value', maxSnap => {
+                    const currentRecord = maxSnap.val();
+                    const currentMaxWpm = currentRecord ? (Number(currentRecord.wpm) || 0) : 0;
+
+                    if (!currentRecord || window.peakWpm > currentMaxWpm) {
+                        db.ref(maxWpmPath).set({
+                            name: window.myName || "Telegrafista",
+                            wpm: window.peakWpm,
+                            score: window.totalScore || 0,
+                            date: (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0],
+                            ts: Date.now()
+                        }).catch(() => {});
+                    }
+                }).catch(() => {});
+            }
+
             if (hasCustomParameters) {
                 console.log("GameCore: Partita in Singolo con parametri modificati (Semplice/FixedSpeed/Spaziatura). Esclusa dalla Classifica Ufficiale.");
                 window.showToast(currentLang === 'it'
