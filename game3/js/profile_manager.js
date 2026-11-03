@@ -1513,49 +1513,6 @@ if (els.deleteDataBtn) {
 }
 
 /**
- * LOGICA INFO STATISTICHE (TOOLTIPS)
- */
-window.showStatInfo = function(type) {
-    const modal = document.getElementById('statInfoModal');
-    const title = document.getElementById('statInfoTitle');
-    const text = document.getElementById('statInfoText');
-    if (!modal || !title || !text) return;
-
-    const info = {
-        trend: {
-            t: "Andamento Accuratezza",
-            m: "Mostra la tua precisione media giornaliera negli ultimi 30 giorni di gioco. Una linea che sale indica un miglioramento nel riconoscimento dei caratteri."
-        },
-        diagnostics: {
-            t: "Diagnostica Operatore",
-            m: "Analisi basata sulla lunghezza delle parole e sulla posizione degli errori. Ti aiuta a capire se hai difficoltà con le parole lunghe o se perdi la concentrazione a metà parola."
-        },
-        wpm_errors: {
-            t: "Errori per Velocità",
-            m: "Identifica a quale velocità (WPM) commetti più errori. Utile per trovare il tuo 'muro' attuale e su cosa lavorare per superarlo."
-        },
-        confusion: {
-            t: "Matrice di Confusione",
-            m: "Rivela quali caratteri il tuo cervello tende a scambiare tra loro. Ad esempio, se scambi spesso la 'S' (...) con la 'H' (....), indica una difficoltà nel conteggio rapido dei punti."
-        },
-        blocks: {
-            t: "Blocchi Cognitivi",
-            m: "Caratteri che hanno un'accuratezza inferiore all'85%. Sono i tuoi punti deboli 'fissi' che richiedono esercizio mirato."
-        },
-        ngrams: {
-            t: "Analisi Sequenze (N-Grammi)",
-            m: "Le coppie, triple e quadruple mostrano sequenze di caratteri in cui il tuo ritmo di ricezione si spezza. Spesso l'errore non è sulla lettera, ma sul 'legame' tra esse."
-        },
-        targeted: {
-            t: "Focus Miglioramento Mirato",
-            m: "Confronta i risultati delle tue sessioni di Allenamento Mirato. Mostra se la tua precisione sui caratteri critici sta aumentando rispetto alle partite passate."
-        }
-    };
-
-    const d = info[type] || { t: "Informazione", m: "Dettagli non disponibili." };
-};
-
-/**
  * TRACCIAMENTO ACCURATEZZA SESSIONE (Chiamata da game_core.js a fine partita)
  */
 window.trackSessionAccuracy = function(matchDetails) {
@@ -1681,41 +1638,6 @@ window.renderTargetedImprovement = function(stats) {
 
     html += `</div></div>`;
     content.innerHTML = html;
-};
-
-/**
- * RENDERING TABELLE N-GRAMMI
- */
-window.renderNGramTable = function(dataNode, container, threshold) {
-    if (!container) return;
-    container.innerHTML = '';
-    const items = dataNode || {};
-    const filtered = Object.entries(items).filter(e => {
-        const count = e[1].count || (typeof e[1] === 'number' ? e[1] : 0);
-        return count >= threshold;
-    }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1])).slice(0, 15);
-
-    if (filtered.length === 0) {
-        container.innerHTML = '<p style="text-align:center; color: var(--hint-color); font-size:0.7em; margin-top:10px;">Dati in raccolta...</p>';
-        return;
-    }
-
-    const frag = document.createDocumentFragment();
-    filtered.forEach(([seq, data]) => {
-        const count = data.count || data;
-        const avgWpm = data.avgWpm || 20;
-        const div = document.createElement('div');
-        div.className = 'leaderboard-row';
-        div.style.cssText = "padding:6px; margin-bottom:4px; font-size:0.8em; flex-direction:column; align-items:flex-start; background: rgba(0,0,0,0.03); color: var(--text-color); border-radius:6px; border:none;";
-        div.innerHTML = `
-            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                <span><b style="color: #d32f2f; font-family: monospace; font-size: 1.1em;">${seq}</b> <small style="color: var(--hint-color);">(${count})</small></span>
-                <button class="action-btn-small btn-secondary" onclick="window.playMorseAudio('${seq}', ${avgWpm}, true)" style="width:30px; padding:3px 0; font-size:0.8em; border-radius:50%;">🔊</button>
-            </div>
-        `;
-        frag.appendChild(div);
-    });
-    container.appendChild(frag);
 };
 
 // --- LISTENERS SOGLIE ANALISI ---
