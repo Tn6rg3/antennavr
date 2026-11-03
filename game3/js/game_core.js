@@ -1465,51 +1465,53 @@ window.finishGame = function() {
                 }).catch(() => {});
             }
 
-            if (hasCustomParameters) {
-                console.log("GameCore: Partita in Singolo con parametri modificati (Semplice/FixedSpeed/Spaziatura). Esclusa dalla Classifica Ufficiale.");
-                window.showToast(currentLang === 'it'
-                    ? "⚠️ Parametri personalizzati attivi: la partita non entra nella Classifica Ufficiale."
-                    : "⚠️ Custom parameters active: match excluded from Official Leaderboard.");
-            } else {
-                db.ref(dbPath).once('value', s => {
-                    let oldData = s.val();
-                    let oldScore = oldData ? (Number(oldData.score) || 0) : 0;
-                    let oldWpm = oldData ? (Number(oldData.wpm) || 0) : 0;
-                    const myLevel = window.userProgression?.level || 1;
+            if (dbPath) {
+                if (hasCustomParameters) {
+                    console.log("GameCore: Partita in Singolo con parametri modificati (Semplice/FixedSpeed/Spaziatura). Esclusa dalla Classifica Ufficiale.");
+                    window.showToast(currentLang === 'it'
+                        ? "⚠️ Parametri personalizzati attivi: la partita non entra nella Classifica Ufficiale."
+                        : "⚠️ Custom parameters active: match excluded from Official Leaderboard.");
+                } else {
+                    db.ref(dbPath).once('value', s => {
+                        let oldData = s.val();
+                        let oldScore = oldData ? (Number(oldData.score) || 0) : 0;
+                        let oldWpm = oldData ? (Number(oldData.wpm) || 0) : 0;
+                        const myLevel = window.userProgression?.level || 1;
 
-                    const isNewWpmRecord = window.peakWpm > oldWpm;
-                    const isNewScoreRecord = window.totalScore > oldScore;
+                        const isNewWpmRecord = window.peakWpm > oldWpm;
+                        const isNewScoreRecord = window.totalScore > oldScore;
 
-                    // Aggiorniamo se la velocità (WPM) è superiore, OPPURE se il punteggio è superiore
-                    if (!oldData || isNewWpmRecord || isNewScoreRecord) {
-                        const bestScore = Math.max(window.totalScore, oldScore);
-                        const bestWpm = Math.max(window.peakWpm, oldWpm);
-                        const todayDateStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+                        // Aggiorniamo se la velocità (WPM) è superiore, OPPURE se il punteggio è superiore
+                        if (!oldData || isNewWpmRecord || isNewScoreRecord) {
+                            const bestScore = Math.max(window.totalScore, oldScore);
+                            const bestWpm = Math.max(window.peakWpm, oldWpm);
+                            const todayDateStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
 
-                        db.ref(dbPath).set({
-                            name: window.myName,
-                            username: window.myPrivacy ? "" : tgUsername,
-                            score: bestScore,
-                            wpm: bestWpm,
-                            level: myLevel,
-                            wordCount: window.requestedWordCount,
-                            date: todayDateStr,
-                            privacyLeaderboard: !!window.myPrivacyLeaderboard
-                        });
+                            db.ref(dbPath).set({
+                                name: window.myName,
+                                username: window.myPrivacy ? "" : tgUsername,
+                                score: bestScore,
+                                wpm: bestWpm,
+                                level: myLevel,
+                                wordCount: window.requestedWordCount,
+                                date: todayDateStr,
+                                privacyLeaderboard: !!window.myPrivacyLeaderboard
+                            });
 
-                        if (baseFolder && window.requestedWordCount) {
-                            db.ref(`leaderboard/categories/${baseFolder}/${window.requestedWordCount}`).set(true).catch(() => {});
+                            if (baseFolder && window.requestedWordCount) {
+                                db.ref(`leaderboard/categories/${baseFolder}/${window.requestedWordCount}`).set(true).catch(() => {});
+                            }
+
+                            window.showToast(currentLang === 'it' ? "🏆 Nuovo Record in Classifica!" : "🏆 New Leaderboard Record!");
+                        } else {
+                            // Anche se non è record, aggiorniamo il livello se è cambiato
+                            if (oldData && oldData.level !== myLevel) {
+                                db.ref(dbPath).update({ level: myLevel });
+                            }
+                            window.showToast(currentLang === 'it' ? "Ottima partita! (Non hai superato il tuo record personale)" : "Good game! (Personal best not beaten)");
                         }
-
-                        window.showToast(currentLang === 'it' ? "🏆 Nuovo Record in Classifica!" : "🏆 New Leaderboard Record!");
-                    } else {
-                        // Anche se non è record, aggiorniamo il livello se è cambiato
-                        if (oldData && oldData.level !== myLevel) {
-                            db.ref(dbPath).update({ level: myLevel });
-                        }
-                        window.showToast(currentLang === 'it' ? "Ottima partita! (Non hai superato il tuo record personale)" : "Good game! (Personal best not beaten)");
-                    }
-                });
+                    });
+                }
             }
 
             // --- SALVATAGGIO RIEPILOGO MATCH (CRONOLOGIA SFIDE) ---
