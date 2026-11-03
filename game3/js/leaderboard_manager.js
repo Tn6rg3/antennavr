@@ -698,6 +698,12 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
 
     // 4e. SFIDA NOMINATIVI SETTIMANALE (es. SFIDA DEL LUNEDÌ)
     if (tabType === 'weekly_callsign') {
+        const isBeta = (typeof window.isUserCwgBetaTester === 'function') ? await window.isUserCwgBetaTester() : false;
+        if (!isBeta) {
+            els.leaderboardContainer.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">⚠️ Questa classifica è attualmente riservata ai Beta Tester autorizzati.</p>`;
+            return;
+        }
+
         const curEventKey = (typeof window.getWeeklyCallsignEventKey === 'function') ? window.getWeeklyCallsignEventKey() : 'current';
         db.ref(`leaderboard/weekly_callsign_challenge/${curEventKey}`).orderByChild('score').limitToLast(100).once('value', snapshot => {
             let players = [];
