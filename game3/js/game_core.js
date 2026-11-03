@@ -1396,14 +1396,27 @@ window.finishGame = function() {
                 dbPath = null;
             } else if (window.currentMode === 'weekly_callsign') {
                 const curEventKey = (typeof window.getWeeklyCallsignEventKey === 'function') ? window.getWeeklyCallsignEventKey() : 'current';
-                db.ref(`leaderboard/weekly_callsign_challenge/${curEventKey}/${window.myId}`).set({
-                    name: window.myName,
-                    username: window.myPrivacy ? "" : tgUsername,
-                    score: window.totalScore,
-                    peakWpm: window.peakWpm,
-                    startWpm: window.baseWpm || 20,
-                    date: (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0],
-                    ts: Date.now()
+                const lbRef = db.ref(`leaderboard/weekly_callsign_challenge/${curEventKey}/${window.myId}`);
+
+                lbRef.once('value', s => {
+                    const oldData = s.val();
+                    const oldScore = oldData ? (Number(oldData.score) || 0) : 0;
+                    const oldWpm = oldData ? (Number(oldData.peakWpm) || 0) : 0;
+
+                    if (!oldData || window.totalScore > oldScore || (window.totalScore === oldScore && window.peakWpm > oldWpm)) {
+                        lbRef.set({
+                            name: window.myName,
+                            username: window.myPrivacy ? "" : tgUsername,
+                            score: window.totalScore,
+                            peakWpm: window.peakWpm,
+                            startWpm: window.baseWpm || 20,
+                            date: (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0],
+                            ts: Date.now()
+                        }).catch(() => {});
+                        window.showToast(currentLang === 'it' ? `🏆 Nuovo Record Personale nella Sfida! (${window.totalScore} pt)` : `🏆 New Personal Best! (${window.totalScore} pt)`);
+                    } else {
+                        window.showToast(currentLang === 'it' ? `Ottima prova! (Record attuale in classifica: ${oldScore} pt)` : `Good try! (Current best in leaderboard: ${oldScore} pt)`);
+                    }
                 }).catch(() => {});
                 dbPath = null;
             } else {

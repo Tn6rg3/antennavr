@@ -2010,58 +2010,48 @@ window.startWeeklyCallsignChallengeGame = async function() {
         return alert("⚠️ La Sfida Nominativi è attualmente riservata agli utenti abilitati all'Activity CWG.");
     }
 
-    const curEventKey = window.getWeeklyCallsignEventKey();
+    const modal = document.getElementById('weeklyCallsignModal');
+    if (modal) modal.style.display = 'none';
 
-    db.ref(`users/${window.myId}/weekly_callsign_attempt/${curEventKey}`).once('value', snap => {
-        if (snap.exists() && snap.val() === true && !window.isAdmin) {
-            alert("⚠️ Hai già partecipato alla Sfida Nominativi di questa settimana!\n\nÈ consentito 1 solo tentativo per ogni edizione della sfida.");
-            return;
-        }
+    window.resetGameState();
 
-        const modal = document.getElementById('weeklyCallsignModal');
-        if (modal) modal.style.display = 'none';
+    const startWpmInput = document.getElementById('weeklyCallsignStartWpm');
+    const startToneInput = document.getElementById('weeklyCallsignTone');
 
-        window.resetGameState();
+    const startWpm = startWpmInput ? (parseInt(startWpmInput.value) || 20) : 20;
+    const startTone = startToneInput ? (parseInt(startToneInput.value) || 600) : 600;
 
-        const startWpmInput = document.getElementById('weeklyCallsignStartWpm');
-        const startToneInput = document.getElementById('weeklyCallsignTone');
+    window.currentMode = 'weekly_callsign';
+    window.isSinglePlayer = true;
+    window.currentWpm = window.baseWpm = startWpm;
+    window.peakWpm = startWpm;
+    window.requestedWordCount = 50;
+    window.currentTone = startTone;
 
-        const startWpm = startWpmInput ? (parseInt(startWpmInput.value) || 20) : 20;
-        const startTone = startToneInput ? (parseInt(startToneInput.value) || 600) : 600;
+    roomCode = "SOLO_CALLSIGN_" + window.myId;
+    gameWords = window.getCallsignWords(50);
+    gameRunning = true;
+    inputActive = true;
 
-        window.currentMode = 'weekly_callsign';
-        window.isSinglePlayer = true;
-        window.currentWpm = window.baseWpm = startWpm;
-        window.peakWpm = startWpm;
-        window.requestedWordCount = 50;
-        window.currentTone = startTone;
+    if (typeof window.showScreen === 'function') window.showScreen('gameArea');
 
-        roomCode = "SOLO_CALLSIGN_" + window.myId;
-        gameWords = window.getCallsignWords(50);
-        gameRunning = true;
-        inputActive = true;
+    if (els.permanentGameInput) {
+        els.permanentGameInput.disabled = false;
+        els.permanentGameInput.value = "";
+        try { els.permanentGameInput.focus(); } catch(e) {}
+    }
 
-        db.ref(`users/${window.myId}/weekly_callsign_attempt/${curEventKey}`).set(true).catch(() => {});
+    if (els.tableBody) els.tableBody.innerHTML = "";
+    if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: 0`;
+    if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${window.currentWpm}`;
+    if (els.wordIndexDisplay) els.wordIndexDisplay.textContent = `1 / 50`;
 
-        if (typeof window.showScreen === 'function') window.showScreen('gameArea');
+    showToast(`🎙️ Sfida Nominativi avviata! (50 Nominativi • ${startWpm} WPM)`);
 
-        if (els.permanentGameInput) {
-            els.permanentGameInput.disabled = false;
-            els.permanentGameInput.value = "";
-            try { els.permanentGameInput.focus(); } catch(e) {}
-        }
-
-        if (els.tableBody) els.tableBody.innerHTML = "";
-        if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: 0`;
-        if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${window.currentWpm}`;
-        if (els.wordIndexDisplay) els.wordIndexDisplay.textContent = `1 / 50`;
-
-        showToast(`🎙️ Sfida Nominativi avviata! (50 Nominativi • ${startWpm} WPM)`);
-
-        setTimeout(() => {
-            if (typeof playNextWord === 'function') window.playNextWord();
-        }, 800);
-    });
+    setTimeout(() => {
+        if (typeof playNextWord === 'function') window.playNextWord();
+    }, 800);
+};
 };
 
 window.saveAdminCallsignChallengeSettings = function() {
