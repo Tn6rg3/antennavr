@@ -2815,49 +2815,6 @@
         <button onclick="document.getElementById('toneTestModal').style.display='none'" class="btn-secondary" style="width:100%; margin-top:10px;">Chiudi</button>
     </div>
 
-<!-- MODAL: SFIDA NOMINATIVI DEL GIORNO (es. SFIDA DEL LUNEDÌ) -->
-<div id="weeklyCallsignModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 480px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 9500; border: 3px solid #ffd700; border-radius: 16px; padding: 16px; flex-direction: column; box-sizing: border-box; box-shadow: 0 15px 50px rgba(0,0,0,0.9); max-height: 90vh; overflow-y: auto;">
-    <h3 id="weeklyCallsignModalTitle" style="color: #ffd700; margin: 0 0 10px 0; text-align: center; font-size: 1.2em;">🎙️ Sfida del Lunedì (50 Nominativi)</h3>
-
-    <div style="background: rgba(255,215,0,0.1); border: 1px solid #ffd700; border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 0.85em; text-align: left;">
-        <p style="margin:0 0 6px 0; color:var(--text-color);"><b>Regole della Sfida:</b></p>
-        <ul style="margin:0; padding-left:18px; color:var(--hint-color);">
-            <li>Devi decodificare esattamente <b>50 Nominativi radioamatoriali</b>.</li>
-            <li>Scegli qui sotto il tuo <b>WPM Iniziale</b> ed il <b>Tono acustico</b>.</li>
-            <li>Ad ogni nominativo <b>Corretto</b>, la velocità aumenta di <b>+1 WPM</b>.</li>
-            <li>Ad ogni errore, la velocità diminuisce di <b>-1 WPM</b>.</li>
-            <li><b>1 Singolo Tentativo</b> disponibile per questa edizione della sfida!</li>
-        </ul>
-    </div>
-
-    <!-- CONFIGURAZIONE WPM & TONO -->
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:12px; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
-        <div>
-            <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">WPM Iniziale:</label>
-            <input type="number" id="weeklyCallsignStartWpm" value="20" min="10" max="50" style="width:100%; padding:6px; font-size:1em; font-weight:bold; text-align:center; background:#fff; color:#000; border-radius:6px; box-sizing:border-box;">
-        </div>
-        <div>
-            <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">Tono (Hz):</label>
-            <input type="number" id="weeklyCallsignTone" value="600" min="400" max="1000" step="50" style="width:100%; padding:6px; font-size:1em; font-weight:bold; text-align:center; background:#fff; color:#000; border-radius:6px; box-sizing:border-box;">
-        </div>
-    </div>
-
-    <!-- ANTEPRIMA CLASSIFICA DELLA SETTIMANA -->
-    <div style="margin-bottom:12px; text-align:left;">
-        <b style="font-size:0.85em; color:#ffd700; display:block; margin-bottom:4px;">📊 Classifica Provvisoria della Settimana:</b>
-        <div id="weeklyCallsignLeaderboardPreview" style="max-height:120px; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:6px; padding:6px; border:1px solid rgba(255,255,255,0.05); font-size:0.8em;">
-            <p style="text-align:center; color:var(--hint-color); margin:4px 0;">Caricamento classifica...</p>
-        </div>
-    </div>
-
-    <button id="btnStartWeeklyCallsignGame" onclick="window.startWeeklyCallsignChallengeGame()" class="btn-success" style="width:100%; padding:12px; font-weight:bold; font-size:1em; background:#ffd700; color:#000; border:none; cursor:pointer; margin-bottom:6px;">
-        🚀 INIZIA LA SFIDA (50 NOMINATIVI)
-    </button>
-    <button onclick="document.getElementById('weeklyCallsignModal').style.display='none'" class="btn-secondary" style="width:100%; padding:8px; font-size:0.85em; cursor:pointer;">
-        Annulla
-    </button>
-</div>
-
     <div id="toneTestRunning" style="display:none; text-align:center;">
         <div id="toneTestPulse" style="width:60px; height:60px; background:var(--link-color); border-radius:50%; margin:15px auto; display:flex; align-items:center; justify-content:center; animation: pulse 1s infinite;">
             <span style="font-size:1.5em;">📻</span>
@@ -2903,6 +2860,49 @@
         <button onclick="window.openToneTest()" class="btn-secondary" style="width:100%;">RIPETI TEST 🔄</button>
         <button onclick="document.getElementById('toneTestModal').style.display='none'" class="btn-link" style="width:100%; margin-top:10px; color:var(--hint-color);">Chiudi</button>
     </div>
+</div>
+
+<!-- MODAL: SFIDA NOMINATIVI DEL GIORNO (es. SFIDA DEL LUNEDÌ) -->
+<div id="weeklyCallsignModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 480px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 9500; border: 3px solid #ffd700; border-radius: 16px; padding: 16px; flex-direction: column; box-sizing: border-box; box-shadow: 0 15px 50px rgba(0,0,0,0.9); max-height: 90vh; overflow-y: auto;">
+    <h3 id="weeklyCallsignModalTitle" style="color: #ffd700; margin: 0 0 10px 0; text-align: center; font-size: 1.2em;">🎙️ Sfida del Lunedì (50 Nominativi)</h3>
+
+    <div style="background: rgba(255,215,0,0.1); border: 1px solid #ffd700; border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 0.85em; text-align: left;">
+        <p style="margin:0 0 6px 0; color:var(--text-color);"><b>Regole della Sfida:</b></p>
+        <ul style="margin:0; padding-left:18px; color:var(--hint-color);">
+            <li>Devi decodificare esattamente <b>50 Nominativi radioamatoriali</b>.</li>
+            <li>Scegli qui sotto il tuo <b>WPM Iniziale</b> ed il <b>Tono acustico</b>.</li>
+            <li>Ad ogni nominativo <b>Corretto</b>, la velocità aumenta di <b>+1 WPM</b>.</li>
+            <li>Ad ogni errore, la velocità diminuisce di <b>-1 WPM</b>.</li>
+            <li><b>1 Singolo Tentativo</b> disponibile per questa edizione della sfida!</li>
+        </ul>
+    </div>
+
+    <!-- CONFIGURAZIONE WPM & TONO -->
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:12px; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
+        <div>
+            <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">WPM Iniziale:</label>
+            <input type="number" id="weeklyCallsignStartWpm" value="20" min="10" max="50" style="width:100%; padding:6px; font-size:1em; font-weight:bold; text-align:center; background:#fff; color:#000; border-radius:6px; box-sizing:border-box;">
+        </div>
+        <div>
+            <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">Tono (Hz):</label>
+            <input type="number" id="weeklyCallsignTone" value="600" min="400" max="1000" step="50" style="width:100%; padding:6px; font-size:1em; font-weight:bold; text-align:center; background:#fff; color:#000; border-radius:6px; box-sizing:border-box;">
+        </div>
+    </div>
+
+    <!-- ANTEPRIMA CLASSIFICA DELLA SETTIMANA -->
+    <div style="margin-bottom:12px; text-align:left;">
+        <b style="font-size:0.85em; color:#ffd700; display:block; margin-bottom:4px;">📊 Classifica Provvisoria della Settimana:</b>
+        <div id="weeklyCallsignLeaderboardPreview" style="max-height:120px; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:6px; padding:6px; border:1px solid rgba(255,255,255,0.05); font-size:0.8em;">
+            <p style="text-align:center; color:var(--hint-color); margin:4px 0;">Caricamento classifica...</p>
+        </div>
+    </div>
+
+    <button id="btnStartWeeklyCallsignGame" onclick="window.startWeeklyCallsignChallengeGame()" class="btn-success" style="width:100%; padding:12px; font-weight:bold; font-size:1em; background:#ffd700; color:#000; border:none; cursor:pointer; margin-bottom:6px;">
+        🚀 INIZIA LA SFIDA (50 NOMINATIVI)
+    </button>
+    <button onclick="document.getElementById('weeklyCallsignModal').style.display='none'" class="btn-secondary" style="width:100%; padding:8px; font-size:0.85em; cursor:pointer;">
+        Annulla
+    </button>
 </div>
 
 <!-- MODAL: STATISTICHE CORSISTA (PER TUTOR) -->
