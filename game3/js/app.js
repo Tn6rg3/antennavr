@@ -2038,11 +2038,20 @@ window.startWeeklyCallsignChallengeGame = async function() {
 
         roomCode = "SOLO_CALLSIGN_" + window.myId;
         gameWords = window.getCallsignWords(50);
+        gameRunning = true;
+        inputActive = true;
 
         db.ref(`users/${window.myId}/weekly_callsign_attempt/${curEventKey}`).set(true).catch(() => {});
 
-        if (typeof window.showScreen === 'function') window.showScreen('gameScreen');
+        if (typeof window.showScreen === 'function') window.showScreen('gameArea');
 
+        if (els.permanentGameInput) {
+            els.permanentGameInput.disabled = false;
+            els.permanentGameInput.value = "";
+            try { els.permanentGameInput.focus(); } catch(e) {}
+        }
+
+        if (els.tableBody) els.tableBody.innerHTML = "";
         if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: 0`;
         if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${window.currentWpm}`;
         if (els.wordIndexDisplay) els.wordIndexDisplay.textContent = `1 / 50`;
