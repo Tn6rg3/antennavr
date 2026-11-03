@@ -493,66 +493,76 @@
                 <div id="timeoutDiv" style="display: none;"><label id="txt_room_timeout">Scad.</label> <input type="number" id="roomTimerInput" value="5" min="1" max="60"></div>
             </div>
 
-            <div style="display:flex; justify-content:center; flex-wrap:wrap; gap:15px; margin-top:5px;">
-                <label id="fixedSpeedContainer" style="display: none; align-items: center; gap: 5px; font-size: 0.85em; font-weight: bold; color: var(--hint-color); cursor: pointer;">
-                    <input type="checkbox" id="fixedSpeedCheckbox"> <span id="txt_fixed_speed">Fissa</span>
-                </label>
-                <label id="easyModeContainer" style="display: none; align-items: center; gap: 5px; font-size: 0.85em; font-weight: bold; color: var(--champ-color); cursor: pointer;">
-                    <input type="checkbox" id="easyModeCheckbox"> <span id="txt_easy_mode">Semplice</span>
-                </label>
-                <div id="speakModeContainer" style="display: none; align-items: center; gap: 12px; font-size: 0.85em; font-weight: bold;">
-                    <label style="color: #64b5f6; cursor: pointer; display: flex; align-items: center; gap: 5px; margin: 0;">
-                        <input type="checkbox" id="speakModeCheckbox"> <span>🎧 Ascolto</span>
-                    </label>
-                    <label id="voiceInputContainer" style="color: #ff5722; cursor: pointer; display: none; align-items: center; gap: 5px; margin: 0;">
-                        <input type="checkbox" id="voiceInputCheckbox"> <span id="txt_voice_answer">Risposta Vocale 🎤</span>
-                    </label>
-                    <label id="autoAdvanceContainer" style="color: #81c784; cursor: pointer; display: none; align-items: center; gap: 4px; margin: 0;">
-                        <input type="checkbox" id="autoAdvanceCheckbox"> <span>⏱️ Avanzamento Auto:</span>
-                        <select id="autoAdvanceDelaySelect" style="padding: 2px 4px; font-size: 0.85em; border-radius: 4px; background: var(--sec-bg-color); color: var(--text-color); border: 1px solid var(--link-color);">
-                            <option value="1">1s</option>
-                            <option value="2">2s</option>
-                            <option value="3">3s</option>
-                            <option value="4">4s</option>
-                            <option value="5" selected>5s</option>
-                            <option value="6">6s</option>
-                            <option value="7">7s</option>
-                            <option value="8">8s</option>
-                            <option value="9">9s</option>
-                            <option value="10">10s</option>
-                        </select>
-                    </label>
-                </div>
-                <label id="spectatorContainer" style="display: none; align-items: center; gap: 5px; font-size: 0.85em; font-weight: bold; color: #fbc02d; cursor: pointer;">
-                    <input type="checkbox" id="allowSpectatorsCheckbox"> <span>👁️ Spettatori</span>
-                </label>
+            <!-- PULSANTE ESPANDIBILE PERSONALIZZAZIONI AVANZATE -->
+            <div id="customSettingsToggleArea" style="margin-top:8px; text-align:center;">
+                <button type="button" id="btnToggleCustomSettings" onclick="window.toggleCustomSettingsBox()" class="action-btn-small btn-secondary" style="padding:4px 12px; font-size:0.8em; font-weight:bold; cursor:pointer; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:var(--text-color);">
+                    🛠️ Personalizzazioni Avanzate 🔽
+                </button>
             </div>
 
-            <div id="advancedSpacingContainer" style="display:none; justify-content:center; align-items:center; flex-wrap:wrap; gap:15px; margin-top:10px; font-size:0.85em;">
-                <div style="display:flex; flex-direction:column; align-items:center;">
-                    <label style="color:var(--hint-color); font-weight:bold;">Spazio Caratt. (WPM)</label>
-                    <input type="number" id="charSpaceInput" value="" placeholder="es: 10" min="5" max="50" style="width:70px; padding:4px; text-align:center;">
+            <!-- CONTENITORE RICHIUDIBILE PARAMETRI PERSONALIZZATI -->
+            <div id="customSettingsCollapsibleBox" style="display:none; margin-top:8px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px;">
+                <div style="display:flex; justify-content:center; flex-wrap:wrap; gap:12px; margin-bottom:6px;">
+                    <label id="fixedSpeedContainer" style="display: none; align-items: center; gap: 5px; font-size: 0.85em; font-weight: bold; color: var(--hint-color); cursor: pointer;">
+                        <input type="checkbox" id="fixedSpeedCheckbox"> <span id="txt_fixed_speed">Fissa</span>
+                    </label>
+                    <label id="easyModeContainer" style="display: none; align-items: center; gap: 5px; font-size: 0.85em; font-weight: bold; color: var(--champ-color); cursor: pointer;">
+                        <input type="checkbox" id="easyModeCheckbox"> <span id="txt_easy_mode">Semplice</span>
+                    </label>
+                    <div id="speakModeContainer" style="display: none; align-items: center; gap: 10px; font-size: 0.85em; font-weight: bold;">
+                        <label style="color: #64b5f6; cursor: pointer; display: flex; align-items: center; gap: 5px; margin: 0;">
+                            <input type="checkbox" id="speakModeCheckbox"> <span>🎧 Ascolto</span>
+                        </label>
+                        <label id="voiceInputContainer" style="color: #ff5722; cursor: pointer; display: none; align-items: center; gap: 5px; margin: 0;">
+                            <input type="checkbox" id="voiceInputCheckbox"> <span id="txt_voice_answer">Risposta Vocale 🎤</span>
+                        </label>
+                        <label id="autoAdvanceContainer" style="color: #81c784; cursor: pointer; display: none; align-items: center; gap: 4px; margin: 0;">
+                            <input type="checkbox" id="autoAdvanceCheckbox"> <span>⏱️ Avanzamento Auto:</span>
+                            <select id="autoAdvanceDelaySelect" style="padding: 2px 4px; font-size: 0.85em; border-radius: 4px; background: var(--sec-bg-color); color: var(--text-color); border: 1px solid var(--link-color);">
+                                <option value="1">1s</option>
+                                <option value="2">2s</option>
+                                <option value="3">3s</option>
+                                <option value="4">4s</option>
+                                <option value="5" selected>5s</option>
+                                <option value="6">6s</option>
+                                <option value="7">7s</option>
+                                <option value="8">8s</option>
+                                <option value="9">9s</option>
+                                <option value="10">10s</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label id="spectatorContainer" style="display: none; align-items: center; gap: 5px; font-size: 0.85em; font-weight: bold; color: #fbc02d; cursor: pointer;">
+                        <input type="checkbox" id="allowSpectatorsCheckbox"> <span>👁️ Spettatori</span>
+                    </label>
                 </div>
-                <div style="display:flex; flex-direction:column; align-items:center;">
-                    <label style="color:var(--hint-color); font-weight:bold;">Spazio Parole</label>
-                    <select id="wordSpaceSelect" style="width:80px; padding:4px;">
-                        <option value="1.0">1.0x</option>
-                        <option value="1.5">1.5x</option>
-                        <option value="2.0">2.0x</option>
-                        <option value="2.5">2.5x</option>
-                        <option value="3.0">3.0x</option>
-                    </select>
-                </div>
-                <div id="voiceRateDiv" style="display:none; flex-direction:column; align-items:center;">
-                    <label style="color:#64b5f6; font-weight:bold;">Velocità Voce</label>
-                    <select id="voiceRateSelect" style="width:80px; padding:4px;">
-                        <option value="0.5">0.5x</option>
-                        <option value="0.8">0.8x</option>
-                        <option value="1.0" selected>1.0x</option>
-                        <option value="1.2">1.2x</option>
-                        <option value="1.5">1.5x</option>
-                        <option value="2.0">2.0x</option>
-                    </select>
+
+                <div id="advancedSpacingContainer" style="display:none; justify-content:center; align-items:center; flex-wrap:wrap; gap:12px; font-size:0.85em;">
+                    <div style="display:flex; flex-direction:column; align-items:center;">
+                        <label style="color:var(--hint-color); font-weight:bold;">Spazio Caratt. (WPM)</label>
+                        <input type="number" id="charSpaceInput" value="" placeholder="es: 10" min="5" max="50" style="width:70px; padding:4px; text-align:center;">
+                    </div>
+                    <div style="display:flex; flex-direction:column; align-items:center;">
+                        <label style="color:var(--hint-color); font-weight:bold;">Spazio Parole</label>
+                        <select id="wordSpaceSelect" style="width:80px; padding:4px;">
+                            <option value="1.0">1.0x</option>
+                            <option value="1.5">1.5x</option>
+                            <option value="2.0">2.0x</option>
+                            <option value="2.5">2.5x</option>
+                            <option value="3.0">3.0x</option>
+                        </select>
+                    </div>
+                    <div id="voiceRateDiv" style="display:none; flex-direction:column; align-items:center;">
+                        <label style="color:#64b5f6; font-weight:bold;">Velocità Voce</label>
+                        <select id="voiceRateSelect" style="width:80px; padding:4px;">
+                            <option value="0.5">0.5x</option>
+                            <option value="0.8">0.8x</option>
+                            <option value="1.0" selected>1.0x</option>
+                            <option value="1.2">1.2x</option>
+                            <option value="1.5">1.5x</option>
+                            <option value="2.0">2.0x</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
