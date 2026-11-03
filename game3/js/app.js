@@ -1986,6 +1986,22 @@ window.openWeeklyCallsignPreview = function() {
     }
 };
 
+window.allowReplayWeeklyCallsignChallenge = function() {
+    if (!db || !window.myId) return;
+    const curEventKey = (typeof window.getWeeklyCallsignEventKey === 'function') ? window.getWeeklyCallsignEventKey() : 'current';
+
+    Promise.all([
+        db.ref(`users/${window.myId}/weekly_callsign_attempt/${curEventKey}`).remove(),
+        db.ref(`leaderboard/weekly_callsign_challenge/${curEventKey}/${window.myId}`).remove()
+    ]).then(() => {
+        if (typeof showToast === 'function') showToast("🔄 Sfida Nominativi resettata per il tuo account!");
+        alert("🔄 Sfida Nominativi resettata per il tuo account! Puoi provarla nuovamente.");
+        window.openWeeklyCallsignPreview();
+    }).catch(e => {
+        alert("Errore reset: " + e.message);
+    });
+};
+
 window.startWeeklyCallsignChallengeGame = async function() {
     if (!db || !window.myId) return alert("⚠️ Connessione non disponibile.");
 
@@ -1997,7 +2013,7 @@ window.startWeeklyCallsignChallengeGame = async function() {
     const curEventKey = window.getWeeklyCallsignEventKey();
 
     db.ref(`users/${window.myId}/weekly_callsign_attempt/${curEventKey}`).once('value', snap => {
-        if (snap.exists() && snap.val() === true) {
+        if (snap.exists() && snap.val() === true && !window.isAdmin) {
             alert("⚠️ Hai già partecipato alla Sfida Nominativi di questa settimana!\n\nÈ consentito 1 solo tentativo per ogni edizione della sfida.");
             return;
         }
