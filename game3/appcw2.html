@@ -1719,6 +1719,45 @@
                     Caricamento lista tester...
                 </div>
             </div>
+
+            <!-- AREA ADMIN: CONFIGURAZIONE PROGRAMMAZIONE ACTIVITY - CWG -->
+            <div style="border-top: 1px solid rgba(0,188,212,0.4); padding-top: 10px; margin-top:10px; text-align:left;">
+                <h4 style="margin: 0 0 8px 0; color: #00bcd4; font-size: 0.95em;">📻 Programmazione Oraria Activity - CWG</h4>
+
+                <div style="margin-bottom:8px;">
+                    <label style="font-size:0.75em; color:var(--text-color); display:block; margin-bottom:4px; font-weight:bold;">Giorni Abilitati:</label>
+                    <div style="display:flex; flex-wrap:wrap; gap:8px; font-size:0.75em;">
+                        <label><input type="checkbox" id="cwgDay1" checked> Lun</label>
+                        <label><input type="checkbox" id="cwgDay2" checked> Mar</label>
+                        <label><input type="checkbox" id="cwgDay3" checked> Mer</label>
+                        <label><input type="checkbox" id="cwgDay4" checked> Gio</label>
+                        <label><input type="checkbox" id="cwgDay5" checked> Ven</label>
+                        <label><input type="checkbox" id="cwgDay6" checked> Sab</label>
+                        <label><input type="checkbox" id="cwgDay0" checked> Dom</label>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-bottom:8px;">
+                    <div style="background:rgba(0,0,0,0.2); padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.1);">
+                        <b style="font-size:0.75em; color:#00bcd4; display:block;">Fascia 1:</b>
+                        <label style="font-size:0.7em; color:var(--hint-color);">Dalle:</label>
+                        <input type="time" id="cwgSlot1Start" value="08:00" style="width:100%; padding:4px; font-size:0.8em; background:#fff; color:#000; border-radius:4px; margin-bottom:2px; box-sizing:border-box;">
+                        <label style="font-size:0.7em; color:var(--hint-color);">Alle:</label>
+                        <input type="time" id="cwgSlot1End" value="12:00" style="width:100%; padding:4px; font-size:0.8em; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
+                    </div>
+                    <div style="background:rgba(0,0,0,0.2); padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.1);">
+                        <b style="font-size:0.75em; color:#00bcd4; display:block;">Fascia 2 (Opzionale):</b>
+                        <label style="font-size:0.7em; color:var(--hint-color);">Dalle:</label>
+                        <input type="time" id="cwgSlot2Start" value="18:00" style="width:100%; padding:4px; font-size:0.8em; background:#fff; color:#000; border-radius:4px; margin-bottom:2px; box-sizing:border-box;">
+                        <label style="font-size:0.7em; color:var(--hint-color);">Alle:</label>
+                        <input type="time" id="cwgSlot2End" value="22:00" style="width:100%; padding:4px; font-size:0.8em; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
+                    </div>
+                </div>
+
+                <button onclick="window.saveAdminCwgScheduleSettings()" class="btn-success" style="width:100%; padding:8px; font-weight:bold; background:#00bcd4; border:none; color:#000; cursor:pointer;">
+                    💾 SALVA PROGRAMMAZIONE ACTIVITY
+                </button>
+            </div>
         </div>
     </div>
     <div class="fixed-bottom-btns">
@@ -2278,15 +2317,40 @@
                 </button>
             </div>
 
-            <!-- CHAT PRIVATA TEMPORANEA DI SERVIZIO QSO -->
-            <div id="cwgPrivateChatSection" style="display:none; background:rgba(0,0,0,0.3); border:1px solid #00bcd4; border-radius:8px; padding:10px; margin-top:10px;">
-                <b style="color:#00bcd4; font-size:0.85em; display:block; margin-bottom:6px;">💬 Chat Privata QSO (Scomparirà a fine QSO)</b>
-                <div id="cwgPrivateChatMessages" style="max-height:110px; overflow-y:auto; font-size:0.8em; margin-bottom:8px; background:rgba(0,0,0,0.2); border-radius:6px; padding:6px; border:1px solid rgba(255,255,255,0.05);">
-                    <p style="color:var(--hint-color); text-align:center; margin:4px 0;">Chat di servizio aperta tra i due operatori.</p>
+            <!-- CHAT PRIVATA TEMPORANEA DI SERVIZIO QSO (SFONDO BIANCO E TESTO NERO CON RIDUZIONE) -->
+            <div id="cwgPrivateChatSection" style="display:none; background:#ffffff; border:2px solid #00bcd4; border-radius:8px; padding:8px; margin-top:10px; color:#000000;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <b style="color:#008ba3; font-size:0.85em;">💬 Chat Privata QSO (Scomparirà a fine QSO)</b>
+                    <button id="btnToggleCwgPrivateChat" onclick="window.toggleCwgPrivateChatBody()" class="action-btn-small btn-secondary" style="padding:2px 8px; font-size:0.75em; margin:0; background:#f0f0f0; color:#000000; border:1px solid #ccc; cursor:pointer;">🔼 Riduci</button>
                 </div>
-                <div style="display:flex; gap:6px;">
-                    <input type="text" id="cwgPrivateChatInput" placeholder="Messaggio di servizio..." autocomplete="off" onkeypress="if(event.key==='Enter') window.sendCwgPrivateChatMessage()" style="flex:1; padding:6px 8px; font-size:0.85em; background:rgba(255,255,255,0.1); border:1px solid var(--hint-color); color:white; border-radius:4px; box-sizing:border-box;">
-                    <button onclick="window.sendCwgPrivateChatMessage()" class="action-btn-small btn-primary" style="padding:6px 12px; font-weight:bold; font-size:0.8em; background:#00bcd4; border:none; color:#000; cursor:pointer;">Invia</button>
+                <div id="cwgPrivateChatBody">
+                    <div id="cwgPrivateChatMessages" style="max-height:100px; overflow-y:auto; font-size:0.8em; margin-bottom:6px; background:#f8f9fa; border-radius:6px; padding:6px; border:1px solid #ddd; color:#000000;">
+                        <p style="color:#666666; text-align:center; margin:4px 0;">Chat di servizio aperta tra i due operatori.</p>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <input type="text" id="cwgPrivateChatInput" placeholder="Messaggio di servizio..." autocomplete="off" onkeypress="if(event.key==='Enter') window.sendCwgPrivateChatMessage()" style="flex:1; padding:6px 8px; font-size:0.85em; background:#ffffff; border:1px solid #00bcd4; color:#000000; border-radius:4px; box-sizing:border-box; font-weight:bold;">
+                        <button onclick="window.sendCwgPrivateChatMessage()" class="action-btn-small btn-primary" style="padding:6px 12px; font-weight:bold; font-size:0.8em; background:#00bcd4; border:none; color:#000; cursor:pointer;">Invia</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TABELLA LIVE QSO IN CORSO (SCORREVOLE, SOTTO LA CHAT) -->
+            <div id="cwgLiveQsosSection" style="background:rgba(0,0,0,0.3); border:1px solid rgba(0,188,212,0.3); border-radius:8px; padding:8px; margin-top:10px; text-align:left;">
+                <b style="color:#00bcd4; font-size:0.85em; display:block; margin-bottom:6px;">📻 QSO Activity in Corso nel Gioco</b>
+                <div style="max-height:130px; overflow-y:auto; border-radius:6px; border:1px solid rgba(255,255,255,0.05); background:rgba(0,0,0,0.2);">
+                    <table style="width:100%; border-collapse:collapse; font-size:0.75em; text-align:left;">
+                        <thead>
+                            <tr style="border-bottom:1px solid #00bcd4; color:#00bcd4;">
+                                <th style="padding:4px 6px;">Telegrafista A</th>
+                                <th style="padding:4px 6px;">Telegrafista B</th>
+                                <th style="padding:4px 6px; text-align:center;">Banda</th>
+                                <th style="padding:4px 6px; text-align:right;">Stato</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cwgLiveQsosTableBody">
+                            <tr><td colspan="4" style="text-align:center; color:var(--hint-color); padding:10px;">Nessun QSO attualmente in corso.</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
