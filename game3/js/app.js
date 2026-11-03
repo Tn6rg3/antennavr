@@ -1886,7 +1886,7 @@ window.isWeeklyCallsignActiveNow = function(settings) {
     const now = new Date();
     const currentDayOfWeek = now.getDay();
 
-    if (currentDayOfWeek !== enabledDay && !window.isAdmin) {
+    if (currentDayOfWeek !== enabledDay) {
         return { active: false, dayName: dayName, reason: "Giorno non attivo" };
     }
 
@@ -1900,7 +1900,7 @@ window.isWeeklyCallsignActiveNow = function(settings) {
     const startMin = parseMin(settings.start || "00:00");
     const endMin = parseMin(settings.end || "23:59");
 
-    if (startMin !== null && endMin !== null && (curMinutes < startMin || curMinutes > endMin) && !window.isAdmin) {
+    if (startMin !== null && endMin !== null && (curMinutes < startMin || curMinutes > endMin)) {
         return { active: false, dayName: dayName, reason: "Fuori orario" };
     }
 
@@ -1908,10 +1908,18 @@ window.isWeeklyCallsignActiveNow = function(settings) {
     return { active: true, dayName: dayName, slotLabel: timeLabel };
 };
 
-window.checkWeeklyCallsignVisibility = function() {
+window.checkWeeklyCallsignVisibility = async function() {
     const container = document.getElementById('btnWeeklyCallsignChallengeContainer');
     const btn = document.getElementById('btnWeeklyCallsignChallenge');
     const modalTitle = document.getElementById('weeklyCallsignModalTitle');
+
+    // Restringiamo la visibilità del banner UNICAMENTE agli utenti abilitati all'Activity CWG
+    const isBeta = typeof window.isUserCwgBetaTester === 'function' ? await window.isUserCwgBetaTester() : false;
+
+    if (!isBeta) {
+        if (container) container.style.display = 'none';
+        return;
+    }
 
     if (!db) return;
 
@@ -1925,7 +1933,7 @@ window.checkWeeklyCallsignVisibility = function() {
         if (modalTitle) modalTitle.textContent = titleText;
 
         if (container) {
-            container.style.display = (status.active || window.isAdmin) ? 'block' : 'none';
+            container.style.display = status.active ? 'block' : 'none';
         }
     });
 };
@@ -1978,8 +1986,13 @@ window.openWeeklyCallsignPreview = function() {
     }
 };
 
-window.startWeeklyCallsignChallengeGame = function() {
+window.startWeeklyCallsignChallengeGame = async function() {
     if (!db || !window.myId) return alert("⚠️ Connessione non disponibile.");
+
+    const isBeta = typeof window.isUserCwgBetaTester === 'function' ? await window.isUserCwgBetaTester() : false;
+    if (!isBeta) {
+        return alert("⚠️ La Sfida Nominativi è attualmente riservata agli utenti abilitati all'Activity CWG.");
+    }
 
     const curEventKey = window.getWeeklyCallsignEventKey();
 
