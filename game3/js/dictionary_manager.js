@@ -143,10 +143,31 @@ window.getGameWords = function(num, mode, options = {}) {
 
     if (mode === 'daily_challenge') return window.getDailyWords(num);
     if (mode === 'tri_daily') return window.getTriDailyWords(num);
+    if (mode === 'callsign' || mode === 'weekly_callsign') return window.getCallsignWords(num);
 
     if (window.GAME_MODES && window.GAME_MODES[mode] && typeof window.GAME_MODES[mode].generateWords === 'function') {
         return window.GAME_MODES[mode].generateWords(num, { master: window.masterDictionary, custom: window.customDictionary }, options);
     }
+};
+
+window.getCallsignWords = function(count = 50) {
+    if (window.gameModesConfig && window.gameModesConfig.callsign && typeof window.gameModesConfig.callsign.generator === 'function') {
+        return window.gameModesConfig.callsign.generator(count);
+    }
+    let words = [];
+    let prefixes = ["I", "IK", "IZ", "IU", "IT9", "K", "W", "N", "AA", "DL", "F", "G", "EA", "PA", "OH", "JA", "VK", "ZS", "PY", "LU", "VE", "LA", "SM", "ON", "OE", "HB9", "OK", "OM", "SP", "HA", "YO", "LZ", "SV", "9A", "S5", "E7", "UR", "RA"];
+    for (let i = 0; i < count; i++) {
+        let callsign = prefixes[Math.floor(Math.random() * prefixes.length)] + Math.floor(Math.random() * 10);
+        for (let j = 0; j < Math.floor(Math.random() * 3) + 1; j++) {
+            callsign += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
+        }
+        if (Math.random() < 0.15) {
+            callsign += ["/QRP", "/P"][Math.floor(Math.random() * 5)];
+        }
+        words.push(callsign);
+    }
+    return words;
+};
 
     if (mode === 'custom' && window.customDictionary && window.customDictionary.length > 0) {
         let list = window.customDictionary;
