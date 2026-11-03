@@ -1066,43 +1066,67 @@ window.openMatchDetails = function(matchKey) {
     const match = window.userMatchHistory.find(m => m.key === matchKey);
     if (!match || !els.matchDetailsBody || !els.matchDetailsModal) return;
 
-    els.matchDetailsBody.innerHTML = '';
-    const h3 = els.matchDetailsModal.querySelector('h3');
-    if (h3) h3.textContent = `Dettagli Match - ${match.mode.toUpperCase()}`;
+    const renderDetails = (detailsList) => {
+        els.matchDetailsBody.innerHTML = '';
+        const h3 = els.matchDetailsModal.querySelector('h3');
+        if (h3) h3.textContent = `Dettagli Match - ${match.mode.toUpperCase()}`;
 
-    const frag = document.createDocumentFragment();
-    (match.details || []).forEach(row => {
-        const tr = document.createElement('tr');
-        const isCorrect = (row.real === row.typed);
-        let color = row.points > 0 ? "#4caf50" : (!isCorrect ? "#d32f2f" : "#999999");
+        const frag = document.createDocumentFragment();
+        (detailsList || []).forEach(row => {
+            const tr = document.createElement('tr');
+            const isCorrect = (row.real === row.typed);
+            let color = row.points > 0 ? "#4caf50" : (!isCorrect ? "#d32f2f" : "#999999");
 
-        const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed || '-';
-        const tdReal = document.createElement('td');
+            const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed || '-';
+            const tdReal = document.createElement('td');
 
-        if (typeof window.renderDiffSecure === 'function') {
-            window.renderDiffSecure(tdReal, row.real, row.typed || '');
-        } else {
-            const bReal = document.createElement('b'); bReal.textContent = row.real; tdReal.appendChild(bReal);
-        }
+            if (typeof window.renderDiffSecure === 'function') {
+                window.renderDiffSecure(tdReal, row.real, row.typed || '');
+            } else {
+                const bReal = document.createElement('b'); bReal.textContent = row.real; tdReal.appendChild(bReal);
+            }
 
-        const tdWpm = document.createElement('td');
-        tdWpm.style.textAlign = 'center';
-        tdWpm.style.fontWeight = 'bold';
-        tdWpm.style.color = '#ff9800';
-        tdWpm.style.fontSize = '0.85em';
-        tdWpm.textContent = `${row.wpm || match.wpm || 20} WPM`;
+            const tdWpm = document.createElement('td');
+            tdWpm.style.textAlign = 'center';
+            tdWpm.style.fontWeight = 'bold';
+            tdWpm.style.color = '#ff9800';
+            tdWpm.style.fontSize = '0.85em';
+            tdWpm.textContent = `${row.wpm || match.wpm || 20} WPM`;
 
-        const tdActions = document.createElement('td');
-        tdActions.style.textAlign = 'center';
+            const tdActions = document.createElement('td');
+            tdActions.style.textAlign = 'center';
 
-        const ptsSpan = document.createElement('span');
-        ptsSpan.style.color = color;
-        ptsSpan.style.fontWeight = 'bold';
-        ptsSpan.style.display = 'block';
-        ptsSpan.textContent = row.points > 0 ? `+${row.points}` : row.points;
-        tdActions.appendChild(ptsSpan);
+            const ptsSpan = document.createElement('span');
+            ptsSpan.style.color = color;
+            ptsSpan.style.fontWeight = 'bold';
+            ptsSpan.style.display = 'block';
+            ptsSpan.textContent = row.points > 0 ? `+${row.points}` : row.points;
+            tdActions.appendChild(ptsSpan);
 
-        tr.appendChild(tdTyped);
+            tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdWpm); tr.appendChild(tdActions);
+            frag.appendChild(tr);
+        });
+
+        els.matchDetailsBody.appendChild(frag);
+        els.matchDetailsModal.style.display = 'flex';
+    };
+
+    if (match.details || match.matchDetailsFull) {
+        renderDetails(match.details || match.matchDetailsFull);
+    } else {
+        if (typeof showToast === 'function') showToast("Caricamento dettagli partita...");
+        db.ref(`users/${window.myId}/history_details/${matchKey}`).once('value').then(snap => {
+            if (snap.exists()) {
+                renderDetails(snap.val());
+            } else {
+                showToast("Dettagli parole non disponibili per questa partita.");
+            }
+        }).catch(err => {
+            console.error("Fetch Match Details Error:", err);
+            showToast("Errore caricamento dettagli.");
+        });
+    }
+};
         tr.appendChild(tdReal);
         tr.appendChild(tdWpm);
         tr.appendChild(tdActions);

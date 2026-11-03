@@ -1495,16 +1495,22 @@ window.finishGame = function() {
     }
 
     if (matchDetailsArray.length > 0) {
-        db.ref(`users/${myId}/history`).push().set({
+        const newHistRef = db.ref(`users/${myId}/history`).push();
+        const histKey = newHistRef.key;
+
+        // Salvataggio sommario leggero in history (soli 60 Byte) per minimizzare il consumo di banda
+        newHistRef.set({
             date: firebase.database.ServerValue.TIMESTAMP,
             mode: window.currentMode,
             score: totalScore,
             wpm: peakWpm,
             type: window.isSinglePlayer ? 'single' : 'multi',
             isAutoAdvance: !!window.isAutoAdvance,
-            wordCount: requestedWordCount,
-            details: matchDetailsArray
+            wordCount: requestedWordCount
         });
+
+        // Salvataggio dettagli parole nel nodo dedicato history_details (scaricato solo al click su "Vedi")
+        db.ref(`users/${myId}/history_details/${histKey}`).set(matchDetailsArray).catch(() => {});
 
         // --- TRACCIAMENTO ACCURATEZZA GLOBALE PER GRAFICO (Solo Parole Comuni, Nominativi e Sfida Giornaliera) ---
         const isAllowedStatMode = ['standard', 'callsign', 'daily_challenge'].includes(window.currentMode);
