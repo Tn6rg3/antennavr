@@ -2052,7 +2052,6 @@ window.startWeeklyCallsignChallengeGame = async function() {
         if (typeof playNextWord === 'function') window.playNextWord();
     }, 800);
 };
-};
 
 window.saveAdminCallsignChallengeSettings = function() {
     if (!db || !window.isAdmin) return;
