@@ -1373,6 +1373,7 @@ window.initMandatoryAliasHandlers = function() {
         window.initAdminAnnouncementListener();
         window.checkBugFeedback();
         if (typeof window.checkCwgBetaVisibility === 'function') window.checkCwgBetaVisibility();
+        if (typeof window.checkWeeklyCallsignVisibility === 'function') window.checkWeeklyCallsignVisibility();
 
         // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
         const updateVers = () => {
@@ -1492,6 +1493,7 @@ window.setupBugSystem = function() {
         window.updateAdminBadge();
         window.loadAdminCwgTesterList?.();
         window.loadAdminCwgScheduleSettings?.();
+        window.loadAdminCallsignChallengeSettings?.();
 
         // Listener per Richieste Tutor
         db.ref('tutorRequests').off('value');
@@ -1858,6 +1860,215 @@ window.saveAdminCwgScheduleSettings = function() {
         alert("✅ Programmazione Activity salvata con successo!");
         window.checkCwgBetaVisibility?.();
     }).catch(e => {
+        alert("Errore salvataggio: " + e.message);
+    });
+};
+
+// --- GESTIONE SFIDA NOMINATIVI DEL GIORNO (es. SFIDA DEL LUNEDÌ - 50 NOMINATIVI) ---
+window.getWeeklyCallsignEventKey = function() {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    const yyyy = monday.getFullYear();
+    const mm = String(monday.getMonth() + 1).padStart(2, '0');
+    const dd = String(monday.getDate()).padStart(2, '0');
+    return `event_${yyyy}_${mm}_${dd}`;
+};
+
+window.isWeeklyCallsignActiveNow = function(settings) {
+    if (!settings) return { active: true, dayName: "Lunedì", slotLabel: "Tutto il Giorno" };
+
+    const dayNames = { 0: "Domenica", 1: "Lunedì", 2: "Martedì", 3: "Mercoledì", 4: "Giovedì", 5: "Venerdì", 6: "Sabato" };
+    const enabledDay = parseInt(settings.enabledDay !== undefined ? settings.enabledDay : 1);
+    const dayName = dayNames[enabledDay] || "Lunedì";
+
+    const now = new Date();
+    const currentDayOfWeek = now.getDay();
+
+    if (currentDayOfWeek !== enabledDay && !window.isAdmin) {
+        return { active: false, dayName: dayName, reason: "Giorno non attivo" };
+    }
+
+    const curMinutes = now.getHours() * 60 + now.getMinutes();
+    const parseMin = (str) => {
+        if (!str || !str.includes(':')) return null;
+        const parts = str.split(':').map(Number);
+        return parts[0] * 60 + parts[1];
+    };
+
+    const startMin = parseMin(settings.start || "00:00");
+    const endMin = parseMin(settings.end || "23:59");
+
+    if (startMin !== null && endMin !== null && (curMinutes < startMin || curMinutes > endMin) && !window.isAdmin) {
+        return { active: false, dayName: dayName, reason: "Fuori orario" };
+    }
+
+    const timeLabel = (settings.start && settings.end) ? `dalle ${settings.start} alle ${settings.end}` : "Tutto il Giorno";
+    return { active: true, dayName: dayName, slotLabel: timeLabel };
+};
+
+window.checkWeeklyCallsignVisibility = function() {
+    const container = document.getElementById('btnWeeklyCallsignChallengeContainer');
+    const btn = document.getElementById('btnWeeklyCallsignChallenge');
+    const modalTitle = document.getElementById('weeklyCallsignModalTitle');
+
+    if (!db) return;
+
+    db.ref('appConfig/weekly_callsign_challenge_settings').once('value', snap => {
+        const settings = snap.exists() ? snap.val() : null;
+        const status = window.isWeeklyCallsignActiveNow(settings);
+
+        const titleText = `🎙️ Sfida del ${status.dayName} (50 Nominativi)`;
+
+        if (btn) btn.textContent = `🎙️ SFIDA DEL ${status.dayName.toUpperCase()} (50 Nominativi) 🚀`;
+        if (modalTitle) modalTitle.textContent = titleText;
+
+        if (container) {
+            container.style.display = (status.active || window.isAdmin) ? 'block' : 'none';
+        }
+    });
+};
+
+window.openWeeklyCallsignPreview = function() {
+    const modal = document.getElementById('weeklyCallsignModal');
+    const previewList = document.getElementById('weeklyCallsignLeaderboardPreview');
+    if (!modal || !previewList) return;
+
+    modal.style.display = 'flex';
+    previewList.innerHTML = '<p style="text-align:center; color:var(--hint-color); margin:4px 0;">Caricamento classifica...</p>';
+
+    const curEventKey = window.getWeeklyCallsignEventKey();
+
+    if (db) {
+        db.ref(`leaderboard/weekly_callsign_challenge/${curEventKey}`).orderByChild('score').limitToLast(10).once('value', snap => {
+            previewList.innerHTML = '';
+            if (!snap.exists()) {
+                previewList.innerHTML = '<p style="text-align:center; color:var(--hint-color); margin:4px 0;">Sei il primo a giocare questa sfida! Fai una grande prestazione! 🚀</p>';
+                return;
+            }
+
+            const list = [];
+            snap.forEach(c => list.unshift({ id: c.key, ...c.val() }));
+            list.sort((a,b) => (Number(b.score) - Number(a.score)) || (Number(b.peakWpm) - Number(a.peakWpm)));
+
+            list.forEach((item, idx) => {
+                const rank = idx + 1;
+                const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+                const name = item.name || 'Telegrafista';
+                const score = item.score || 0;
+                const wpm = item.peakWpm || item.startWpm || 20;
+                const isMe = (item.id === window.myId);
+
+                const row = document.createElement('div');
+                row.style.cssText = `display:flex; justify-content:space-between; padding:4px 6px; border-bottom:1px solid rgba(255,255,255,0.05); ${isMe ? 'background:rgba(255,215,0,0.2); font-weight:bold;' : ''}`;
+
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = `${medal} ${name}`;
+
+                const scoreB = document.createElement('b');
+                scoreB.style.color = "#ffd700";
+                scoreB.textContent = `${score} pt (${wpm} WPM)`;
+
+                row.appendChild(nameSpan);
+                row.appendChild(scoreB);
+                previewList.appendChild(row);
+            });
+        });
+    }
+};
+
+window.startWeeklyCallsignChallengeGame = function() {
+    if (!db || !window.myId) return alert("⚠️ Connessione non disponibile.");
+
+    const curEventKey = window.getWeeklyCallsignEventKey();
+
+    db.ref(`users/${window.myId}/weekly_callsign_attempt/${curEventKey}`).once('value', snap => {
+        if (snap.exists() && snap.val() === true) {
+            alert("⚠️ Hai già partecipato alla Sfida Nominativi di questa settimana!\n\nÈ consentito 1 solo tentativo per ogni edizione della sfida.");
+            return;
+        }
+
+        const modal = document.getElementById('weeklyCallsignModal');
+        if (modal) modal.style.display = 'none';
+
+        window.resetGameState();
+
+        const startWpmInput = document.getElementById('weeklyCallsignStartWpm');
+        const startToneInput = document.getElementById('weeklyCallsignTone');
+
+        const startWpm = startWpmInput ? (parseInt(startWpmInput.value) || 20) : 20;
+        const startTone = startToneInput ? (parseInt(startToneInput.value) || 600) : 600;
+
+        window.currentMode = 'weekly_callsign';
+        window.isSinglePlayer = true;
+        window.currentWpm = window.baseWpm = startWpm;
+        window.peakWpm = startWpm;
+        window.requestedWordCount = 50;
+        window.currentTone = startTone;
+
+        roomCode = "SOLO_CALLSIGN_" + window.myId;
+        gameWords = window.getCallsignWords(50);
+
+        db.ref(`users/${window.myId}/weekly_callsign_attempt/${curEventKey}`).set(true).catch(() => {});
+
+        if (typeof window.showScreen === 'function') window.showScreen('gameScreen');
+
+        if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: 0`;
+        if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${window.currentWpm}`;
+        if (els.wordIndexDisplay) els.wordIndexDisplay.textContent = `1 / 50`;
+
+        showToast(`🎙️ Sfida Nominativi avviata! (50 Nominativi • ${startWpm} WPM)`);
+
+        setTimeout(() => {
+            if (typeof playNextWord === 'function') window.playNextWord();
+        }, 800);
+    });
+};
+
+window.saveAdminCallsignChallengeSettings = function() {
+    if (!db || !window.isAdmin) return;
+
+    const daySelect = document.getElementById('adminCallsignDaySelect');
+    const startInput = document.getElementById('adminCallsignStart');
+    const endInput = document.getElementById('adminCallsignEnd');
+
+    const enabledDay = parseInt(daySelect ? daySelect.value : "1");
+    const startTime = startInput ? startInput.value : "00:00";
+    const endTime = endInput ? endInput.value : "23:59";
+
+    db.ref('appConfig/weekly_callsign_challenge_settings').set({
+        enabledDay: enabledDay,
+        start: startTime,
+        end: endTime,
+        updatedAt: Date.now()
+    }).then(() => {
+        showToast("✅ Programmazione Sfida Nominativi salvata!");
+        alert("✅ Programmazione Sfida Nominativi salvata con successo!");
+        window.checkWeeklyCallsignVisibility?.();
+    }).catch(e => {
+        alert("Errore salvataggio: " + e.message);
+    });
+};
+
+window.loadAdminCallsignChallengeSettings = function() {
+    if (!db) return;
+
+    db.ref('appConfig/weekly_callsign_challenge_settings').once('value', snap => {
+        if (!snap.exists()) return;
+        const s = snap.val() || {};
+
+        if (document.getElementById('adminCallsignDaySelect')) {
+            document.getElementById('adminCallsignDaySelect').value = String(s.enabledDay !== undefined ? s.enabledDay : "1");
+        }
+        if (document.getElementById('adminCallsignStart')) {
+            document.getElementById('adminCallsignStart').value = s.start || "00:00";
+        }
+        if (document.getElementById('adminCallsignEnd')) {
+            document.getElementById('adminCallsignEnd').value = s.end || "23:59";
+        }
+    });
+};
         alert("Errore salvataggio: " + e.message);
     });
 };

@@ -30,6 +30,7 @@ window.lbGroups = {
         { val: 'trn_global', it: '🏆 Classifica Team', en: '🏆 Team Standings' }
     ],
     special: [
+        { val: 'weekly_callsign', it: '🎙️ Sfida del Lunedì (Nominativi)', en: '🎙️ Monday Callsign Challenge' },
         { val: 'la_torre', it: '🗼 La Torre (Scalata)', en: '🗼 The Tower (Climb)' },
         { val: 'arcade', it: '🕹️ Arcade Interception', en: '🕹️ Arcade Interception' },
         { val: 'memory_cw', it: '🧩 Gioco delle Coppie (Memory CW)', en: '🧩 Memory CW (Card Pairs)' },
@@ -116,6 +117,8 @@ window.showLeaderboardTab = function(modeValue) {
         window.fetchAndRenderGlobalLeaderboard('tournaments', null);
     } else if (modeValue === 'cwfreak') {
         window.fetchAndRenderGlobalLeaderboard('callsign', null);
+    } else if (modeValue === 'weekly_callsign') {
+        window.fetchAndRenderGlobalLeaderboard('weekly_callsign', null);
     } else if (modeValue === 'arcade') {
         window.fetchAndRenderGlobalLeaderboard('arcade', null);
     } else if (modeValue === 'la_torre') {
@@ -693,7 +696,24 @@ window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
         return;
     }
 
-    // 4d. MEMORY CW (GIOCO DELLE COPPIE)
+    // 4e. SFIDA NOMINATIVI SETTIMANALE (es. SFIDA DEL LUNEDÌ)
+    if (tabType === 'weekly_callsign') {
+        const curEventKey = (typeof window.getWeeklyCallsignEventKey === 'function') ? window.getWeeklyCallsignEventKey() : 'current';
+        db.ref(`leaderboard/weekly_callsign_challenge/${curEventKey}`).orderByChild('score').limitToLast(100).once('value', snapshot => {
+            let players = [];
+            snapshot.forEach(child => {
+                let p = child.val();
+                if (p) {
+                    p.id = child.key;
+                    p.dbPath = `leaderboard/weekly_callsign_challenge/${curEventKey}/${child.key}`;
+                    players.push(p);
+                }
+            });
+            players.sort((a, b) => (Number(b.score) - Number(a.score)) || (Number(b.peakWpm) - Number(a.peakWpm)));
+            window.renderPlayersListHTML(players, els.leaderboardContainer, false);
+        });
+        return;
+    }
     if (tabType === 'memory_cw') {
         db.ref('leaderboard/arcade/memory_cw').orderByChild('score').limitToLast(100).once('value', snapshot => {
             let players = [];

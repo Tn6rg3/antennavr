@@ -1394,6 +1394,18 @@ window.finishGame = function() {
                     });
                 });
                 dbPath = null;
+            } else if (window.currentMode === 'weekly_callsign') {
+                const curEventKey = (typeof window.getWeeklyCallsignEventKey === 'function') ? window.getWeeklyCallsignEventKey() : 'current';
+                db.ref(`leaderboard/weekly_callsign_challenge/${curEventKey}/${window.myId}`).set({
+                    name: window.myName,
+                    username: window.myPrivacy ? "" : tgUsername,
+                    score: window.totalScore,
+                    peakWpm: window.peakWpm,
+                    startWpm: window.baseWpm || 20,
+                    date: (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0],
+                    ts: Date.now()
+                }).catch(() => {});
+                dbPath = null;
             } else {
                 const modeMap = {
                     'callsign': 'callsign/global',
@@ -2282,8 +2294,15 @@ window.handleWordSubmission = function(userWord) {
         }
     }
 
-    // Avanzamento WPM e Missioni (Escluso se Avanzamento Auto è attivo)
-    if (levDist === 0 && !usedReplay) {
+    // Avanzamento WPM e Missioni
+    if (window.currentMode === 'weekly_callsign') {
+        if (levDist === 0) {
+            currentWpm += 1; // +1 WPM per ogni nominativo corretto
+        } else {
+            currentWpm = Math.max(10, currentWpm - 1); // -1 WPM per ogni errore
+        }
+        if (currentWpm > peakWpm) peakWpm = currentWpm;
+    } else if (levDist === 0 && !usedReplay) {
         if (!window.isPerfectionRetry) {
             if (!isFixedSpeed && window.currentMode !== 'chars') {
                 let step = 2;
