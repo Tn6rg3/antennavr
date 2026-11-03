@@ -1127,29 +1127,6 @@ window.openMatchDetails = function(matchKey) {
         });
     }
 };
-        tr.appendChild(tdReal);
-        tr.appendChild(tdWpm);
-        tr.appendChild(tdActions);
-
-        if (!isCorrect) {
-            const replayBtn = document.createElement('button');
-            replayBtn.className = 'action-btn-small btn-secondary';
-            replayBtn.style.padding = '2px 6px';
-            replayBtn.style.marginTop = '2px';
-            replayBtn.style.width = 'auto';
-            replayBtn.innerHTML = '🔊';
-            const replayWpm = row.wpm || match.wpm || 20;
-            replayBtn.onclick = () => window.playMorseAudio(row.real, replayWpm, true);
-            tdActions.appendChild(replayBtn);
-        }
-
-        tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdActions);
-        frag.appendChild(tr);
-    });
-
-    els.matchDetailsBody.appendChild(frag);
-    els.matchDetailsModal.style.display = 'flex';
-};
 
 window.deleteHistoryItem = function(key) {
     if (confirm("Eliminare questa partita?")) {

@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261103.261";
+const APP_VERSION = "20261103.262";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1388,6 +1388,13 @@ window.initMandatoryAliasHandlers = function() {
             const currentStr = String(APP_VERSION).trim();
             if (latestStr && latestStr !== currentStr) {
                 if (els.updateBanner) els.updateBanner.style.display = 'block';
+
+                const lastReloadedVersion = localStorage.getItem('cwgame_last_reloaded_version');
+                if (lastReloadedVersion !== latestStr) {
+                    localStorage.setItem('cwgame_last_reloaded_version', latestStr);
+                    console.warn(`App: Nuova versione ${latestStr} rilevata. Ricaricamento forzato in corso...`);
+                    window.location.reload(true);
+                }
             } else {
                 if (els.updateBanner) els.updateBanner.style.display = 'none';
             }
