@@ -53,9 +53,26 @@ window.switchLBGroup = async function(groupId) {
     select.innerHTML = '';
     const modes = window.lbGroups[groupId] || [];
     const isBetaTester = (typeof window.isUserCwgBetaTester === 'function') ? await window.isUserCwgBetaTester() : false;
+    const isWeeklyBeta = (typeof window.isWeeklyCallsignBetaTester === 'function') ? await window.isWeeklyCallsignBetaTester() : false;
+
+    if (groupId === 'special' && db) {
+        try {
+            const cSettingsSnap = await db.ref('appConfig/weekly_callsign_challenge_settings').once('value');
+            if (cSettingsSnap.exists()) {
+                const s = cSettingsSnap.val() || {};
+                const dayNames = { 0: "Domenica", 1: "Lunedì", 2: "Martedì", 3: "Mercoledì", 4: "Giovedì", 5: "Venerdì", 6: "Sabato" };
+                const enabledDay = parseInt(s.enabledDay !== undefined ? s.enabledDay : 1);
+                const dayName = dayNames[enabledDay] || "Lunedì";
+
+                const wcObj = modes.find(x => x.val === 'weekly_callsign');
+                if (wcObj) wcObj.it = `🎙️ Sfida del ${dayName} (Nominativi)`;
+            }
+        } catch(e) {}
+    }
 
     modes.forEach(m => {
         if (m.val === 'cwg_activity_monthly' && !isBetaTester) return;
+        if (m.val === 'weekly_callsign' && !isWeeklyBeta) return;
 
         const opt = document.createElement('option');
         opt.value = m.val;

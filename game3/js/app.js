@@ -1712,13 +1712,19 @@ window.setupBugSystem = function() {
     window.isUserCwgBetaTester = async function() {
         if (!db || !window.myId) return false;
         try {
+            // Controlliamo se Activity CWG è stata abilitata per TUTTI gli utenti dall'Admin
+            const settingsSnap = await db.ref('appConfig/cwg_activity_settings/allUsersEnabled').once('value');
+            if (settingsSnap.exists() && settingsSnap.val() === true) {
+                window.isCwgBetaCached = true;
+                return true;
+            }
+
             const snap = await db.ref(`appConfig/cwg_beta_users/${window.myId}`).once('value');
             if (snap.exists()) {
                 const isBeta = (snap.val() === true);
                 window.isCwgBetaCached = isBeta;
                 return isBeta;
             }
-            // Se l'ID non è esplicitamente presente in cwg_beta_users, consentiamo l'accesso all'Admin solo se il nodo cwg_beta_users è vuoto
             const rootBetaSnap = await db.ref('appConfig/cwg_beta_users').once('value');
             if (!rootBetaSnap.exists() && window.isAdmin) {
                 window.isCwgBetaCached = true;
@@ -1728,6 +1734,19 @@ window.setupBugSystem = function() {
             return false;
         } catch(e) {
             window.isCwgBetaCached = !!window.isAdmin;
+            return !!window.isAdmin;
+        }
+    };
+
+    window.isWeeklyCallsignBetaTester = async function() {
+        if (!db || !window.myId) return false;
+        try {
+            const settingsSnap = await db.ref('appConfig/weekly_callsign_challenge_settings/allUsersEnabled').once('value');
+            if (settingsSnap.exists() && settingsSnap.val() === true) {
+                return true;
+            }
+            return await window.isUserCwgBetaTester();
+        } catch(e) {
             return !!window.isAdmin;
         }
     };
@@ -1810,6 +1829,10 @@ window.loadAdminCwgScheduleSettings = function() {
         const s = snap.val() || {};
         const days = s.enabledDays || {};
 
+        if (document.getElementById('adminCwgAllUsersCheckbox')) {
+            document.getElementById('adminCwgAllUsersCheckbox').checked = (s.allUsersEnabled === true);
+        }
+
         for (let d = 0; d <= 6; d++) {
             const el = document.getElementById(`cwgDay${d}`);
             if (el) el.checked = (days[d] !== false);
@@ -1829,6 +1852,8 @@ window.loadAdminCwgScheduleSettings = function() {
 
 window.saveAdminCwgScheduleSettings = function() {
     if (!db || !window.isAdmin) return;
+
+    const allUsersEnabled = !!document.getElementById('adminCwgAllUsersCheckbox')?.checked;
 
     const days = {
         0: !!document.getElementById('cwgDay0')?.checked,
@@ -1851,6 +1876,7 @@ window.saveAdminCwgScheduleSettings = function() {
     };
 
     db.ref('appConfig/cwg_activity_settings').set({
+        allUsersEnabled: allUsersEnabled,
         enabledDays: days,
         slot1: slot1,
         slot2: slot2,
@@ -2056,6 +2082,7 @@ window.startWeeklyCallsignChallengeGame = async function() {
 window.saveAdminCallsignChallengeSettings = function() {
     if (!db || !window.isAdmin) return;
 
+    const allUsersEnabled = !!document.getElementById('adminCallsignAllUsersCheckbox')?.checked;
     const daySelect = document.getElementById('adminCallsignDaySelect');
     const startInput = document.getElementById('adminCallsignStart');
     const endInput = document.getElementById('adminCallsignEnd');
@@ -2065,6 +2092,7 @@ window.saveAdminCallsignChallengeSettings = function() {
     const endTime = endInput ? endInput.value : "23:59";
 
     db.ref('appConfig/weekly_callsign_challenge_settings').set({
+        allUsersEnabled: allUsersEnabled,
         enabledDay: enabledDay,
         start: startTime,
         end: endTime,
@@ -2085,6 +2113,9 @@ window.loadAdminCallsignChallengeSettings = function() {
         if (!snap.exists()) return;
         const s = snap.val() || {};
 
+        if (document.getElementById('adminCallsignAllUsersCheckbox')) {
+            document.getElementById('adminCallsignAllUsersCheckbox').checked = (s.allUsersEnabled === true);
+        }
         if (document.getElementById('adminCallsignDaySelect')) {
             document.getElementById('adminCallsignDaySelect').value = String(s.enabledDay !== undefined ? s.enabledDay : "1");
         }
@@ -2092,6 +2123,10 @@ window.loadAdminCallsignChallengeSettings = function() {
             document.getElementById('adminCallsignStart').value = s.start || "00:00";
         }
         if (document.getElementById('adminCallsignEnd')) {
+            document.getElementById('adminCallsignEnd').value = s.end || "23:59";
+        }
+    });
+};
             document.getElementById('adminCallsignEnd').value = s.end || "23:59";
         }
     });
