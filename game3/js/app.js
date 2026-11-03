@@ -1484,6 +1484,7 @@ window.setupBugSystem = function() {
         if (els.btnReadAllBugs) els.btnReadAllBugs.style.display = 'block';
         window.updateAdminBadge();
         window.loadAdminCwgTesterList?.();
+        window.loadAdminCwgScheduleSettings?.();
 
         // Listener per Richieste Tutor
         db.ref('tutorRequests').off('value');
@@ -1775,7 +1776,7 @@ window.checkCwgBetaVisibility = async function() {
             const settings = snap.exists() ? snap.val() : null;
             const activeStatus = window.isCwgActivityActiveNow(settings);
 
-            if (activeStatus.active || window.isAdmin) {
+            if (activeStatus.active) {
                 if (container) container.style.display = 'block';
                 if (opt) opt.style.display = 'block';
                 if (btn && activeStatus.slotLabel) {
@@ -1790,6 +1791,31 @@ window.checkCwgBetaVisibility = async function() {
         if (container) container.style.display = isBeta ? 'block' : 'none';
         if (opt) opt.style.display = isBeta ? 'block' : 'none';
     }
+};
+
+window.loadAdminCwgScheduleSettings = function() {
+    if (!db) return;
+
+    db.ref('appConfig/cwg_activity_settings').once('value', snap => {
+        if (!snap.exists()) return;
+        const s = snap.val() || {};
+        const days = s.enabledDays || {};
+
+        for (let d = 0; d <= 6; d++) {
+            const el = document.getElementById(`cwgDay${d}`);
+            if (el) el.checked = (days[d] !== false);
+        }
+
+        if (s.slot1) {
+            if (document.getElementById('cwgSlot1Start')) document.getElementById('cwgSlot1Start').value = s.slot1.start || "08:00";
+            if (document.getElementById('cwgSlot1End')) document.getElementById('cwgSlot1End').value = s.slot1.end || "12:00";
+        }
+
+        if (s.slot2) {
+            if (document.getElementById('cwgSlot2Start')) document.getElementById('cwgSlot2Start').value = s.slot2.start || "";
+            if (document.getElementById('cwgSlot2End')) document.getElementById('cwgSlot2End').value = s.slot2.end || "";
+        }
+    });
 };
 
 window.saveAdminCwgScheduleSettings = function() {
