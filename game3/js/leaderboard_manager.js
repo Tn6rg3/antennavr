@@ -896,12 +896,13 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
         dateDiv.style.color = 'var(--hint-color)';
         dateDiv.textContent = (player.date || "") + " ";
 
-        if (!isTeam && player.wpm) {
+        const activeWpm = Number(player.peakWpm || player.wpm || 0);
+        if (!isTeam && activeWpm > 0) {
             const wpmLabel = (isArcade || isTower) ? "Peak " : "";
             const wpmSpan = document.createElement('span');
             wpmSpan.style.color = 'var(--champ-color)';
             wpmSpan.style.fontWeight = 'bold';
-            wpmSpan.textContent = wpmLabel + player.wpm + " WPM";
+            wpmSpan.textContent = wpmLabel + activeWpm + " WPM";
             dateDiv.appendChild(wpmSpan);
         }
 
