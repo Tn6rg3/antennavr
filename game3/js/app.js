@@ -2069,9 +2069,6 @@ window.loadAdminCallsignChallengeSettings = function() {
         }
     });
 };
-        alert("Errore salvataggio: " + e.message);
-    });
-};
 
     window.loadAdminCwgTesterList = function() {
         const listDiv = document.getElementById('adminCwgTesterList');
