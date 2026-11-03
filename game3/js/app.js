@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20260807.259";
+const APP_VERSION = "20261103.261";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1722,14 +1722,112 @@ window.setupBugSystem = function() {
         }
     };
 
-    window.checkCwgBetaVisibility = async function() {
-        const container = document.getElementById('btnCwgActivityContainer');
-        const opt = document.getElementById('opt_cwg_activity');
-        const isBeta = typeof window.isUserCwgBetaTester === 'function' ? await window.isUserCwgBetaTester() : false;
+window.isCwgActivityActiveNow = function(settings) {
+    if (!settings) return { active: true, slotLabel: "Attiva" };
 
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 = Dom, 1 = Lun, ecc.
+
+    if (settings.enabledDays && settings.enabledDays[dayOfWeek] === false) {
+        return { active: false, reason: "Giorno non abilitato" };
+    }
+
+    const curMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const parseMinutes = (timeStr) => {
+        if (!timeStr || !timeStr.includes(':')) return null;
+        const parts = timeStr.split(':').map(Number);
+        return parts[0] * 60 + parts[1];
+    };
+
+    const s1Start = parseMinutes(settings.slot1?.start);
+    const s1End = parseMinutes(settings.slot1?.end);
+
+    if (s1Start !== null && s1End !== null && curMinutes >= s1Start && curMinutes < s1End) {
+        return { active: true, slotLabel: `${settings.slot1.start} - ${settings.slot1.end}` };
+    }
+
+    const s2Start = parseMinutes(settings.slot2?.start);
+    const s2End = parseMinutes(settings.slot2?.end);
+
+    if (s2Start !== null && s2End !== null && curMinutes >= s2Start && curMinutes < s2End) {
+        return { active: true, slotLabel: `${settings.slot2.start} - ${settings.slot2.end}` };
+    }
+
+    return { active: false, reason: "Fuori orario abilitato" };
+};
+
+window.checkCwgBetaVisibility = async function() {
+    const container = document.getElementById('btnCwgActivityContainer');
+    const opt = document.getElementById('opt_cwg_activity');
+    const btn = document.getElementById('btnCwgActivityMode');
+
+    const isBeta = typeof window.isUserCwgBetaTester === 'function' ? await window.isUserCwgBetaTester() : false;
+
+    if (!isBeta) {
+        if (container) container.style.display = 'none';
+        if (opt) opt.style.display = 'none';
+        return;
+    }
+
+    if (db) {
+        db.ref('appConfig/cwg_activity_settings').once('value', snap => {
+            const settings = snap.exists() ? snap.val() : null;
+            const activeStatus = window.isCwgActivityActiveNow(settings);
+
+            if (activeStatus.active || window.isAdmin) {
+                if (container) container.style.display = 'block';
+                if (opt) opt.style.display = 'block';
+                if (btn && activeStatus.slotLabel) {
+                    btn.textContent = `📻 ACTIVITY - CWG (${activeStatus.slotLabel}) 🧪`;
+                }
+            } else {
+                if (container) container.style.display = 'none';
+                if (opt) opt.style.display = 'none';
+            }
+        });
+    } else {
         if (container) container.style.display = isBeta ? 'block' : 'none';
         if (opt) opt.style.display = isBeta ? 'block' : 'none';
+    }
+};
+
+window.saveAdminCwgScheduleSettings = function() {
+    if (!db || !window.isAdmin) return;
+
+    const days = {
+        0: !!document.getElementById('cwgDay0')?.checked,
+        1: !!document.getElementById('cwgDay1')?.checked,
+        2: !!document.getElementById('cwgDay2')?.checked,
+        3: !!document.getElementById('cwgDay3')?.checked,
+        4: !!document.getElementById('cwgDay4')?.checked,
+        5: !!document.getElementById('cwgDay5')?.checked,
+        6: !!document.getElementById('cwgDay6')?.checked
     };
+
+    const slot1 = {
+        start: document.getElementById('cwgSlot1Start')?.value || "08:00",
+        end: document.getElementById('cwgSlot1End')?.value || "12:00"
+    };
+
+    const slot2 = {
+        start: document.getElementById('cwgSlot2Start')?.value || "",
+        end: document.getElementById('cwgSlot2End')?.value || ""
+    };
+
+    db.ref('appConfig/cwg_activity_settings').set({
+        enabledDays: days,
+        slot1: slot1,
+        slot2: slot2,
+        updatedAt: Date.now()
+    }).then(() => {
+        if (typeof showToast === 'function') showToast("✅ Programmazione Activity salvata!");
+        alert("✅ Programmazione Activity salvata con successo!");
+        window.checkCwgBetaVisibility?.();
+    }).catch(e => {
+        alert("Errore salvataggio: " + e.message);
+    });
+};
 
     window.loadAdminCwgTesterList = function() {
         const listDiv = document.getElementById('adminCwgTesterList');

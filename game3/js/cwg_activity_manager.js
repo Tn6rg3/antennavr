@@ -60,6 +60,11 @@ window.openCwgActivityScreenImpl = async function() {
         window.showScreen('cwgActivityScreen');
     }
 
+    // Attiviamo l'ascolto della tabella dei QSO in corso nel gioco
+    if (typeof window.listenToCwgLiveQsosTable === 'function') {
+        window.listenToCwgLiveQsosTable();
+    }
+
     // Controlliamo se c'è una sessione QSO già attiva da ripristinare anziché azzerare
     const activeSessionRaw = localStorage.getItem('cwgame_active_qso_session');
     if (activeSessionRaw) {
@@ -304,6 +309,73 @@ window.joinCqSpotActivity = async function(spotCall, spotBand) {
     if (!isBeta) {
         return alert("⚠️ La modalità Activity - CWG è attualmente riservata ai Beta Tester autorizzati.");
     }
+
+window.listenToCwgLiveQsosTable = function() {
+    if (!db) return;
+    const tableBody = document.getElementById('cwgLiveQsosTableBody');
+    if (!tableBody) return;
+
+    db.ref('activity_cwg/handshake').limitToLast(30).on('value', snap => {
+        if (!tableBody) return;
+        tableBody.innerHTML = '';
+
+        if (!snap.exists()) {
+            tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--hint-color); padding:10px;">Nessun QSO attualmente in corso.</td></tr>';
+            return;
+        }
+
+        const now = Date.now();
+        const activePairs = {};
+
+        snap.forEach(child => {
+            const data = child.val();
+            if (data && data.myCall && data.partnerCall && (now - (data.ts || 0) < 360000)) {
+                const sortedKey = [data.myCall, data.partnerCall].sort().join('_') + '_' + (data.band || '40m');
+                if (!activePairs[sortedKey]) {
+                    activePairs[sortedKey] = {
+                        callA: data.myCall,
+                        callB: data.partnerCall,
+                        band: (data.band || '40m').toUpperCase(),
+                        ts: data.ts
+                    };
+                }
+            }
+        });
+
+        const list = Object.values(activePairs);
+        if (list.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--hint-color); padding:10px;">Nessun QSO attualmente in corso.</td></tr>';
+            return;
+        }
+
+        list.forEach(qso => {
+            const tr = document.createElement('tr');
+            tr.style.cssText = "border-bottom:1px solid rgba(255,255,255,0.05);";
+
+            const tdA = document.createElement('td');
+            tdA.style.cssText = "padding:6px; font-weight:bold; color:#00ff66;";
+            tdA.textContent = qso.callA;
+
+            const tdB = document.createElement('td');
+            tdB.style.cssText = "padding:6px; font-weight:bold; color:#00bcd4;";
+            tdB.textContent = qso.callB;
+
+            const tdBand = document.createElement('td');
+            tdBand.style.cssText = "padding:6px; text-align:center; font-weight:bold; color:#ff9800;";
+            tdBand.textContent = qso.band;
+
+            const tdStatus = document.createElement('td');
+            tdStatus.style.cssText = "padding:6px; text-align:right; color:#4caf50; font-size:0.9em;";
+            tdStatus.textContent = "🟢 In Corso";
+
+            tr.appendChild(tdA);
+            tr.appendChild(tdB);
+            tr.appendChild(tdBand);
+            tr.appendChild(tdStatus);
+            tableBody.appendChild(tr);
+        });
+    });
+};
 
     const cleanSpotCall = window.cleanCallsignString(spotCall);
     const cleanSpotBand = (spotBand || "40m").trim().toLowerCase();
