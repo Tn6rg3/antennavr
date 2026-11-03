@@ -148,6 +148,18 @@ window.getGameWords = function(num, mode, options = {}) {
     if (window.GAME_MODES && window.GAME_MODES[mode] && typeof window.GAME_MODES[mode].generateWords === 'function') {
         return window.GAME_MODES[mode].generateWords(num, { master: window.masterDictionary, custom: window.customDictionary }, options);
     }
+
+    if (mode === 'custom' && window.customDictionary && window.customDictionary.length > 0) {
+        let list = window.customDictionary;
+        const targetLen = parseInt(options?.wordLength) || 0;
+        if (targetLen > 0) {
+            const filtered = list.filter(w => w.length === targetLen);
+            if (filtered.length > 0) list = filtered;
+        }
+        return fisherYatesShuffle(list).slice(0, num).map(w => w.toUpperCase());
+    }
+
+    return fisherYatesShuffle(window.masterDictionary).slice(0, num).map(w => w.toUpperCase());
 };
 
 window.getCallsignWords = function(count = 50) {
@@ -162,24 +174,11 @@ window.getCallsignWords = function(count = 50) {
             callsign += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
         }
         if (Math.random() < 0.15) {
-            callsign += ["/QRP", "/P"][Math.floor(Math.random() * 5)];
+            callsign += ["/QRP", "/P"][Math.floor(Math.random() * 2)];
         }
         words.push(callsign);
     }
     return words;
-};
-
-    if (mode === 'custom' && window.customDictionary && window.customDictionary.length > 0) {
-        let list = window.customDictionary;
-        const targetLen = parseInt(options?.wordLength) || 0;
-        if (targetLen > 0) {
-            const filtered = list.filter(w => w.length === targetLen);
-            if (filtered.length > 0) list = filtered;
-        }
-        return fisherYatesShuffle(list).slice(0, num).map(w => w.toUpperCase());
-    }
-
-    return fisherYatesShuffle(window.masterDictionary).slice(0, num).map(w => w.toUpperCase());
 };
 
 window.updateCustomDictStatus = function() {

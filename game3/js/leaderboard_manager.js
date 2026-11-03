@@ -562,7 +562,7 @@ window.fetchAndRenderCwgActivityMonthlyLeaderboard = async function() {
     });
 };
 
-window.fetchAndRenderGlobalLeaderboard = function(tabType, filterWordCount) {
+window.fetchAndRenderGlobalLeaderboard = async function(tabType, filterWordCount) {
     if (!els.leaderboardContainer) return;
     els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Caricamento classifica...':'Loading standings...'}</p>`;
 
