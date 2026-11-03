@@ -2127,10 +2127,6 @@ window.loadAdminCallsignChallengeSettings = function() {
         }
     });
 };
-            document.getElementById('adminCallsignEnd').value = s.end || "23:59";
-        }
-    });
-};
 
     window.loadAdminCwgTesterList = function() {
         const listDiv = document.getElementById('adminCwgTesterList');
