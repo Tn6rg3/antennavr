@@ -3842,53 +3842,48 @@ window.openMaxWpmRecordsModal = function() {
             const results = [];
 
             const getBestForMode = (modeKey, snapsList, fallbackSnap, modeName, wpmField = 'wpm') => {
-                // Se c'è il record dedicato registrato da qualsiasi partita nel mese, USALO SUBITO!
+                let maxW = 0, bName = "Nessun Record", bScore = 0;
+
+                // 1. Valore iniziale dal nodo dedicato dei record del mese
                 if (monthMaxData[modeKey] && Number(monthMaxData[modeKey].wpm) > 0) {
-                    return {
-                        name: modeName,
-                        bestName: monthMaxData[modeKey].name || "Telegrafista",
-                        maxWpm: Number(monthMaxData[modeKey].wpm || 0),
-                        bestScore: Number(monthMaxData[modeKey].score || 0)
-                    };
+                    maxW = Number(monthMaxData[modeKey].wpm || 0);
+                    bName = monthMaxData[modeKey].name || "Telegrafista";
+                    bScore = Number(monthMaxData[modeKey].score || 0);
                 }
 
-                // Altrimenti, fallback scansionando i nodi tradizionali
-                let maxW = 0, bName = "Nessun Record", bScore = 0;
+                // 2. Scansiona TUTTI i giorni del mese per trovare l'assoluto Max WPM nelle Sfide Giornaliere/Triple
                 if (snapsList) {
                     snapsList.forEach(snap => {
                         if (snap && snap.exists()) {
                             snap.forEach(child => {
                                 const val = child.val();
                                 if (val && typeof val === 'object') {
-                                    const isCustom = !!val.isEasyMode || !!val.isFixedSpeed || !!val.hasCustomParams || (val.charSpaceWpm && Number(val.charSpaceWpm) > 0) || (val.wordSpaceMult && Number(val.wordSpaceMult) !== 1.0);
-                                    if (!isCustom) {
-                                        const w = Number(val[wpmField] || val.wpm || val.peakWpm || 0);
-                                        if (w > maxW) {
-                                            maxW = w;
-                                            bName = val.name || "Telegrafista";
-                                            bScore = val.score || val.totalScore || 0;
-                                        }
+                                    const w = Number(val[wpmField] || val.wpm || val.peakWpm || 0);
+                                    if (w > maxW) {
+                                        maxW = w;
+                                        bName = val.name || "Telegrafista";
+                                        bScore = val.score || val.totalScore || 0;
                                     }
                                 }
                             });
                         }
                     });
-                } else if (fallbackSnap && fallbackSnap.exists()) {
+                }
+
+                // 3. Scansiona anche i nodi generali delle classifiche
+                if (fallbackSnap && fallbackSnap.exists()) {
                     const scan = (node) => {
                         if (!node) return;
                         node.forEach(child => {
                             const val = child.val();
                             if (val && typeof val === 'object') {
                                 if (val.wpm !== undefined || val.peakWpm !== undefined) {
-                                    const isCustom = !!val.isEasyMode || !!val.isFixedSpeed || !!val.hasCustomParams || (val.charSpaceWpm && Number(val.charSpaceWpm) > 0) || (val.wordSpaceMult && Number(val.wordSpaceMult) !== 1.0);
-                                    if (!isCustom) {
-                                        const w = Number(val.peakWpm || val.wpm || 0);
-                                        const recordDate = String(val.date || child.key || "");
-                                        if (window.isDateInCurrentMonth(recordDate) && w > maxW) {
-                                            maxW = w;
-                                            bName = val.name || "Telegrafista";
-                                            bScore = val.score || val.totalScore || 0;
-                                        }
+                                    const w = Number(val.peakWpm || val.wpm || 0);
+                                    const recordDate = String(val.date || child.key || "");
+                                    if (window.isDateInCurrentMonth(recordDate) && w > maxW) {
+                                        maxW = w;
+                                        bName = val.name || "Telegrafista";
+                                        bScore = val.score || val.totalScore || 0;
                                     }
                                 } else {
                                     scan(child);
@@ -3898,6 +3893,7 @@ window.openMaxWpmRecordsModal = function() {
                     };
                     scan(fallbackSnap);
                 }
+
                 return { name: modeName, bestName: bName, maxWpm: maxW, bestScore: bScore };
             };
 
@@ -3956,6 +3952,20 @@ window.openMaxWpmRecordsModal = function() {
         container.innerHTML = '<p style="text-align:center; font-size:0.85em; color:var(--hint-color); padding:10px;">Errore caricamento record.</p>';
     });
     });
+};
+
+window.toggleCustomSettingsBox = function() {
+    const box = document.getElementById('customSettingsCollapsibleBox');
+    const btn = document.getElementById('btnToggleCustomSettings');
+    if (!box || !btn) return;
+
+    if (box.style.display === 'none') {
+        box.style.display = 'block';
+        btn.textContent = '🛠️ Personalizzazioni Avanzate 🔼';
+    } else {
+        box.style.display = 'none';
+        btn.textContent = '🛠️ Personalizzazioni Avanzate 🔽';
+    }
 };
 
 window.inviteFriendsToRoom = function() {
