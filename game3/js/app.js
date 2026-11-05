@@ -122,6 +122,14 @@ window.addEventListener('pointerdown', () => {
 // WATCHDOG: Rileva risvegli dopo sospensioni prolungate (es. schermo spento a lungo)
 let lastWatchdogTick = Date.now();
 setInterval(() => {
+    const now = Date.now();
+    if (now - lastWatchdogTick > 30000) {
+        console.warn("App: Watchdog rileva risveglio profondo, riattivo connessione...");
+        handleAppResume(false);
+    }
+    lastWatchdogTick = now;
+}, 5000);
+
 const handleAppPause = () => {
     console.log("App: App in background, stacco listener temporanei per azzerare il download...");
     if (typeof window.detachTempBackgroundListeners === 'function') {
