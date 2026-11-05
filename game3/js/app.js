@@ -1899,15 +1899,35 @@ window.saveAdminCwgScheduleSettings = function() {
 };
 
 // --- GESTIONE SFIDA NOMINATIVI DEL GIORNO (es. SFIDA DEL LUNEDÌ - 50 NOMINATIVI) ---
-window.getWeeklyCallsignEventKey = function() {
+window.getWeeklyCallsignEventKey = function(settings) {
     const d = new Date();
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(d.setDate(diff));
-    const yyyy = monday.getFullYear();
-    const mm = String(monday.getMonth() + 1).padStart(2, '0');
-    const dd = String(monday.getDate()).padStart(2, '0');
-    return `event_${yyyy}_${mm}_${dd}`;
+    const enabledDay = (settings && settings.enabledDay !== undefined) ? parseInt(settings.enabledDay) : 1;
+
+    const currentDayOfWeek = d.getDay();
+    let diffDays = currentDayOfWeek - enabledDay;
+    if (diffDays < 0) {
+        diffDays += 7;
+    }
+
+    const editionDate = new Date(d);
+    editionDate.setDate(d.getDate() - diffDays);
+
+    const yyyy = editionDate.getFullYear();
+    const mm = String(editionDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(editionDate.getDate()).padStart(2, '0');
+
+    return `edition_day_${enabledDay}_${yyyy}_${mm}_${dd}`;
+};
+
+window.getWeeklyCallsignEventKeyAsync = async function() {
+    if (!db) return window.getWeeklyCallsignEventKey(null);
+    try {
+        const snap = await db.ref('appConfig/weekly_callsign_challenge_settings').once('value');
+        const settings = snap.exists() ? snap.val() : null;
+        return window.getWeeklyCallsignEventKey(settings);
+    } catch(e) {
+        return window.getWeeklyCallsignEventKey(null);
+    }
 };
 
 window.isWeeklyCallsignActiveNow = function(settings) {
@@ -1972,7 +1992,7 @@ window.checkWeeklyCallsignVisibility = async function() {
     });
 };
 
-window.openWeeklyCallsignPreview = function() {
+window.openWeeklyCallsignPreview = async function() {
     const modal = document.getElementById('weeklyCallsignModal');
     const previewList = document.getElementById('weeklyCallsignLeaderboardPreview');
     if (!modal || !previewList) return;
@@ -1980,7 +2000,7 @@ window.openWeeklyCallsignPreview = function() {
     modal.style.display = 'flex';
     previewList.innerHTML = '<p style="text-align:center; color:var(--hint-color); margin:4px 0;">Caricamento classifica...</p>';
 
-    const curEventKey = window.getWeeklyCallsignEventKey();
+    const curEventKey = await window.getWeeklyCallsignEventKeyAsync();
 
     if (db) {
         db.ref(`leaderboard/weekly_callsign_challenge/${curEventKey}`).orderByChild('score').limitToLast(10).once('value', snap => {
@@ -2020,9 +2040,9 @@ window.openWeeklyCallsignPreview = function() {
     }
 };
 
-window.allowReplayWeeklyCallsignChallenge = function() {
+window.allowReplayWeeklyCallsignChallenge = async function() {
     if (!db || !window.myId) return;
-    const curEventKey = (typeof window.getWeeklyCallsignEventKey === 'function') ? window.getWeeklyCallsignEventKey() : 'current';
+    const curEventKey = await window.getWeeklyCallsignEventKeyAsync();
 
     Promise.all([
         db.ref(`users/${window.myId}/weekly_callsign_attempt/${curEventKey}`).remove(),

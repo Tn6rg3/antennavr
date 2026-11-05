@@ -1395,7 +1395,7 @@ window.finishGame = function() {
                 });
                 dbPath = null;
             } else if (window.currentMode === 'weekly_callsign') {
-                const curEventKey = (typeof window.getWeeklyCallsignEventKey === 'function') ? window.getWeeklyCallsignEventKey() : 'current';
+                const curEventKey = (typeof window.getWeeklyCallsignEventKeyAsync === 'function') ? await window.getWeeklyCallsignEventKeyAsync() : 'current';
                 const lbRef = db.ref(`leaderboard/weekly_callsign_challenge/${curEventKey}/${window.myId}`);
 
                 lbRef.once('value', s => {
