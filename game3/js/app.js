@@ -1979,6 +1979,7 @@ window.checkWeeklyCallsignVisibility = async function() {
 
     db.ref('appConfig/weekly_callsign_challenge_settings').once('value', snap => {
         const settings = snap.exists() ? snap.val() : null;
+        window.weeklyCallsignSettingsCache = settings;
         const status = window.isWeeklyCallsignActiveNow(settings);
 
         const titleText = `🎙️ Sfida del ${status.dayName} (50 Nominativi)`;
