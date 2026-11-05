@@ -74,8 +74,15 @@ tg.onEvent('viewportChanged', updateViewportHeight);
 window.addEventListener('resize', updateViewportHeight);
 window.addEventListener('focus', updateViewportHeight);
 
-// --- GESTIONE RIPRISTINO APP (PREVIENE APP BLOCCATA DA BACKGROUND) ---
-const handleAppResume = (forceReconnect = false) => {
+// --- GESTIONE RIPRISTINO ED INATTIVITÀ APP (PREVIENE APP BLOCCATA DA BACKGROUND) ---
+const handleAppPause = () => {
+    console.log("App: App in background, stacco listener temporanei per azzerare il download...");
+    if (typeof window.detachTempBackgroundListeners === 'function') {
+        window.detachTempBackgroundListeners();
+    }
+};
+
+const handleAppResume = (isForeground = true) => {
     console.log("App: Ripristino visibilità e risveglio da background...");
 
     // 1. Sblocco e ripristino incondizionato di tutti i contesti Web Audio
@@ -91,10 +98,14 @@ const handleAppResume = (forceReconnect = false) => {
     }
     inputActive = true;
 
-    // 3. Ripristino Connessione Firebase SENZA forzare goOffline (previene la cancellazione temporanea di presence!)
+    // 3. Ripristino Connessione Firebase
     if (window.db) {
         window.db.goOnline();
     }
+
+    // 4. Riattiva listener essenziali di presenza e bacheca
+    if (typeof window.listenToOnlineUsers === 'function') window.listenToOnlineUsers();
+    if (typeof window.listenToRooms === 'function') window.listenToRooms();
 
     // Aggiorniamo subito lo stato di presenza su Firebase
     updateAppStatus(true);
@@ -129,29 +140,6 @@ setInterval(() => {
     }
     lastWatchdogTick = now;
 }, 5000);
-
-const handleAppPause = () => {
-    console.log("App: App in background, stacco listener temporanei per azzerare il download...");
-    if (typeof window.detachTempBackgroundListeners === 'function') {
-        window.detachTempBackgroundListeners();
-    }
-};
-
-const handleAppResume = (isForeground) => {
-    console.log("App: App in primo piano, riattivo listener essenziali...");
-    if (typeof window.resumeAudioContext === 'function') {
-        window.resumeAudioContext();
-    }
-
-    if (window.db) {
-        window.db.goOnline();
-    }
-
-    if (typeof window.listenToOnlineUsers === 'function') window.listenToOnlineUsers();
-    if (typeof window.listenToRooms === 'function') window.listenToRooms();
-
-    updateAppStatus(true);
-};
 
 document.addEventListener('visibilitychange', () => {
     const isVisible = !document.hidden;
