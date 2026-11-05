@@ -463,11 +463,12 @@ window.initCwgPrivateChat = function(myCall, partnerCall, band) {
 
                 const isMe = (m.sender === myCall);
                 const nameSpan = document.createElement('b');
-                nameSpan.style.color = isMe ? "#00ff66" : "#00bcd4";
+                nameSpan.style.color = isMe ? "#008ba3" : "#d32f2f";
                 nameSpan.textContent = m.sender + ": ";
 
                 const textSpan = document.createElement('span');
-                textSpan.style.color = "#ffffff";
+                textSpan.style.color = "#000000";
+                textSpan.style.fontWeight = "bold";
                 textSpan.textContent = m.text;
 
                 msgDiv.appendChild(nameSpan);
