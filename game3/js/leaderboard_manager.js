@@ -721,7 +721,7 @@ window.fetchAndRenderGlobalLeaderboard = async function(tabType, filterWordCount
             return;
         }
 
-        const curEventKey = (typeof window.getWeeklyCallsignEventKeyAsync === 'function') ? await window.getWeeklyCallsignEventKeyAsync() : 'current';
+        const curEventKey = (typeof window.getWeeklyCallsignEventKey === 'function') ? window.getWeeklyCallsignEventKey() : 'current';
         db.ref(`leaderboard/weekly_callsign_challenge/${curEventKey}`).orderByChild('score').limitToLast(100).once('value', snapshot => {
             let players = [];
             snapshot.forEach(child => {

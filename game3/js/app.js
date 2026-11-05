@@ -2001,7 +2001,7 @@ window.openWeeklyCallsignPreview = async function() {
     modal.style.display = 'flex';
     previewList.innerHTML = '<p style="text-align:center; color:var(--hint-color); margin:4px 0;">Caricamento classifica...</p>';
 
-    const curEventKey = await window.getWeeklyCallsignEventKeyAsync();
+    const curEventKey = window.getWeeklyCallsignEventKey();
 
     if (db) {
         db.ref(`leaderboard/weekly_callsign_challenge/${curEventKey}`).orderByChild('score').limitToLast(10).once('value', snap => {
@@ -2041,9 +2041,9 @@ window.openWeeklyCallsignPreview = async function() {
     }
 };
 
-window.allowReplayWeeklyCallsignChallenge = async function() {
+window.allowReplayWeeklyCallsignChallenge = function() {
     if (!db || !window.myId) return;
-    const curEventKey = await window.getWeeklyCallsignEventKeyAsync();
+    const curEventKey = window.getWeeklyCallsignEventKey();
 
     Promise.all([
         db.ref(`users/${window.myId}/weekly_callsign_attempt/${curEventKey}`).remove(),
