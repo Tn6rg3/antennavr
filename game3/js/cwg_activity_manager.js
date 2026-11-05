@@ -560,7 +560,7 @@ window.toggleCwgPrivateChatBody = function() {
     }
 };
 
-window.checkCwgDoubleHandshakeMatch = function() {
+window.checkCwgDoubleHandshakeMatch = async function() {
     if (!db) return;
 
     const myCallInput = document.getElementById('cwgLogMyCall');
@@ -578,6 +578,28 @@ window.checkCwgDoubleHandshakeMatch = function() {
         if (statusBox) statusBox.style.display = "none";
         return;
     }
+
+    // CHECK RIGIDO ANTI-DUPLICATO SU FIREBASE PER LA GIORNATA ODIERNA
+    const now = new Date();
+    const year = now.getFullYear();
+    const monthStr = year + "-" + String(now.getMonth() + 1).padStart(2, '0');
+    const dayStr = monthStr + "-" + String(now.getDate()).padStart(2, '0');
+
+    const callsArray = [myCall, partnerCall].sort();
+    const sharedQsoKey = callsArray.join("_") + "_" + band;
+
+    try {
+        const checkQsoSnap = await db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKey}`).once('value');
+        if (checkQsoSnap.exists()) {
+            if (statusBox) {
+                statusBox.style.display = "block";
+                statusBox.style.background = "#ffffff";
+                statusBox.style.border = "2px solid #d32f2f";
+                statusBox.innerHTML = `<span style="color:#d32f2f; font-weight:bold; font-size:0.85em;">⚠️ QSO GIÀ REGISTRATO OGGI! Hai già registrato un QSO sulla banda ${band.toUpperCase()} oggi con ${partnerCall}. Non è possibile effettuare un secondo QSO sulla stessa banda nello stesso giorno.</span>`;
+            }
+            return;
+        }
+    } catch(e) {}
 
     // Inizializza immediatamente la Chat Privata tra i due Call
     if (typeof window.initCwgPrivateChat === 'function') {
