@@ -122,18 +122,36 @@ window.addEventListener('pointerdown', () => {
 // WATCHDOG: Rileva risvegli dopo sospensioni prolungate (es. schermo spento a lungo)
 let lastWatchdogTick = Date.now();
 setInterval(() => {
-    const now = Date.now();
-    if (now - lastWatchdogTick > 30000) { // Salto temporale di almeno 30 secondi
-        console.warn("App: Watchdog rileva risveglio profondo, riattivo connessione...");
-        handleAppResume(false);
+const handleAppPause = () => {
+    console.log("App: App in background, stacco listener temporanei per azzerare il download...");
+    if (typeof window.detachTempBackgroundListeners === 'function') {
+        window.detachTempBackgroundListeners();
     }
-    lastWatchdogTick = now;
-}, 5000);
+};
+
+const handleAppResume = (isForeground) => {
+    console.log("App: App in primo piano, riattivo listener essenziali...");
+    if (typeof window.resumeAudioContext === 'function') {
+        window.resumeAudioContext();
+    }
+
+    if (window.db) {
+        window.db.goOnline();
+    }
+
+    if (typeof window.listenToOnlineUsers === 'function') window.listenToOnlineUsers();
+    if (typeof window.listenToRooms === 'function') window.listenToRooms();
+
+    updateAppStatus(true);
+};
 
 document.addEventListener('visibilitychange', () => {
     const isVisible = !document.hidden;
-    if (isVisible) handleAppResume(true);
-    updateAppStatus(isVisible);
+    if (isVisible) {
+        handleAppResume(true);
+    } else {
+        handleAppPause();
+    }
 });
 
 // --- GESTIONE PRESENZA E FOCUS (HEARTBEAT) ---

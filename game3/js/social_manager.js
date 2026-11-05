@@ -444,12 +444,32 @@ window.removeUserListItem = function(userId) {
     }
 };
 
+window.detachTempBackgroundListeners = function() {
+    if (listeners.presence && listeners.presence.ref) {
+        try {
+            listeners.presence.ref.off('child_added', listeners.presence.onAdded);
+            listeners.presence.ref.off('child_changed', listeners.presence.onChanged);
+            listeners.presence.ref.off('child_removed', listeners.presence.onRemoved);
+        } catch(e) {}
+        listeners.presence = null;
+    }
+
+    if (listeners.roomsList && listeners.roomsList.ref) {
+        try {
+            listeners.roomsList.ref.off('child_added', listeners.roomsList.onAdded);
+            listeners.roomsList.ref.off('child_changed', listeners.roomsList.onChanged);
+            listeners.roomsList.ref.off('child_removed', listeners.roomsList.onRemoved);
+        } catch(e) {}
+        listeners.roomsList = null;
+    }
+};
+
 window.listenToOnlineUsers = function() {
     if (listeners.presence) return;
 
     if (els.onlineUsersList) els.onlineUsersList.innerHTML = '';
-    // Mostriamo fino a 100 utenti attivi contemporaneamente
-    const presenceRef = db.ref('presence').limitToLast(100);
+    // Mostriamo fino a 20 utenti attivi contemporaneamente
+    const presenceRef = db.ref('presence').limitToLast(20);
 
     const onAdded = presenceRef.on('child_added', async snap => {
         if (snap.key !== myId && snap.key !== window.myId) {
