@@ -1332,29 +1332,27 @@ window.initMandatoryAliasHandlers = function() {
 
             if (startParam) return;
 
-            // Verifichiamo se l'utente ha già giocato o iniziato la sfida OGGI
-            db.ref(`users/${myId}`).once('value', userSnap => {
-                const userData = userSnap.val() || {};
-                const history = userData.history || {};
-                const lastAttemptDate = userData.daily_attempt || "";
-
+            // Verifichiamo in modo ultra-leggero solo i nodi specifici della sfida giornaliera (50 Byte)
+            Promise.all([
+                db.ref(`users/${myId}/daily_attempt`).once('value').catch(() => null),
+                db.ref(`users/${myId}/history`).orderByChild('mode').equalTo('daily_challenge').limitToLast(5).once('value').catch(() => null)
+            ]).then(([attemptSnap, historySnap]) => {
+                const lastAttemptDate = (attemptSnap && attemptSnap.exists()) ? attemptSnap.val() : "";
                 let alreadyPlayedToday = (lastAttemptDate === today);
 
-                if (!alreadyPlayedToday) {
-                    Object.values(history).forEach(m => {
-                        if (!m.date) return;
-                        const mDate = window.getLocalDateString(m.date);
-                        if (m.mode === 'daily_challenge' && mDate === today) alreadyPlayedToday = true;
+                if (!alreadyPlayedToday && historySnap && historySnap.exists()) {
+                    historySnap.forEach(mSnap => {
+                        const m = mSnap.val();
+                        if (m && m.date) {
+                            const mDate = window.getLocalDateString(m.date);
+                            if (mDate === today) alreadyPlayedToday = true;
+                        }
                     });
                 }
 
-                const alreadyShownToday = localStorage.getItem(STORAGE_DAILY_STATUS_KEY) === today;
-
                 if (alreadyPlayedToday) {
-                    // Aggiorniamo il cache locale se Firebase dice che abbiamo giocato
                     localStorage.setItem(STORAGE_DAILY_STATUS_KEY, today);
                 } else {
-                    // Se Firebase conferma che NON abbiamo giocato (es. sbloccati dall'Admin), puliamo la cache locale!
                     localStorage.removeItem(STORAGE_DAILY_STATUS_KEY);
                     localStorage.removeItem("cwgame_daily_status");
                 }
@@ -3860,6 +3858,62 @@ window.openMaxWpmRecordsModal = function() {
     // 1. Leggiamo il nodo dedicato dei Record Max WPM del Mese
     db.ref(`leaderboard/max_wpm_records/${currentMonthStr}`).once('value', maxMonthSnap => {
         const monthMaxData = maxMonthSnap.exists() ? maxMonthSnap.val() : {};
+
+        // OTTIMIZZAZIONE BANDA: Se il nodo dedicato dei record del mese ha dati, rendirizziamo ISTANTANEAMENTE senza fare 30 query!
+        if (monthMaxData && Object.keys(monthMaxData).length > 0) {
+            const results = [
+                { name: '🔤 Parole Comuni', bestName: monthMaxData.standard?.name || "Nessun Record", maxWpm: Number(monthMaxData.standard?.wpm || 0), bestScore: Number(monthMaxData.standard?.score || 0) },
+                { name: '➕ Parole +', bestName: monthMaxData.standard_plus?.name || "Nessun Record", maxWpm: Number(monthMaxData.standard_plus?.wpm || 0), bestScore: Number(monthMaxData.standard_plus?.score || 0) },
+                { name: '📅 Sfida Giornaliera', bestName: monthMaxData.daily_challenge?.name || "Nessun Record", maxWpm: Number(monthMaxData.daily_challenge?.wpm || 0), bestScore: Number(monthMaxData.daily_challenge?.score || 0) },
+                { name: '🏆 Sfida Tripla', bestName: monthMaxData.tri_daily?.name || "Nessun Record", maxWpm: Number(monthMaxData.tri_daily?.wpm || 0), bestScore: Number(monthMaxData.tri_daily?.score || 0) },
+                { name: '🎙️ CW Freak (Nominativi)', bestName: monthMaxData.callsign?.name || "Nessun Record", maxWpm: Number(monthMaxData.callsign?.wpm || 0), bestScore: Number(monthMaxData.callsign?.score || 0) },
+                { name: '🧩 Memory CW (Coppie)', bestName: monthMaxData.memory_cw?.name || "Nessun Record", maxWpm: Number(monthMaxData.memory_cw?.wpm || 0), bestScore: Number(monthMaxData.memory_cw?.score || 0) }
+            ];
+
+            container.innerHTML = '';
+            const fragment = document.createDocumentFragment();
+
+            results.forEach(res => {
+                const row = document.createElement('div');
+                row.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;";
+
+                const leftDiv = document.createElement('div');
+                leftDiv.style.cssText = "display:flex; flex-direction:column;";
+
+                const modeB = document.createElement('b');
+                modeB.style.cssText = "font-size:0.85em; color:var(--text-color);";
+                modeB.textContent = res.name;
+
+                const extraScoreStr = (res.bestScore > 0) ? ` • ${res.bestScore} pt` : '';
+                const nameSpan = document.createElement('span');
+                nameSpan.style.cssText = "font-size:0.75em; color:var(--hint-color); margin-top:2px;";
+
+                if (res.maxWpm > 0) {
+                    nameSpan.textContent = `🥇 Recordman: ${res.bestName}${extraScoreStr}`;
+                } else {
+                    nameSpan.textContent = "Nessun record questo mese";
+                }
+
+                leftDiv.appendChild(modeB);
+                leftDiv.appendChild(nameSpan);
+
+                const rightB = document.createElement('b');
+                rightB.style.cssText = "font-size:1em; color:#ff9800; font-weight:bold;";
+                rightB.textContent = res.maxWpm > 0 ? `${res.maxWpm} WPM` : '--';
+
+                row.appendChild(leftDiv);
+                row.appendChild(rightB);
+                fragment.appendChild(row);
+            });
+
+            container.appendChild(fragment);
+
+            window.maxWpmRecordsCache[currentMonthStr] = {
+                ts: Date.now(),
+                fragment: fragment.cloneNode(true)
+            };
+            return;
+        }
 
         const todayNum = now.getDate();
         const currentMonthDailyPromises = [];

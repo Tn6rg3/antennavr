@@ -343,7 +343,7 @@ window.loadAdvancedStats = function() {
 
     Promise.all([
         db.ref(`users/${userId}/stats`).once('value').catch(() => null),
-        db.ref(`users/${userId}/history`).once('value').catch(() => null)
+        db.ref(`users/${userId}/history`).limitToLast(50).once('value').catch(() => null)
     ]).then(([statsSnap, histSnap]) => {
         const stats = (statsSnap && statsSnap.exists()) ? statsSnap.val() : {};
         let historyData = [];
