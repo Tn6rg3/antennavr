@@ -122,6 +122,11 @@ window.resetCwgForm = function() {
         window.cwgCqAcceptedListenerRef = null;
     }
 
+    if (window.cwgMyPresenceKey && db) {
+        try { db.ref(`activity_cwg/handshake/${window.cwgMyPresenceKey}`).remove(); } catch(e) {}
+        window.cwgMyPresenceKey = null;
+    }
+
     window.cleanCwgPrivateChat();
 
     const timerDisp = document.getElementById('cwgQsoTimerDisplay');
@@ -573,7 +578,9 @@ window.checkCwgDoubleHandshakeMatch = function() {
     window.cwgMyHandshakeTs = nowTs;
 
     const myPresenceKey = `${myCall}_${partnerCall}_${band}`;
+    window.cwgMyPresenceKey = myPresenceKey;
     const myPresenceRef = db.ref(`activity_cwg/handshake/${myPresenceKey}`);
+    myPresenceRef.onDisconnect().remove();
     myPresenceRef.set({
         myCall: myCall,
         partnerCall: partnerCall,
@@ -610,7 +617,8 @@ window.checkCwgDoubleHandshakeMatch = function() {
         const data = snap.val() || {};
         const partnerTs = data.ts || 0;
 
-        if (Math.abs(nowTs - partnerTs) < 300000) {
+        // VERIFICA DI FRESCHEZZA STRETTA: Entrambi i timestamp devono essere stati creati a meno di 60 secondi di distanza!
+        if (Math.abs(nowTs - partnerTs) <= 60000) {
             if (statusBox) {
                 statusBox.style.display = "block";
                 statusBox.style.background = "#ffffff";
