@@ -109,6 +109,7 @@ window.resetCwgForm = function() {
     window.cwgExchangeSecondsLeft = 120;
     window.cwgGeneratedTxKey = "";
     window.isCwgInitiator = false;
+    window.cwgQsoActiveInGame = false;
     window.cwgQsoStartTimestamp = 0;
     localStorage.removeItem('cwgame_active_qso_session');
 
@@ -545,6 +546,20 @@ window.cleanCwgPrivateChat = function() {
     if (chatSection) chatSection.style.display = "none";
 };
 
+window.toggleCwgPrivateChatBody = function() {
+    const chatBody = document.getElementById('cwgPrivateChatBody');
+    const btn = document.getElementById('btnToggleCwgPrivateChat');
+    if (!chatBody || !btn) return;
+
+    if (chatBody.style.display === 'none') {
+        chatBody.style.display = 'block';
+        btn.textContent = '🔼 Riduci';
+    } else {
+        chatBody.style.display = 'none';
+        btn.textContent = '🔽 Espandi';
+    }
+};
+
 window.checkCwgDoubleHandshakeMatch = function() {
     if (!db) return;
 
@@ -613,12 +628,21 @@ window.checkCwgDoubleHandshakeMatch = function() {
     });
 
     partnerPresenceRef.on('value', snap => {
-        if (!snap.exists()) return;
+        if (!snap.exists()) {
+            // SE IL QSO ERA IN CORSO E IL CORRISPONDENTE ANNULLA O SI SCOLLEGA:
+            if (window.cwgQsoTimerInterval || window.cwgQsoActiveInGame) {
+                alert(`⚠️ Il corrispondente ${partnerCall} ha abbandonato o annullato il QSO.\n\nIl collegamento è stato annullato (0 Punti).`);
+                window.resetCwgForm();
+            }
+            return;
+        }
+
         const data = snap.val() || {};
         const partnerTs = data.ts || 0;
 
         // VERIFICA DI FRESCHEZZA STRETTA: Entrambi i timestamp devono essere stati creati a meno di 60 secondi di distanza!
         if (Math.abs(nowTs - partnerTs) <= 60000) {
+            window.cwgQsoActiveInGame = true;
             if (statusBox) {
                 statusBox.style.display = "block";
                 statusBox.style.background = "#ffffff";
@@ -673,9 +697,9 @@ window.startCwgQsoTimer = function() {
     const sharedQsoKey = callsArray.join("_") + "_" + band;
 
     if (db) {
-        db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKey}/${myCall}`).once('value', snap => {
+        db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKey}`).once('value', snap => {
             if (snap.exists()) {
-                alert(`⚠️ Hai già registrato un QSO per la banda ${band.toUpperCase()} oggi con ${partnerCall}!\n\nNon è possibile effettuare un secondo QSO sulla stessa banda nello stesso giorno.`);
+                alert(`⚠️ Risulta già registrato un QSO per la banda ${band.toUpperCase()} oggi tra ${myCall} e ${partnerCall}!\n\nNon è possibile effettuare un secondo QSO sulla stessa banda nello stesso giorno.`);
                 window.resetCwgForm();
                 return;
             }
