@@ -1,5 +1,7 @@
 // js/spectator_manager.js - Gestore Modalità Spettatore (Ascolto e Monitoraggio Inserimento Mirato)
 
+window.spectatorAppendedRows = new Set();
+
 window.watchSpecificRoom = function(code, targetName) {
     if (typeof window.currentSpectatorCleanup === 'function') {
         window.currentSpectatorCleanup();
@@ -11,6 +13,7 @@ window.watchSpecificRoom = function(code, targetName) {
     isCourseMode = false;
     wordIndex = 0;
     gameWords = [];
+    window.spectatorAppendedRows = new Set();
     window.lastSpectatorAudioTs = 0;
     if (typeof stopAllMorseAudio === 'function') stopAllMorseAudio();
 
@@ -35,51 +38,49 @@ window.watchSpecificRoom = function(code, targetName) {
 
     const roomRef = db.ref(`rooms/${roomCode}`);
     const liveAudioRef = db.ref(`rooms/${roomCode}/liveAudio`);
+    const spectatorFeedRef = db.ref(`rooms/${roomCode}/spectatorFeed`);
+    const playersRef = db.ref(`rooms/${roomCode}/players`);
     let statusRef = roomRef.child('status');
-    let lastUpdateRef = null;
-    let hostScoreRef = null;
 
-    // 1. Ascolto mirato dello STATO della stanza
+    // 1. Ascolto dello STATO della stanza
     statusRef.on('value', snap => {
         if (currentMode !== 'spectator') return;
-        if (!snap.exists() || snap.val() === 'finished' || snap.val() === 'closed') {
+        if (snap.exists() && (snap.val() === 'finished' || snap.val() === 'closed')) {
             showToast("🏁 La partita che stavi osservando è terminata!");
             window.stopWatchingCleanly();
         }
     });
 
-    // 2. Lettura singola dell'Host ID ed ascolto del solo punteggio e dell'ultima parola
-    roomRef.child('hostId').once('value', hSnap => {
-        if (currentMode !== 'spectator' || !hSnap.exists()) return;
-        const hostId = hSnap.val();
+    // 2. Ascolto FEED SPETTATORE diretto in tempo reale (Scorrimento parole e punteggio)
+    let lastFeedTs = 0;
+    spectatorFeedRef.on('value', snap => {
+        if (currentMode !== 'spectator' || !snap.exists()) return;
+        const feed = snap.val();
 
-        // Lettura iniziale storico parole
-        roomRef.child(`players/${hostId}/matchDetailsFull`).once('value', initSnap => {
-            if (currentMode !== 'spectator') return;
-            if (els.tableBody) els.tableBody.innerHTML = "";
-            if (initSnap.exists()) {
-                initSnap.val().forEach(row => window.appendSpectatorRow(row));
+        if (feed && feed.ts && feed.ts > lastFeedTs) {
+            lastFeedTs = feed.ts;
+
+            if (els.wpmDisplay) els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${feed.wpm || 20}`;
+            if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${feed.score || 0}`;
+            if (els.wordIndexDisplay) els.wordIndexDisplay.textContent = `${feed.wordIndex || 1} / ${window.requestedWordCount || 10}`;
+
+            if (feed.lastUpdate) {
+                window.appendSpectatorRow(feed.lastUpdate);
             }
-        });
+        }
+    });
 
-        // Ascolto mirato dell'ultimo aggiornamento parola
-        lastUpdateRef = roomRef.child(`players/${hostId}/lastUpdate`);
-        lastUpdateRef.on('value', dSnap => {
-            if (currentMode !== 'spectator') return;
-            const lastRow = dSnap.val();
-            if (lastRow) window.appendSpectatorRow(lastRow);
-        });
-
-        // Ascolto mirato del solo punteggio e WPM
-        hostScoreRef = roomRef.child(`players/${hostId}`);
-        hostScoreRef.on('value', pSnap => {
-            if (currentMode !== 'spectator') return;
-            const pData = pSnap.val();
-            if (pData) {
-                if (els.wpmDisplay) els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${pData.wpm || 20}`;
-                if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${pData.score || 0}`;
+    // Fallback per giocatori in stanze tradizionali o multiplayer
+    playersRef.on('child_changed', pSnap => {
+        if (currentMode !== 'spectator' || !pSnap.exists()) return;
+        const pData = pSnap.val();
+        if (pData) {
+            if (els.wpmDisplay) els.wpmDisplay.textContent = `👁️ SPETTATORE | WPM: ${pData.wpm || 20}`;
+            if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${pData.score || 0}`;
+            if (pData.lastUpdate) {
+                window.appendSpectatorRow(pData.lastUpdate);
             }
-        });
+        }
     });
 
     // 3. Ascolto Audio Morse in diretta
@@ -104,25 +105,35 @@ window.watchSpecificRoom = function(code, targetName) {
     window.currentSpectatorCleanup = function() {
         console.log("🧹 Spectator Cleanup Executed");
         try { statusRef.off(); } catch(e){}
-        if (lastUpdateRef) { try { lastUpdateRef.off(); } catch(e){} }
-        if (hostScoreRef) { try { hostScoreRef.off(); } catch(e){} }
+        try { spectatorFeedRef.off(); } catch(e){}
+        try { playersRef.off(); } catch(e){}
         try { liveAudioRef.off(); } catch(e){}
         try { mySpectatorRef.remove(); } catch(e){}
     };
 };
 
 window.appendSpectatorRow = function(detail) {
-    if (!els.tableBody || !detail) return;
+    if (!els.tableBody || !detail || !detail.real) return;
+
+    const rowKey = `${detail.ts || ''}_${detail.real}_${detail.typed || ''}`;
+    if (window.spectatorAppendedRows.has(rowKey)) return;
+    window.spectatorAppendedRows.add(rowKey);
+
     const tr = document.createElement('tr');
     const tdTyped = document.createElement('td'); tdTyped.textContent = detail.typed || "-";
     const tdReal = document.createElement('td');
-    window.renderDiffSecure(tdReal, detail.real, detail.typed);
+    if (typeof window.renderDiffSecure === 'function') {
+        window.renderDiffSecure(tdReal, detail.real, detail.typed || "");
+    } else {
+        tdReal.textContent = detail.real;
+    }
+
     const tdWpm = document.createElement('td');
     tdWpm.style.textAlign = 'center';
     tdWpm.style.fontWeight = 'bold';
     tdWpm.style.color = '#ff9800';
     tdWpm.style.fontSize = '0.85em';
-    tdWpm.textContent = `${detail.wpm || currentWpm} WPM`;
+    tdWpm.textContent = `${detail.wpm || 20} WPM`;
 
     const tdPoints = document.createElement('td');
     tdPoints.style.textAlign = 'center';

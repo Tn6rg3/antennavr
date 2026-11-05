@@ -2364,6 +2364,24 @@ window.handleWordSubmission = function(userWord) {
     };
     matchDetailsArray.push(lastEntry);
 
+    // FEED IN TEMPO REALE PER GLI SPETTATORI / OSSERVATORI
+    if (roomCode && db) {
+        db.ref(`rooms/${roomCode}/players/${window.myId}`).update({
+            score: totalScore,
+            wpm: currentWpm,
+            wordIndex: wordIndex + 1,
+            lastUpdate: lastEntry
+        }).catch(() => {});
+
+        db.ref(`rooms/${roomCode}/spectatorFeed`).set({
+            lastUpdate: lastEntry,
+            score: totalScore,
+            wpm: currentWpm,
+            wordIndex: wordIndex + 1,
+            ts: Date.now()
+        }).catch(() => {});
+    }
+
     // Salva lo stato di avanzamento in tempo reale per la Sfida Tripla
     if (window.currentMode === 'tri_daily' && window.currentTriDailySlotId && db && window.myId) {
         const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
