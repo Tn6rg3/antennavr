@@ -1276,7 +1276,7 @@ window.playNextWord = function() {
     }
 };
 
-window.finishGame = function() {
+window.finishGame = async function() {
     // Se vinciamo a tavolino con 0 punti, diamo un punto simbolico per attivare il salvataggio
     if (totalScore === 0 && !window.isSinglePlayer && !isCourseMode) {
         totalScore = 1;
