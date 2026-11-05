@@ -321,34 +321,13 @@ window.refreshOnlineUsersList = function() {
 
 window.bannedUsersCache = window.bannedUsersCache || {};
 
-window.renderOrUpdateUserListItem = async function(userId, u) {
+window.renderOrUpdateUserListItem = function(userId, u) {
     const isValId = (typeof window.isValidTelegramId === 'function') ? window.isValidTelegramId(userId) : (userId && userId !== 'undefined' && userId !== 'null' && userId !== '0');
 
     if (!els.onlineUsersList || !isValId || userId === myId || userId === window.myId) {
         window.removeUserListItem(userId);
         return;
     }
-
-    // FILTRO RIGIDO BLACKLIST: con cache in memoria per evitare query Firebase ad ogni heartbeat!
-    try {
-        if (db) {
-            let isBanned = window.bannedUsersCache[userId];
-            if (isBanned === undefined) {
-                const [banConfigSnap, banRootSnap] = await Promise.all([
-                    db.ref(`appConfig/bannedUsers/${userId}`).once('value').catch(() => null),
-                    db.ref(`bannedUsers/${userId}`).once('value').catch(() => null)
-                ]);
-                isBanned = (banConfigSnap && banConfigSnap.val() === true) || (banRootSnap && banRootSnap.val() === true);
-                window.bannedUsersCache[userId] = isBanned;
-            }
-
-            if (isBanned) {
-                window.removeUserListItem(userId);
-                db.ref(`presence/${userId}`).remove().catch(() => {});
-                return;
-            }
-        }
-    } catch (err) {}
 
     // Se l'utente ha attivato la privacy online o e offline da piu di 10 minuti, rimuovilo
     const now = Date.now();
@@ -984,8 +963,8 @@ window.listenToRooms = function() {
 
     if (els.waitingRoomsList) els.waitingRoomsList.innerHTML = '';
 
-    // --- FIX: Usiamo public_lobby_rooms per la bacheca (fino a 100 stanze in attesa) ---
-    const lobbyQuery = db.ref('public_lobby_rooms').orderByChild('status').equalTo('waiting').limitToLast(100);
+    // --- FIX: Usiamo public_lobby_rooms per la bacheca (fino a 15 stanze in attesa) ---
+    const lobbyQuery = db.ref('public_lobby_rooms').orderByChild('status').equalTo('waiting').limitToLast(15);
 
     const onAdded = lobbyQuery.on('child_added', snap => {
         const room = snap.val();

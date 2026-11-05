@@ -140,20 +140,16 @@ document.addEventListener('visibilitychange', () => {
 const updateAppStatus = (isFocused) => {
     if (window.isMandatoryAliasPending || window.isUserBanned || !window.myId || !window.db) return;
 
-    db.ref(`presence/${window.myId}`).once('value', s => {
-        if (s.exists()) {
-            db.ref(`presence/${window.myId}`).update({
-                isFocused: isFocused,
-                lastActive: firebase.database.ServerValue.TIMESTAMP
-            });
-        }
-    });
+    db.ref(`presence/${window.myId}`).update({
+        isFocused: isFocused,
+        lastActive: firebase.database.ServerValue.TIMESTAMP
+    }).catch(() => {});
 };
 
-// Heartbeat ogni 15 secondi per confermare la presenza
+// Heartbeat ogni 60 secondi per confermare la presenza con consumo dati ridotto
 setInterval(() => {
     if (!document.hidden) updateAppStatus(true);
-}, 15000);
+}, 60000);
 
 // --- UNLOCK AUDIO (SPECIFICO PER iOS/IPHONE) ---
 // Su iPhone l'audio deve essere attivato da un gesto esplicito dell'utente.
