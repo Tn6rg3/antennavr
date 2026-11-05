@@ -162,8 +162,10 @@ window.resetCwgForm = function() {
         myCallInput.value = window.cleanCallsignString(savedCall);
     }
 
+    if (document.getElementById('cwgLogPartnerCall')) document.getElementById('cwgLogPartnerCall').value = "";
     if (document.getElementById('cwgLogStartTime')) document.getElementById('cwgLogStartTime').value = "";
     if (document.getElementById('cwgLogEndTime')) document.getElementById('cwgLogEndTime').value = "";
+    if (document.getElementById('cwgPrivateChatSection')) document.getElementById('cwgPrivateChatSection').style.display = "none";
 };
 
 window.cancelCwgQso = function() {
@@ -641,20 +643,48 @@ window.checkCwgDoubleHandshakeMatch = function() {
 };
 
 window.startCwgQsoTimer = function() {
+    const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || "");
     const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
+    const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
+
+    if (!myCall || myCall.length < 2) {
+        return alert("⚠️ Inserisci prima il tuo Nominativo (Call) valido.");
+    }
     if (!partnerCall || partnerCall.length < 2) {
-        return alert("⚠️ Inserisci prima un Nominativo (Call) del corrispondente valido.");
+        return alert("⚠️ Inserisci il Nominativo (Call) del corrispondente prima di avviare il QSO.");
+    }
+    if (myCall === partnerCall) {
+        return alert("⚠️ Non puoi effettuare un QSO Activity con te stesso.");
     }
 
-    const cancelBtn = document.getElementById('btnCwgCancelQso');
-    const startBtn = document.getElementById('btnCwgStartTimer');
-    if (startBtn) {
-        startBtn.disabled = true;
-        startBtn.textContent = "⏳ IN ATTESA DEL CORRISPONDENTE...";
-    }
-    if (cancelBtn) cancelBtn.style.display = "block";
+    const year = new Date().getFullYear();
+    const monthStr = year + "-" + String(new Date().getMonth() + 1).padStart(2, '0');
+    const dayStr = monthStr + "-" + String(new Date().getDate()).padStart(2, '0');
 
-    window.checkCwgDoubleHandshakeMatch();
+    const callsArray = [myCall, partnerCall].sort();
+    const sharedQsoKey = callsArray.join("_") + "_" + band;
+
+    if (db) {
+        db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKey}/${myCall}`).once('value', snap => {
+            if (snap.exists()) {
+                alert(`⚠️ Hai già registrato un QSO per la banda ${band.toUpperCase()} oggi con ${partnerCall}!\n\nNon è possibile effettuare un secondo QSO sulla stessa banda nello stesso giorno.`);
+                window.resetCwgForm();
+                return;
+            }
+
+            const cancelBtn = document.getElementById('btnCwgCancelQso');
+            const startBtn = document.getElementById('btnCwgStartTimer');
+            if (startBtn) {
+                startBtn.disabled = true;
+                startBtn.textContent = "⏳ IN ATTESA DEL CORRISPONDENTE...";
+            }
+            if (cancelBtn) cancelBtn.style.display = "block";
+
+            window.checkCwgDoubleHandshakeMatch();
+        });
+    } else {
+        window.checkCwgDoubleHandshakeMatch();
+    }
 };
 
 window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator = true) {
