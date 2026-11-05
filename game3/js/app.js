@@ -4050,7 +4050,6 @@ window.openMaxWpmRecordsModal = function() {
         console.error("Max WPM Modal Error:", err);
         container.innerHTML = '<p style="text-align:center; font-size:0.85em; color:var(--hint-color); padding:10px;">Errore caricamento record.</p>';
     });
-    });
 };
 
 window.toggleCustomSettingsBox = function() {
