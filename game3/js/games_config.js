@@ -341,18 +341,13 @@ window.GAME_MODES = {
         fixedSpeedAllowed: false,
         spacingConfigurable: false,
         generateWords: function(num, dicts) {
-            const prefixes = ["I", "IK", "IZ", "IN", "IT", "IS", "IU", "IW", "W", "K", "N", "A", "WA", "WB", "DL", "DJ", "DK", "DO", "EA", "EB", "EC", "F", "G", "M", "GW", "GM", "9A", "S5", "OK", "OM", "SP", "SQ", "UA", "UR", "EW", "ER", "YO", "YU", "HA", "LZ", "OE", "HB", "PA", "PB", "ON", "VE", "VK", "ZL", "JA", "PY", "LU", "CX"];
             let words = [];
             for (let j = 0; j < num; j++) {
-                let callsign = prefixes[Math.floor(Math.random() * prefixes.length)] + Math.floor(Math.random() * 10);
-                let suffixLen = (Math.random() > 0.9) ? 1 : (Math.random() > 0.7) ? 2 : 3;
-                for (let i = 0; i < suffixLen; i++) {
-                    callsign += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
+                if (typeof window.generateRealisticCallsign === 'function') {
+                    words.push(window.generateRealisticCallsign());
+                } else {
+                    words.push("IK1ABC");
                 }
-                if (Math.random() > 0.90) {
-                    callsign += ["/QRP", "/P", "/M", "/AM", "/MM"][Math.floor(Math.random() * 5)];
-                }
-                words.push(callsign);
             }
             return words;
         }

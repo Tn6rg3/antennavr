@@ -162,21 +162,75 @@ window.getGameWords = function(num, mode, options = {}) {
     return fisherYatesShuffle(window.masterDictionary).slice(0, num).map(w => w.toUpperCase());
 };
 
-window.getCallsignWords = function(count = 50) {
-    if (window.gameModesConfig && window.gameModesConfig.callsign && typeof window.gameModesConfig.callsign.generator === 'function') {
-        return window.gameModesConfig.callsign.generator(count);
+window.generateRealisticCallsign = function() {
+    const prefixes = [
+        "I", "IK", "IZ", "IU", "IT9", "IV3", "IW", "IS0", "IN3",
+        "K", "W", "N", "AA", "AB", "AC", "KB", "KC", "KD", "WA", "WB",
+        "DL", "DK", "DF", "DG", "DH", "DO", "DJ",
+        "F", "FC", "FG", "FO",
+        "G", "GX", "M", "2E", "GW", "GM",
+        "EA", "EB", "EC", "ED",
+        "PA", "PB", "PD", "PE",
+        "OH", "OH0", "OG",
+        "JA", "JH", "JR",
+        "VK", "VK2", "VK3",
+        "ZS", "ZR",
+        "PY", "PU",
+        "LU", "LW",
+        "VE", "VA", "VY",
+        "LA", "LB",
+        "SM", "SA",
+        "ON", "OO",
+        "OE", "OE3",
+        "HB9", "HB0",
+        "OK", "OL",
+        "OM",
+        "SP", "SQ", "SN",
+        "HA", "HG",
+        "YO", "YR",
+        "LZ",
+        "SV", "SZ",
+        "9A",
+        "S5",
+        "E7",
+        "UR", "US", "UW",
+        "RA", "RK", "RU", "RW"
+    ];
+
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const digits = "0123456789";
+
+    let prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+
+    if (!/\d/.test(prefix)) {
+        prefix += digits[Math.floor(Math.random() * digits.length)];
     }
+
+    let suffixLength = (prefix.length < 3) ? 3 : (Math.random() < 0.65 ? 3 : 2);
+
+    let suffix = "";
+    for (let i = 0; i < suffixLength; i++) {
+        suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+
+    let callsign = prefix + suffix;
+
+    while (callsign.length < 5) {
+        callsign += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+
+    if (Math.random() < 0.12) {
+        const modifiers = ["/P","/QRP"];
+        callsign += modifiers[Math.floor(Math.random() * modifiers.length)];
+    }
+
+    return callsign;
+};
+
+window.getCallsignWords = function(count = 50) {
     let words = [];
-    let prefixes = ["I", "IK", "IZ", "IU", "IT9", "K", "W", "N", "AA", "DL", "F", "G", "EA", "PA", "OH", "JA", "VK", "ZS", "PY", "LU", "VE", "LA", "SM", "ON", "OE", "HB9", "OK", "OM", "SP", "HA", "YO", "LZ", "SV", "9A", "S5", "E7", "UR", "RA"];
     for (let i = 0; i < count; i++) {
-        let callsign = prefixes[Math.floor(Math.random() * prefixes.length)] + Math.floor(Math.random() * 10);
-        for (let j = 0; j < Math.floor(Math.random() * 3) + 1; j++) {
-            callsign += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
-        }
-        if (Math.random() < 0.15) {
-            callsign += ["/QRP", "/P"][Math.floor(Math.random() * 2)];
-        }
-        words.push(callsign);
+        words.push(window.generateRealisticCallsign());
     }
     return words;
 };
