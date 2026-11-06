@@ -279,26 +279,32 @@ window.initGlobalNotificationListener = function() {
 };
 
 window.handleNewChatMessage = function(refKey, msg, msgKey) {
+    if (!msg) return;
     const isGlobal = (refKey === 'globalChat');
+    const isCwActive = (localStorage.getItem('cwgame_chat_cw_enabled') === 'true');
+
     const shouldNotifyUI = (isGlobal
         ? (!isGlobalChatMuted && !gameRunning && (!isChatDrawerOpen || activeChatContext !== 'global'))
         : (!isChatDrawerOpen || refKey !== (activeChatContext === 'room' ? roomCode : myTeamId)));
 
     if (shouldNotifyUI) {
         const prefix = isGlobal ? "🌎" : "💬";
+        const msgText = msg.text ? String(msg.text) : "";
         if (isCwActive) {
-            showToast(`${prefix} ${msg.name}: [📻 Messaggio CW...]`);
+            showToast(`${prefix} ${msg.name || 'Utente'}: [📻 Messaggio CW...]`);
         } else {
-            showToast(`${prefix} ${msg.name}: ${msg.text.substring(0,25)}...`);
+            showToast(`${prefix} ${msg.name || 'Utente'}: ${msgText.substring(0, 25)}${msgText.length > 25 ? '...' : ''}`);
             if (!isGlobalChatMuted && typeof playNotificationSound === 'function') playNotificationSound();
         }
     }
 
     // 2. Audio CW (Sempre se ON, tranne in partita)
-    if (isCwActive && !gameRunning && !isPlayingBR) {
+    if (isCwActive && !gameRunning) {
         if (msgKey !== window.lastPlayedCwMsgKey) {
             window.lastPlayedCwMsgKey = msgKey;
-            window.enqueueChatCwAudio(msg.text);
+            if (typeof window.enqueueChatCwAudio === 'function') {
+                window.enqueueChatCwAudio(msg.text);
+            }
         }
     }
 };
