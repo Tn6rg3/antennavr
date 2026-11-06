@@ -266,8 +266,10 @@ window.downloadBackupFileDirectly = async function() {
     const jsonStr = textarea.value;
     const fileName = `cwgame_backup_${window.myId || 'user'}_${new Date().toISOString().split('T')[0]}.json`;
 
-    // 1. TENTATIVO VIA FILE SYSTEM ACCESS API
-    if (typeof window.showSaveFilePicker === 'function') {
+    const isInsideTelegramIframe = (window.self !== window.top);
+
+    // Se siamo all'interno dell'iframe di Telegram, bypassiamo la chiamata a showSaveFilePicker evitando avvisi in console
+    if (!isInsideTelegramIframe && typeof window.showSaveFilePicker === 'function') {
         try {
             const handle = await window.showSaveFilePicker({
                 suggestedName: fileName,
@@ -283,12 +285,11 @@ window.downloadBackupFileDirectly = async function() {
             alert("✅ FILE DI BACKUP SALVATO CON SUCCESSO!\n\nIl file è stato salvato nella cartella che hai scelto.");
             return;
         } catch (e) {
-            if (e.name === 'AbortError') return; // L'utente ha annullato
-            console.warn("SaveFilePicker non consentito nel sandbox di Telegram, procedo con Copia negli appunti...", e);
+            if (e.name === 'AbortError') return;
         }
     }
 
-    // 2. FALLBACK PER IFRAME SANDBOXED TELEGRAM: Copia direttamente negli appunti
+    // FALLBACK SILENZIOSO PER TELEGRAM WEBAPP: Copia direttamente negli appunti
     window.copyBackupToClipboardWithText(jsonStr);
 };
 
