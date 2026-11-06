@@ -292,6 +292,15 @@ window.loadProfileInfo = async function() {
         return 0;
     };
 
+    const formatRecordDate = (m) => {
+        const ts = getRecordTs(m);
+        if (ts > 0) {
+            const d = new Date(ts);
+            return `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
+        }
+        return "Data recente";
+    };
+
     // DEDUPLICAZIONE RIGIDA: Raggruppa per modalità, punteggio e finestra temporale (10 sec)
     const uniqueMap = new Map();
     combinedList.forEach(m => {
