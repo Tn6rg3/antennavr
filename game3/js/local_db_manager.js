@@ -106,29 +106,30 @@ window.loadLocalMatchHistory = function(limit = 50) {
     });
 };
 
-// 4. TELEGRAM CLOUDSTORAGE API - AUTOMATICO REAL-TIME
+// 4. TELEGRAM CLOUDSTORAGE API - AUTOMATICO REAL-TIME (Rispettando il limite di 4 KB per chiave di Telegram)
 window.autoSyncToTelegramCloudStorage = async function() {
     const tg = window.Telegram?.WebApp;
     if (!tg || !tg.CloudStorage || typeof tg.CloudStorage.setItem !== 'function') return;
 
     try {
-        const history = await window.loadLocalMatchHistory(30); // Sincronizza le ultime 30 partite
+        const history = await window.loadLocalMatchHistory(15);
         if (!history || history.length === 0) return;
 
+        // Formato ultra-compatto (sotto 1.2 KB per rientrare tassativamente nel limite di 4096 Byte di Telegram)
         const compactData = history.map(h => ({
-            ts: h.ts,
-            date: h.date,
-            mode: h.mode,
-            score: h.score,
-            wpm: h.wpm,
-            wc: h.wordCount,
-            histKey: h.histKey || h.key || "",
-            details: h.details || []
+            t: Number(h.ts || 0),
+            d: String(h.date || ''),
+            m: String(h.mode || 'standard'),
+            s: Number(h.score || 0),
+            w: Number(h.wpm || 20),
+            c: Number(h.wordCount || 10),
+            k: String(h.histKey || h.key || '')
         }));
 
         const jsonStr = JSON.stringify(compactData);
         tg.CloudStorage.setItem('cwgame_history_cloud', jsonStr, (err, success) => {
-            if (success) console.log("Telegram CloudStorage: Sincronizzazione automatica completata.");
+            if (err) console.warn("Telegram CloudStorage setItem Error:", err);
+            else if (success) console.log("Telegram CloudStorage: Sincronizzazione automatica completata con successo!");
         });
     } catch(e) {
         console.warn("Telegram CloudStorage Sync Warn:", e);
@@ -156,17 +157,17 @@ window.syncFromTelegramCloudStorage = function() {
                         let importedCount = 0;
 
                         cloudMatches.forEach(item => {
-                            const itemTs = Number(item.ts || 0);
+                            const itemTs = Number(item.t || item.ts || 0);
                             if (itemTs > 0 && !localTsSet.has(itemTs)) {
                                 store.add({
-                                    ts: item.ts,
-                                    date: item.date,
-                                    mode: item.mode,
-                                    score: item.score,
-                                    wpm: item.wpm,
-                                    wordCount: item.wc,
-                                    histKey: item.histKey || "",
-                                    details: item.details || []
+                                    ts: itemTs,
+                                    date: item.d || item.date,
+                                    mode: item.m || item.mode,
+                                    score: item.s || item.score,
+                                    wpm: item.w || item.wpm,
+                                    wordCount: item.c || item.wordCount,
+                                    histKey: item.k || item.histKey || "",
+                                    details: []
                                 });
                                 importedCount++;
                             }
@@ -178,6 +179,15 @@ window.syncFromTelegramCloudStorage = function() {
                                 window.loadProfileInfo();
                             }
                         }
+                    }
+                } catch(e) {
+                    console.warn("Telegram CloudStorage Parse Error:", e);
+                }
+            }
+            resolve(true);
+        });
+    });
+};
                     }
                 } catch(e) {
                     console.warn("Telegram CloudStorage Parse Error:", e);
