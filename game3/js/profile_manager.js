@@ -627,6 +627,38 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
             return mode === 'daily_challenge';
         }).sort((a,b) => getMatchTs(a) - getMatchTs(b));
 
+        // RECUPERO AUTOMATICO DA FIREBASE: Eseguito 1 sola volta se in locale ce ne sono meno di 2, poi salvato per sempre in locale!
+        if (dailyMatches.length < 2 && db && window.myId && !window.hasAlreadySyncedPastDailyMatches) {
+            window.hasAlreadySyncedPastDailyMatches = true;
+            db.ref(`users/${window.myId}/history`).orderByChild('mode').equalTo('daily_challenge').once('value', snap => {
+                if (snap.exists()) {
+                    let fetchedDaily = [];
+                    snap.forEach(c => {
+                        const val = c.val();
+                        if (val) {
+                            const rec = { key: c.key, ...val };
+                            fetchedDaily.push(rec);
+                            if (typeof window.saveLocalMatchRecord === 'function') {
+                                window.saveLocalMatchRecord({
+                                    ts: val.ts || (val.date ? new Date(val.date).getTime() : Date.now()),
+                                    date: val.date,
+                                    mode: 'daily_challenge',
+                                    score: val.score || 0,
+                                    wpm: val.wpm || 20,
+                                    wordCount: val.wordCount || 10,
+                                    details: val.details || []
+                                });
+                            }
+                        }
+                    });
+                    if (fetchedDaily.length > dailyMatches.length) {
+                        window.renderAccuracyTrend(trendData, fetchedDaily);
+                        return;
+                    }
+                }
+            }).catch(() => {});
+        }
+
         if (dailyMatches.length > 0) {
             dailyMatches.forEach((m, idx) => {
                 let acc = -1;
