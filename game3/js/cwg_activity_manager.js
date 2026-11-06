@@ -323,7 +323,12 @@ window.listenToCwgLiveQsosTable = function() {
     const tableBody = document.getElementById('cwgLiveQsosTableBody');
     if (!tableBody) return;
 
-    db.ref('activity_cwg/handshake').limitToLast(30).on('value', snap => {
+    if (window.cwgLiveQsosRef) {
+        try { window.cwgLiveQsosRef.off(); } catch(e) {}
+    }
+
+    window.cwgLiveQsosRef = db.ref('activity_cwg/handshake').limitToLast(15);
+    window.cwgLiveQsosRef.on('value', snap => {
         if (!tableBody) return;
         tableBody.innerHTML = '';
 

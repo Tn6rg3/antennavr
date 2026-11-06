@@ -804,11 +804,9 @@ window.checkAllInactiveStudents = function() {
 };
 
 window.listenToCourseEnrollment = function() {
-    const activeRef = db.ref('courseActiveEnrollments');
-    activeRef.on('value', snap => {
-        const data = snap.val() || {};
-        const entries = Object.values(data);
-        const studentCount = entries.filter(e => e.role !== 'tutor').length;
+    if (!db) return;
+    db.ref('appConfig/courseEnrollmentCount').once('value', snap => {
+        const studentCount = snap.exists() ? Number(snap.val()) : 0;
         const badge = document.getElementById('courseEnrollmentBadgeGlobal');
         if (badge) {
             badge.textContent = studentCount;
@@ -820,12 +818,7 @@ window.listenToCourseEnrollment = function() {
                 badge.classList.remove('badge-active');
             }
         }
-
-        // Controllo globale inattivi per tutti i corsisti attivi (con o senza tutor)
-        if (typeof window.checkAllInactiveStudents === 'function') {
-            window.checkAllInactiveStudents();
-        }
-    });
+    }).catch(() => {});
 };
 
 window.checkCourseStartupNotification = function() {

@@ -111,18 +111,7 @@ window.listenToAllTeams = function(isAlreadyInTeam) {
 
             // --- AUTO-PULIZIA AUTOMATICA SQUADRE ORFANE ---
             if (count === 0 || t.status === 'retired') {
-                console.log("Teams Manager: Auto-removing empty or retired team:", child.key);
-                db.ref(`teams/${child.key}`).remove();
-
-                // Pulizia dai tornei in background
-                db.ref('tournaments').once('value', trnSnap => {
-                    if (trnSnap.exists()) {
-                        trnSnap.forEach(ts => {
-                            db.ref(`tournaments/${ts.key}/teams/${child.key}`).remove();
-                            db.ref(`tournaments/${ts.key}/standings/${child.key}`).remove();
-                        });
-                    }
-                });
+                if (window.isAdmin) db.ref(`teams/${child.key}`).remove();
                 return;
             }
 

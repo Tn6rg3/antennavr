@@ -462,6 +462,11 @@ window.detachTempBackgroundListeners = function() {
         } catch(e) {}
         listeners.roomsList = null;
     }
+
+    if (window.cwgLiveQsosRef) {
+        try { window.cwgLiveQsosRef.off(); } catch(e) {}
+        window.cwgLiveQsosRef = null;
+    }
 };
 
 window.listenToOnlineUsers = function() {
