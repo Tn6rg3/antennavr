@@ -1522,6 +1522,9 @@ window.finishGame = async function() {
     }
 
     if (matchDetailsArray.length > 0) {
+        const newHistRef = db.ref(`users/${myId}/history`).push();
+        const histKey = newHistRef.key;
+
         // --- SALVATAGGIO AUTOMATICO LOCALE (INDEXEDDB + TELEGRAM CLOUDSTORAGE) ---
         if (typeof window.saveLocalMatchRecord === 'function') {
             window.saveLocalMatchRecord({
@@ -1531,14 +1534,12 @@ window.finishGame = async function() {
                 score: totalScore,
                 wpm: peakWpm,
                 wordCount: requestedWordCount,
+                histKey: histKey,
                 details: matchDetailsArray
             });
         }
 
-        const newHistRef = db.ref(`users/${myId}/history`).push();
-        const histKey = newHistRef.key;
-
-        // Salvataggio sommario leggero in history (soli 60 Byte) per minimizzare il consumo di banda
+        // Salvataggio sommario leggero in history con il rif al histKey per cross-device sync
         newHistRef.set({
             date: firebase.database.ServerValue.TIMESTAMP,
             mode: window.currentMode,
@@ -1546,7 +1547,8 @@ window.finishGame = async function() {
             wpm: peakWpm,
             type: window.isSinglePlayer ? 'single' : 'multi',
             isAutoAdvance: !!window.isAutoAdvance,
-            wordCount: requestedWordCount
+            wordCount: requestedWordCount,
+            histKey: histKey
         });
 
         // Salvataggio dettagli parole nel nodo dedicato history_details (scaricato solo al click su "Vedi")

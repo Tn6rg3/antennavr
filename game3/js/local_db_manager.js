@@ -53,6 +53,7 @@ window.saveLocalMatchRecord = async function(matchRecord) {
         score: Number(matchRecord.score) || 0,
         wpm: Number(matchRecord.wpm) || 20,
         wordCount: Number(matchRecord.wordCount) || 10,
+        histKey: matchRecord.histKey || matchRecord.key || "",
         details: matchRecord.details || matchRecord.matchDetailsFull || []
     };
 
@@ -111,7 +112,7 @@ window.autoSyncToTelegramCloudStorage = async function() {
     if (!tg || !tg.CloudStorage || typeof tg.CloudStorage.setItem !== 'function') return;
 
     try {
-        const history = await window.loadLocalMatchHistory(30); // Sincronizza le ultime 30 partite in formato compatto
+        const history = await window.loadLocalMatchHistory(30); // Sincronizza le ultime 30 partite
         if (!history || history.length === 0) return;
 
         const compactData = history.map(h => ({
@@ -121,7 +122,8 @@ window.autoSyncToTelegramCloudStorage = async function() {
             score: h.score,
             wpm: h.wpm,
             wc: h.wordCount,
-            detCount: Array.isArray(h.details) ? h.details.length : 0
+            histKey: h.histKey || h.key || "",
+            details: h.details || []
         }));
 
         const jsonStr = JSON.stringify(compactData);
@@ -163,7 +165,8 @@ window.syncFromTelegramCloudStorage = function() {
                                     score: item.score,
                                     wpm: item.wpm,
                                     wordCount: item.wc,
-                                    details: []
+                                    histKey: item.histKey || "",
+                                    details: item.details || []
                                 });
                                 importedCount++;
                             }
@@ -173,6 +176,17 @@ window.syncFromTelegramCloudStorage = function() {
                             console.log(`Telegram CloudStorage: Sincronizzate ${importedCount} nuove partite da smartphone!`);
                             if (typeof window.loadProfileInfo === 'function') {
                                 window.loadProfileInfo();
+                            }
+                        }
+                    }
+                } catch(e) {
+                    console.warn("Telegram CloudStorage Parse Error:", e);
+                }
+            }
+            resolve(true);
+        });
+    });
+};
                             }
                         }
                     }
