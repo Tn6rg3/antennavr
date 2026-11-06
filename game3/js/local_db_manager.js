@@ -259,6 +259,41 @@ window.selectAndCopyTextarea = function() {
     }
 };
 
+window.deleteLocalMatchRecord = function(keyOrTs) {
+    return new Promise((resolve) => {
+        if (!window.isLocalDbReady || !window.localDb || !keyOrTs) {
+            resolve(false);
+            return;
+        }
+
+        try {
+            const tx = window.localDb.transaction(['matchHistory'], 'readwrite');
+            const store = tx.objectStore('matchHistory');
+
+            if (!isNaN(keyOrTs)) {
+                try { store.delete(Number(keyOrTs)); } catch(e){}
+            }
+
+            const request = store.openCursor();
+            request.onsuccess = function(e) {
+                const cursor = e.target.result;
+                if (cursor) {
+                    const val = cursor.value;
+                    if (String(val.id) === String(keyOrTs) || String(val.ts) === String(keyOrTs) || String(val.key) === String(keyOrTs)) {
+                        cursor.delete();
+                    }
+                    cursor.continue();
+                } else {
+                    resolve(true);
+                }
+            };
+            request.onerror = function() { resolve(false); };
+        } catch(e) {
+            resolve(false);
+        }
+    });
+};
+
 window.downloadBackupFileDirectly = async function() {
     const textarea = document.getElementById('backupJsonTextarea');
     if (!textarea || !textarea.value) return;
