@@ -290,39 +290,35 @@ window.loadProfileInfo = async function() {
         return tsB - tsA;
     });
 
-        if (window.userMatchHistory.length === 0) {
-            listContainer.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna partita.</li>';
-            return;
-        }
+    if (window.userMatchHistory.length === 0) {
+        listContainer.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna partita.</li>';
+        return;
+    }
 
-        const frag = document.createDocumentFragment();
-        window.userMatchHistory.slice(0, 15).forEach(match => {
-            const d = new Date(match.date || match.ts || Date.now());
-            const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
-            let modeIcon = match.mode === 'callsign' ? '🎙️' : match.mode === 'pingpong' ? '🏓' : match.mode === 'chars' ? '⌨️' : (match.mode === 'daily_challenge' ? '📅' : '🔤');
+    const frag = document.createDocumentFragment();
+    window.userMatchHistory.slice(0, 15).forEach(match => {
+        const d = new Date(match.date || match.ts || Date.now());
+        const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
+        let modeIcon = match.mode === 'callsign' ? '🎙️' : match.mode === 'pingpong' ? '🏓' : match.mode === 'chars' ? '⌨️' : (match.mode === 'daily_challenge' ? '📅' : '🔤');
 
-            const li = document.createElement('li');
-            li.style.cssText = "flex-direction:column; align-items:flex-start; padding:8px;";
-            li.innerHTML = `
-                <div style="display:flex; justify-content:space-between; width:100%; font-size:0.85em;">
-                    <b>${modeIcon} ${(match.mode || "GIOCO").toUpperCase()}</b>
-                    <span style="color:var(--hint-color)">${dateStr}</span>
+        const li = document.createElement('li');
+        li.style.cssText = "flex-direction:column; align-items:flex-start; padding:8px;";
+        li.innerHTML = `
+            <div style="display:flex; justify-content:space-between; width:100%; font-size:0.85em;">
+                <b>${modeIcon} ${(match.mode || "GIOCO").toUpperCase()}</b>
+                <span style="color:var(--hint-color)">${dateStr}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; width:100%; margin-top:5px; align-items:center;">
+                <span><b>${match.score || 0} pt</b> <small>(${match.wpm || 20} WPM)</small></span>
+                <div style="display:flex; gap:5px;">
+                    <button class="action-btn-small btn-secondary" onclick="window.openMatchDetails('${match.key}')" style="width:auto; padding:2px 10px;">Vedi</button>
+                    <button class="action-btn-small btn-danger" onclick="window.deleteHistoryItem('${match.key}')" style="width:auto; padding:2px 6px;">🗑️</button>
                 </div>
-                <div style="display:flex; justify-content:space-between; width:100%; margin-top:5px; align-items:center;">
-                    <span><b>${match.score || 0} pt</b> <small>(${match.wpm || 20} WPM)</small></span>
-                    <div style="display:flex; gap:5px;">
-                        <button class="action-btn-small btn-secondary" onclick="window.openMatchDetails('${match.key}')" style="width:auto; padding:2px 10px;">Vedi</button>
-                        <button class="action-btn-small btn-danger" onclick="window.deleteHistoryItem('${match.key}')" style="width:auto; padding:2px 6px;">🗑️</button>
-                    </div>
-                </div>
-            `;
-            frag.appendChild(li);
-        });
-        listContainer.appendChild(frag);
-    }).catch(err => {
-        console.error("Profile: Error loading history:", err);
-        listContainer.innerHTML = '<li style="justify-content:center; color:#d32f2f;">Errore caricamento.</li>';
+            </div>
+        `;
+        frag.appendChild(li);
     });
+    listContainer.appendChild(frag);
 };
 
 window.loadAdvancedStats = function() {
