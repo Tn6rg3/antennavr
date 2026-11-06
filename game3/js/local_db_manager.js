@@ -141,21 +141,21 @@ window.syncFromTelegramCloudStorage = function() {
             return;
         }
 
-        // Verifichiamo prima se il database locale è vuoto
-        window.loadLocalMatchHistory(1).then(existing => {
-            if (existing && existing.length > 0) {
-                resolve(true); // Abbiamo già dati locali sul dispositivo
-                return;
-            }
+        tg.CloudStorage.getItem('cwgame_history_cloud', async (err, value) => {
+            if (!err && value) {
+                try {
+                    const cloudMatches = JSON.parse(value);
+                    if (Array.isArray(cloudMatches) && cloudMatches.length > 0 && window.isLocalDbReady && window.localDb) {
+                        const localMatches = await window.loadLocalMatchHistory(100);
+                        const localTsSet = new Set(localMatches.map(m => Number(m.ts || 0)));
 
-            tg.CloudStorage.getItem('cwgame_history_cloud', (err, value) => {
-                if (!err && value) {
-                    try {
-                        const parsed = JSON.parse(value);
-                        if (Array.isArray(parsed) && window.isLocalDbReady && window.localDb) {
-                            const tx = window.localDb.transaction(['matchHistory'], 'readwrite');
-                            const store = tx.objectStore('matchHistory');
-                            parsed.forEach(item => {
+                        const tx = window.localDb.transaction(['matchHistory'], 'readwrite');
+                        const store = tx.objectStore('matchHistory');
+                        let importedCount = 0;
+
+                        cloudMatches.forEach(item => {
+                            const itemTs = Number(item.ts || 0);
+                            if (itemTs > 0 && !localTsSet.has(itemTs)) {
                                 store.add({
                                     ts: item.ts,
                                     date: item.date,
@@ -165,13 +165,22 @@ window.syncFromTelegramCloudStorage = function() {
                                     wordCount: item.wc,
                                     details: []
                                 });
-                            });
-                            console.log(`Telegram CloudStorage: Ripristinate ${parsed.length} partite dal Cloud personale Telegram!`);
+                                importedCount++;
+                            }
+                        });
+
+                        if (importedCount > 0) {
+                            console.log(`Telegram CloudStorage: Sincronizzate ${importedCount} nuove partite da smartphone!`);
+                            if (typeof window.loadProfileInfo === 'function') {
+                                window.loadProfileInfo();
+                            }
                         }
-                    } catch(e) {}
+                    }
+                } catch(e) {
+                    console.warn("Telegram CloudStorage Parse Error:", e);
                 }
-                resolve(true);
-            });
+            }
+            resolve(true);
         });
     });
 };
