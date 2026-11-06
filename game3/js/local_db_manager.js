@@ -179,9 +179,25 @@ window.syncFromTelegramCloudStorage = function() {
 // 5. ESPORTAZIONE BACKUP MANUALE IN CHAT BOT TELEGRAM (.JSON)
 window.exportLocalBackupToTelegramChat = async function() {
     try {
-        const history = await window.loadLocalMatchHistory(100);
+        let history = await window.loadLocalMatchHistory(100);
+
+        // Fallback: se IndexedDB non ha ancora partite salvate, usiamo lo storico in memoria o Firebase!
         if (!history || history.length === 0) {
-            return alert("⚠️ Nessun dato locale da esportare.");
+            if (Array.isArray(window.userMatchHistory) && window.userMatchHistory.length > 0) {
+                history = window.userMatchHistory;
+            } else if (db && window.myId) {
+                const snap = await db.ref(`users/${window.myId}/history`).limitToLast(50).once('value');
+                if (snap.exists()) {
+                    history = [];
+                    snap.forEach(child => {
+                        history.push({ key: child.key, ...child.val() });
+                    });
+                }
+            }
+        }
+
+        if (!history || history.length === 0) {
+            return alert("⚠️ Nessun dato locale o storico trovato da esportare.\n\nGioca almeno 1 partita per generare lo storico!");
         }
 
         const backupObj = {
@@ -194,7 +210,7 @@ window.exportLocalBackupToTelegramChat = async function() {
 
         const jsonStr = JSON.stringify(backupObj, null, 2);
         const blob = new Blob([jsonStr], { type: 'application/json' });
-        const fileName = `cwgame_backup_${window.myId}_${new Date().toISOString().split('T')[0]}.json`;
+        const fileName = `cwgame_backup_${window.myId || 'user'}_${new Date().toISOString().split('T')[0]}.json`;
 
         // Download diretto browser
         const a = document.createElement('a');
@@ -207,7 +223,7 @@ window.exportLocalBackupToTelegramChat = async function() {
         if (typeof showToast === 'function') {
             showToast("💾 Backup generato con successo!");
         }
-        alert("💾 Backup locale generato con successo!\n\nIl file .json è stato scaricato sul tuo dispositivo. Puoi inviarlo nella chat del Bot Telegram per salvarlo per sempre o caricarlo da un altro dispositivo.");
+        alert("💾 Backup generato con successo!\n\nIl file .json è stato scaricato sul tuo dispositivo. Puoi inviarlo nella chat del Bot Telegram per salvarlo per sempre o caricarlo da un altro dispositivo.");
     } catch(e) {
         alert("Errore generazione backup: " + e.message);
     }
