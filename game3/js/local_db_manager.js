@@ -243,20 +243,52 @@ window.copyBackupToClipboardWithText = function(text) {
     }
 };
 
-window.downloadBackupFileDirectly = function() {
+window.downloadBackupFileDirectly = async function() {
     const textarea = document.getElementById('backupJsonTextarea');
     if (!textarea || !textarea.value) return;
 
     const jsonStr = textarea.value;
     const fileName = `cwgame_backup_${window.myId || 'user'}_${new Date().toISOString().split('T')[0]}.json`;
 
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonStr);
-    const dlAnchorElem = document.createElement('a');
-    dlAnchorElem.setAttribute("href", dataStr);
-    dlAnchorElem.setAttribute("download", fileName);
-    document.body.appendChild(dlAnchorElem);
-    dlAnchorElem.click();
-    dlAnchorElem.remove();
+    // 1. APERTURA NATIVA DELLA FINESTRA OS "SALVA CON NOME..." (File System Access API)
+    if (typeof window.showSaveFilePicker === 'function') {
+        try {
+            const handle = await window.showSaveFilePicker({
+                suggestedName: fileName,
+                types: [{
+                    description: 'File Backup JSON (.json)',
+                    accept: { 'application/json': ['.json', '.txt'], 'text/plain': ['.txt'] }
+                }]
+            });
+            const writable = await handle.createWritable();
+            await writable.write(jsonStr);
+            await writable.close();
+            if (typeof showToast === 'function') showToast("💾 File salvato con successo!");
+            alert("✅ FILE DI BACKUP SALVATO CON SUCCESSO!\n\nIl file è stato salvato nella cartella che hai scelto.");
+            return;
+        } catch (e) {
+            if (e.name === 'AbortError') return; // L'utente ha chiuso o annullato la finestra
+            console.warn("SaveFilePicker not supported or blocked, fallback...", e);
+        }
+    }
+
+    // 2. FALLBACK 1: DATA URL ANCHOR DOWNLOAD
+    try {
+        const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+        const blobUrl = URL.createObjectURL(blob);
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.href = blobUrl;
+        dlAnchorElem.download = fileName;
+        dlAnchorElem.target = "_blank";
+        document.body.appendChild(dlAnchorElem);
+        dlAnchorElem.click();
+        setTimeout(() => {
+            dlAnchorElem.remove();
+            URL.revokeObjectURL(blobUrl);
+        }, 1000);
+    } catch(err) {
+        alert("💾 Il testo del backup è stato copiato negli appunti. Puoi incollarlo in un file di testo .txt o nelle tue Note!");
+    }
 };
 
 // 6. IMPORTAZIONE BACKUP MANUALE DA FILE .JSON
