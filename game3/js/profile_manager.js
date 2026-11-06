@@ -283,12 +283,28 @@ window.loadProfileInfo = async function() {
         }
     }
 
+    const getRecordTs = (m) => {
+        if (!m) return 0;
+        if (typeof m.ts === 'number' && m.ts > 0) return m.ts;
+        if (typeof m.date === 'number' && m.date > 0) return m.date;
+        if (typeof m.date === 'string') {
+            const parsed = new Date(m.date).getTime();
+            if (!isNaN(parsed) && parsed > 0) return parsed;
+        }
+        return 0;
+    };
+
+    const formatRecordDate = (m) => {
+        const ts = getRecordTs(m);
+        if (ts > 0) {
+            const d = new Date(ts);
+            return `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
+        }
+        return "Data recente";
+    };
+
     listContainer.innerHTML = '';
-    window.userMatchHistory.sort((a,b) => {
-        const tsA = a.ts || (a.date ? (typeof a.date === 'number' ? a.date : new Date(a.date).getTime()) : 0);
-        const tsB = b.ts || (b.date ? (typeof b.date === 'number' ? b.date : new Date(b.date).getTime()) : 0);
-        return tsB - tsA;
-    });
+    window.userMatchHistory.sort((a,b) => getRecordTs(b) - getRecordTs(a));
 
     if (window.userMatchHistory.length === 0) {
         listContainer.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna partita.</li>';
@@ -297,8 +313,7 @@ window.loadProfileInfo = async function() {
 
     const frag = document.createDocumentFragment();
     window.userMatchHistory.slice(0, 15).forEach(match => {
-        const d = new Date(match.date || match.ts || Date.now());
-        const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
+        const dateStr = formatRecordDate(match);
         let modeIcon = match.mode === 'callsign' ? '🎙️' : match.mode === 'pingpong' ? '🏓' : match.mode === 'chars' ? '⌨️' : (match.mode === 'daily_challenge' ? '📅' : '🔤');
 
         const itemKey = match.key || match.id || match.ts || Date.now();
@@ -1160,20 +1175,29 @@ window.openMatchDetails = function(matchKey) {
         els.matchDetailsModal.style.display = 'flex';
     };
 
-    if (match.details || match.matchDetailsFull || match.matchDetails) {
-        renderDetails(match.details || match.matchDetailsFull || match.matchDetails);
+    const localDetails = (match.details && match.details.length > 0) ? match.details :
+                         ((match.matchDetailsFull && match.matchDetailsFull.length > 0) ? match.matchDetailsFull :
+                         ((match.matchDetails && match.matchDetails.length > 0) ? match.matchDetails : null));
+
+    if (localDetails) {
+        renderDetails(localDetails);
     } else {
-        if (typeof showToast === 'function') showToast("Caricamento dettagli partita...");
-        db.ref(`users/${window.myId}/history_details/${matchKey}`).once('value').then(snap => {
-            if (snap.exists()) {
-                renderDetails(snap.val());
-            } else {
-                showToast("Dettagli parole non disponibili per questa partita.");
-            }
-        }).catch(err => {
-            console.error("Fetch Match Details Error:", err);
-            showToast("Errore caricamento dettagli.");
-        });
+        const fetchKey = match.key || match.histKey || matchKey;
+        if (fetchKey && db && window.myId) {
+            if (typeof showToast === 'function') showToast("Caricamento dettagli da server...");
+            db.ref(`users/${window.myId}/history_details/${fetchKey}`).once('value').then(snap => {
+                if (snap.exists() && snap.val()) {
+                    renderDetails(snap.val());
+                } else {
+                    showToast("Dettagli parole non disponibili per questa partita.");
+                }
+            }).catch(err => {
+                console.error("Fetch Match Details Error:", err);
+                showToast("Errore caricamento dettagli.");
+            });
+        } else {
+            showToast("Dettagli parole non disponibili per questa partita.");
+        }
     }
 };
 
