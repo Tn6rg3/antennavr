@@ -177,8 +177,7 @@ window.playMorseAudio = function(text, wpm, forcePlay = false) {
     return new Promise(resolve => {
         window.resumeAudioContext();
         window.startBluetoothKeepAlive();
-        const isBrActive = (typeof brIsPlaying !== 'undefined' && brIsPlaying);
-        if (!forcePlay && !gameRunning && !isBrActive) { resolve(); return; }
+        if (!forcePlay && !gameRunning) { resolve(); return; }
         window.stopAllMorseAudio();
         const currentToken = window.morsePlayToken;
 

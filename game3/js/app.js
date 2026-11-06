@@ -355,7 +355,6 @@ function clearAllTimers() {
     // Fermiamo tutti gli intervalli e timeout di sistema
     const timers = [
         lobbyTimerInterval, quizTimerInterval, ppTimerInterval,
-        brTimerInterval, brCheckInterval,
         coopTimerInterval, coopDecayInterval,
         courseSessionTimer, coursePauseInterval,
         arcadeNextBrickTimeout, nextWordTimeout,
@@ -364,7 +363,6 @@ function clearAllTimers() {
     timers.forEach(t => { if(t) { clearInterval(t); clearTimeout(t); } });
 
     lobbyTimerInterval = quizTimerInterval = ppTimerInterval = null;
-    brTimerInterval = brCheckInterval = null;
     coopTimerInterval = coopDecayInterval = null;
     courseSessionTimer = coursePauseInterval = null;
     arcadeNextBrickTimeout = null;
@@ -1371,7 +1369,6 @@ window.initMandatoryAliasHandlers = function() {
             await window.ensureUidMapping();
         }
 
-        window.initBattleRoyaleScheduler?.();
         window.initGlobalNotificationListener?.(); // AVVIO LISTENER BACKGROUND
         window.loadRegolamento();
         window.initProgression?.();

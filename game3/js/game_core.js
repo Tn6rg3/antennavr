@@ -101,7 +101,7 @@ window.showScreen = function(screenId) {
         qsoChatBtn.style.display = (screenId === 'qsoArea' && window.isSinglePlayer) ? 'none' : 'block';
     }
 
-    const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'brScreen', 'qsoArea'].includes(screenId);
+    const isPlayingScreen = ['lobbyScreen', 'gameArea', 'countdownScreen', 'quizArea', 'qsoArea'].includes(screenId);
 
     // Inizializziamo il cache DOM se entriamo in gioco
     if (isPlayingScreen && typeof window.initDOMCache === 'function') {

@@ -280,12 +280,8 @@ window.initGlobalNotificationListener = function() {
 
 window.handleNewChatMessage = function(refKey, msg, msgKey) {
     const isGlobal = (refKey === 'globalChat');
-    const isPlayingBR = (typeof brIsPlaying !== 'undefined' && brIsPlaying);
-    const isCwActive = localStorage.getItem('cwgame_chat_cw_enabled') === 'true';
-
-    // 1. Notifica Visiva (Toast)
     const shouldNotifyUI = (isGlobal
-        ? (!isGlobalChatMuted && !gameRunning && !isPlayingBR && (!isChatDrawerOpen || activeChatContext !== 'global'))
+        ? (!isGlobalChatMuted && !gameRunning && (!isChatDrawerOpen || activeChatContext !== 'global'))
         : (!isChatDrawerOpen || refKey !== (activeChatContext === 'room' ? roomCode : myTeamId)));
 
     if (shouldNotifyUI) {
