@@ -181,7 +181,6 @@ window.exportLocalBackupToTelegramChat = async function() {
     try {
         let history = await window.loadLocalMatchHistory(100);
 
-        // Fallback: se IndexedDB non ha ancora partite salvate, usiamo lo storico in memoria o Firebase!
         if (!history || history.length === 0) {
             if (Array.isArray(window.userMatchHistory) && window.userMatchHistory.length > 0) {
                 history = window.userMatchHistory;
@@ -209,21 +208,33 @@ window.exportLocalBackupToTelegramChat = async function() {
         };
 
         const jsonStr = JSON.stringify(backupObj, null, 2);
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const fileName = `cwgame_backup_${window.myId || 'user'}_${new Date().toISOString().split('T')[0]}.json`;
 
-        // Download diretto browser
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        if (typeof showToast === 'function') showToast("💾 Invio file backup in Chat Telegram...");
 
-        if (typeof showToast === 'function') {
-            showToast("💾 Backup generato con successo!");
-        }
-        alert("💾 Backup generato con successo!\n\nIl file .json è stato scaricato sul tuo dispositivo. Puoi inviarlo nella chat del Bot Telegram per salvarlo per sempre o caricarlo da un altro dispositivo.");
+        const serverUrl = (typeof VALIDATION_SERVER_URL !== 'undefined' && VALIDATION_SERVER_URL)
+            ? VALIDATION_SERVER_URL
+            : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
+
+        const formData = new FormData();
+        formData.append('initData', window.tgInitData || "");
+        formData.append('jsonStr', jsonStr);
+
+        fetch(`${serverUrl}?action=send_backup_doc&userId=${window.myId}`, {
+            method: 'POST',
+            body: formData
+        }).then(res => res.json()).then(data => {
+            alert("💾 BACKUP INVIATO IN CHAT TELEGRAM!\n\nApri la chat con il Bot Telegram per trovare il tuo file .json di backup allegato e salvato per sempre!");
+        }).catch(err => {
+            const fileName = `cwgame_backup_${window.myId || 'user'}_${new Date().toISOString().split('T')[0]}.json`;
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            alert("💾 Backup generato! Se usi Telegram mobile, trovi i tuoi dati salvati anche nel Cloud Telegram privato!");
+        });
     } catch(e) {
         alert("Errore generazione backup: " + e.message);
     }
