@@ -2945,6 +2945,27 @@
     </button>
 </div>
 
+<!-- MODAL: BACKUP E RIPRISTINO DATI -->
+<div id="backupModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 480px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 9600; border: 3px solid #ffd700; border-radius: 16px; padding: 16px; flex-direction: column; box-sizing: border-box; box-shadow: 0 15px 50px rgba(0,0,0,0.9); max-height: 90vh; overflow-y: auto;">
+    <h3 style="color: #ffd700; margin: 0 0 10px 0; text-align: center; font-size: 1.2em;">💾 Backup Dati Personali</h3>
+
+    <p style="font-size:0.85em; color:var(--text-color); margin-bottom:10px;">Puoi copiare il testo del backup negli appunti per incollarlo dove vuoi (es. Note o Chat Telegram), oppure scaricare il file .json sul tuo dispositivo.</p>
+
+    <textarea id="backupJsonTextarea" rows="8" readonly style="width:100%; font-family:monospace; font-size:0.75em; padding:8px; background:#000; color:#00ff66; border:1px solid #ffd700; border-radius:8px; box-sizing:border-box; margin-bottom:12px; resize:none;"></textarea>
+
+    <div style="display:flex; flex-direction:column; gap:8px;">
+        <button onclick="window.copyBackupToClipboard()" class="btn-primary" style="padding:12px; font-weight:bold; font-size:0.95em; background:#ffd700; color:#000; border:none; cursor:pointer;">
+            📋 COPIA TESTO BACKUP NEGLI APPUNTI
+        </button>
+        <button onclick="window.downloadBackupFileDirectly()" class="btn-secondary" style="padding:10px; font-size:0.85em; cursor:pointer;">
+            📥 SCARICA FILE .JSON SUL DISPOSITIVO
+        </button>
+        <button onclick="document.getElementById('backupModal').style.display='none'" class="btn-secondary" style="padding:8px; font-size:0.85em; margin-top:4px; cursor:pointer;">
+            Chiudi
+        </button>
+    </div>
+</div>
+
 <!-- MODAL: STATISTICHE CORSISTA (PER TUTOR) -->
 <div id="tutorStudentStatsModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; height: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 9000; border: 2px solid #673ab7; border-radius: 12px; padding: 15px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow-y: auto;">
     <h3 id="tutorStudentStatsTitle" style="margin-top:0; text-align: center; color: #9575cd;">Dati Corsista</h3>
