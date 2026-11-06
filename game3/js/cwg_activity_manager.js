@@ -595,7 +595,14 @@ window.checkCwgDoubleHandshakeMatch = async function() {
                 statusBox.style.display = "block";
                 statusBox.style.background = "#ffffff";
                 statusBox.style.border = "2px solid #d32f2f";
-                statusBox.innerHTML = `<span style="color:#d32f2f; font-weight:bold; font-size:0.85em;">⚠️ QSO GIÀ REGISTRATO OGGI! Hai già registrato un QSO sulla banda ${band.toUpperCase()} oggi con ${partnerCall}. Non è possibile effettuare un secondo QSO sulla stessa banda nello stesso giorno.</span>`;
+                statusBox.textContent = "";
+
+                const span = document.createElement('span');
+                span.style.color = "#d32f2f";
+                span.style.fontWeight = "bold";
+                span.style.fontSize = "0.85em";
+                span.textContent = `⚠️ QSO GIÀ REGISTRATO OGGI! Hai già registrato un QSO sulla banda ${band.toUpperCase()} oggi con ${partnerCall}. Non è possibile effettuare un secondo QSO sulla stessa banda nello stesso giorno.`;
+                statusBox.appendChild(span);
             }
             return;
         }

@@ -1522,6 +1522,19 @@ window.finishGame = async function() {
     }
 
     if (matchDetailsArray.length > 0) {
+        // --- SALVATAGGIO AUTOMATICO LOCALE (INDEXEDDB + TELEGRAM CLOUDSTORAGE) ---
+        if (typeof window.saveLocalMatchRecord === 'function') {
+            window.saveLocalMatchRecord({
+                ts: Date.now(),
+                date: (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0],
+                mode: window.currentMode,
+                score: totalScore,
+                wpm: peakWpm,
+                wordCount: requestedWordCount,
+                details: matchDetailsArray
+            });
+        }
+
         const newHistRef = db.ref(`users/${myId}/history`).push();
         const histKey = newHistRef.key;
 

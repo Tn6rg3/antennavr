@@ -254,7 +254,7 @@ window.switchProfileTab = function(tabId) {
     }
 };
 
-window.loadProfileInfo = function() {
+window.loadProfileInfo = async function() {
     const listContainer = document.getElementById('matchHistoryList');
     if (!listContainer) return;
     listContainer.innerHTML = '<li style="justify-content:center;">Caricamento...</li>';
@@ -265,22 +265,30 @@ window.loadProfileInfo = function() {
         return;
     }
 
-    // OTTIMIZZAZIONE BANDA: Limitiamo il caricamento alle ultime 50 partite giocate
-    db.ref(`users/${userId}/history`).limitToLast(50).once('value').then(snap => {
-        listContainer.innerHTML = '';
-        window.userMatchHistory = [];
+    let localHistory = (typeof window.loadLocalMatchHistory === 'function') ? await window.loadLocalMatchHistory(50) : [];
 
-        if (snap.exists()) {
-            snap.forEach(child => {
-                window.userMatchHistory.push({ key: child.key, ...child.val() });
-            });
+    if (localHistory && localHistory.length > 0) {
+        window.userMatchHistory = localHistory;
+    } else {
+        try {
+            const snap = await db.ref(`users/${userId}/history`).limitToLast(50).once('value');
+            window.userMatchHistory = [];
+            if (snap.exists()) {
+                snap.forEach(child => {
+                    window.userMatchHistory.push({ key: child.key, ...child.val() });
+                });
+            }
+        } catch(e) {
+            window.userMatchHistory = [];
         }
+    }
 
-        window.userMatchHistory.sort((a,b) => {
-            const tsA = a.ts || (a.date ? (typeof a.date === 'number' ? a.date : new Date(a.date).getTime()) : 0);
-            const tsB = b.ts || (b.date ? (typeof b.date === 'number' ? b.date : new Date(b.date).getTime()) : 0);
-            return tsB - tsA;
-        });
+    listContainer.innerHTML = '';
+    window.userMatchHistory.sort((a,b) => {
+        const tsA = a.ts || (a.date ? (typeof a.date === 'number' ? a.date : new Date(a.date).getTime()) : 0);
+        const tsB = b.ts || (b.date ? (typeof b.date === 'number' ? b.date : new Date(b.date).getTime()) : 0);
+        return tsB - tsA;
+    });
 
         if (window.userMatchHistory.length === 0) {
             listContainer.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna partita.</li>';
@@ -341,14 +349,17 @@ window.loadAdvancedStats = function() {
         return;
     }
 
+    const localHistPromise = (typeof window.loadLocalMatchHistory === 'function') ? window.loadLocalMatchHistory(50) : Promise.resolve([]);
+
     Promise.all([
         db.ref(`users/${userId}/stats`).once('value').catch(() => null),
+        localHistPromise,
         db.ref(`users/${userId}/history`).limitToLast(50).once('value').catch(() => null)
-    ]).then(([statsSnap, histSnap]) => {
+    ]).then(([statsSnap, localHist, histSnap]) => {
         const stats = (statsSnap && statsSnap.exists()) ? statsSnap.val() : {};
-        let historyData = [];
+        let historyData = localHist || [];
 
-        if (histSnap && histSnap.exists()) {
+        if (historyData.length === 0 && histSnap && histSnap.exists()) {
             histSnap.forEach(child => {
                 historyData.push({ key: child.key, ...child.val() });
             });
