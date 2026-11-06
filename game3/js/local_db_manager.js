@@ -232,14 +232,30 @@ window.copyBackupToClipboard = function() {
 };
 
 window.copyBackupToClipboardWithText = function(text) {
+    if (!text) return;
+
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(() => {
-            alert("📋 TESTO BACKUP COPIATO NEGLI APPUNTI!\n\nPuoi incollarlo dove desideri (Note, Chat o File di testo).");
+            alert("📋 TESTO BACKUP COPIATO NEGLI APPUNTI!\n\nI browser interni di Telegram bloccano il download diretto di file dentro le WebApp. Il testo del tuo backup è stato copiato negli appunti: puoi incollarlo nelle tue Note, in Chat o in un file di testo!");
         }).catch(() => {
-            alert("📋 Testo selezionato! Puoi copiarlo manualmente dalla casella.");
+            window.selectAndCopyTextarea();
         });
     } else {
-        alert("📋 Testo selezionato! Puoi copiarlo manualmente dalla casella.");
+        window.selectAndCopyTextarea();
+    }
+};
+
+window.selectAndCopyTextarea = function() {
+    const textarea = document.getElementById('backupJsonTextarea');
+    if (textarea) {
+        textarea.focus();
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            alert("📋 TESTO BACKUP COPIATO NEGLI APPUNTI!\n\nPuoi incollarlo dove vuoi (Note o Chat).");
+        } catch(e) {
+            alert("📋 Seleziona il testo nella casella e copialo manualmente.");
+        }
     }
 };
 
@@ -250,7 +266,7 @@ window.downloadBackupFileDirectly = async function() {
     const jsonStr = textarea.value;
     const fileName = `cwgame_backup_${window.myId || 'user'}_${new Date().toISOString().split('T')[0]}.json`;
 
-    // 1. APERTURA NATIVA DELLA FINESTRA OS "SALVA CON NOME..." (File System Access API)
+    // 1. TENTATIVO VIA FILE SYSTEM ACCESS API
     if (typeof window.showSaveFilePicker === 'function') {
         try {
             const handle = await window.showSaveFilePicker({
@@ -267,28 +283,13 @@ window.downloadBackupFileDirectly = async function() {
             alert("✅ FILE DI BACKUP SALVATO CON SUCCESSO!\n\nIl file è stato salvato nella cartella che hai scelto.");
             return;
         } catch (e) {
-            if (e.name === 'AbortError') return; // L'utente ha chiuso o annullato la finestra
-            console.warn("SaveFilePicker not supported or blocked, fallback...", e);
+            if (e.name === 'AbortError') return; // L'utente ha annullato
+            console.warn("SaveFilePicker non consentito nel sandbox di Telegram, procedo con Copia negli appunti...", e);
         }
     }
 
-    // 2. FALLBACK 1: DATA URL ANCHOR DOWNLOAD
-    try {
-        const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
-        const blobUrl = URL.createObjectURL(blob);
-        const dlAnchorElem = document.createElement('a');
-        dlAnchorElem.href = blobUrl;
-        dlAnchorElem.download = fileName;
-        dlAnchorElem.target = "_blank";
-        document.body.appendChild(dlAnchorElem);
-        dlAnchorElem.click();
-        setTimeout(() => {
-            dlAnchorElem.remove();
-            URL.revokeObjectURL(blobUrl);
-        }, 1000);
-    } catch(err) {
-        alert("💾 Il testo del backup è stato copiato negli appunti. Puoi incollarlo in un file di testo .txt o nelle tue Note!");
-    }
+    // 2. FALLBACK PER IFRAME SANDBOXED TELEGRAM: Copia direttamente negli appunti
+    window.copyBackupToClipboardWithText(jsonStr);
 };
 
 // 6. IMPORTAZIONE BACKUP MANUALE DA FILE .JSON
