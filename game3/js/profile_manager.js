@@ -266,22 +266,20 @@ window.loadProfileInfo = async function() {
     }
 
     let localHistory = (typeof window.loadLocalMatchHistory === 'function') ? await window.loadLocalMatchHistory(50) : [];
+    let serverHistory = [];
 
-    if (localHistory && localHistory.length > 0) {
-        window.userMatchHistory = localHistory;
-    } else {
+    if (!localHistory || localHistory.length === 0) {
         try {
             const snap = await db.ref(`users/${userId}/history`).limitToLast(50).once('value');
-            window.userMatchHistory = [];
             if (snap.exists()) {
                 snap.forEach(child => {
-                    window.userMatchHistory.push({ key: child.key, ...child.val() });
+                    serverHistory.push({ key: child.key, ...child.val() });
                 });
             }
-        } catch(e) {
-            window.userMatchHistory = [];
-        }
+        } catch(e) {}
     }
+
+    const combinedList = [...localHistory, ...serverHistory];
 
     const getRecordTs = (m) => {
         if (!m) return 0;
@@ -294,16 +292,24 @@ window.loadProfileInfo = async function() {
         return 0;
     };
 
-    const formatRecordDate = (m) => {
+    // DEDUPLICAZIONE RIGIDA: Raggruppa per modalità, punteggio e finestra temporale (10 sec)
+    const uniqueMap = new Map();
+    combinedList.forEach(m => {
         const ts = getRecordTs(m);
-        if (ts > 0) {
-            const d = new Date(ts);
-            return `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
+        const sig = `${(m.mode || 'standard').toLowerCase()}_${m.score || 0}_${Math.floor(ts / 10000)}`;
+        if (!uniqueMap.has(sig)) {
+            uniqueMap.set(sig, m);
+        } else {
+            const existing = uniqueMap.get(sig);
+            const newHasDetails = Array.isArray(m.details) && m.details.length > 0;
+            const oldHasDetails = Array.isArray(existing.details) && existing.details.length > 0;
+            if (!oldHasDetails && newHasDetails) {
+                uniqueMap.set(sig, m);
+            }
         }
-        return "Data recente";
-    };
+    });
 
-    listContainer.innerHTML = '';
+    window.userMatchHistory = Array.from(uniqueMap.values());
     window.userMatchHistory.sort((a,b) => getRecordTs(b) - getRecordTs(a));
 
     if (window.userMatchHistory.length === 0) {
@@ -1201,9 +1207,31 @@ window.openMatchDetails = function(matchKey) {
     }
 };
 
-window.deleteHistoryItem = function(key) {
-    if (confirm("Eliminare questa partita?")) {
-        db.ref(`users/${myId}/history/${key}`).remove().then(() => window.loadProfileInfo());
+window.deleteHistoryItem = async function(key) {
+    if (!key) return;
+    if (confirm("Eliminare questa partita dallo storico?")) {
+        // 1. Elimina dal database locale IndexedDB
+        if (typeof window.deleteLocalMatchRecord === 'function') {
+            await window.deleteLocalMatchRecord(key);
+        }
+
+        // 2. Elimina da Firebase se la chiave esiste
+        if (db && window.myId) {
+            db.ref(`users/${window.myId}/history/${key}`).remove().catch(() => {});
+            db.ref(`users/${window.myId}/history_details/${key}`).remove().catch(() => {});
+        }
+
+        // 3. Rimuove dalla memoria ed aggiorna la UI in 0ms
+        if (Array.isArray(window.userMatchHistory)) {
+            window.userMatchHistory = window.userMatchHistory.filter(m => (
+                String(m.key) !== String(key) &&
+                String(m.id) !== String(key) &&
+                String(m.ts) !== String(key)
+            ));
+        }
+
+        if (typeof showToast === 'function') showToast("Partita eliminata dallo storico.");
+        window.loadProfileInfo();
     }
 };
 
