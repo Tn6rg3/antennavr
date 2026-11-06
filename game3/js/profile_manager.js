@@ -301,6 +301,7 @@ window.loadProfileInfo = async function() {
         const dateStr = `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}`;
         let modeIcon = match.mode === 'callsign' ? '🎙️' : match.mode === 'pingpong' ? '🏓' : match.mode === 'chars' ? '⌨️' : (match.mode === 'daily_challenge' ? '📅' : '🔤');
 
+        const itemKey = match.key || match.id || match.ts || Date.now();
         const li = document.createElement('li');
         li.style.cssText = "flex-direction:column; align-items:flex-start; padding:8px;";
         li.innerHTML = `
@@ -311,8 +312,8 @@ window.loadProfileInfo = async function() {
             <div style="display:flex; justify-content:space-between; width:100%; margin-top:5px; align-items:center;">
                 <span><b>${match.score || 0} pt</b> <small>(${match.wpm || 20} WPM)</small></span>
                 <div style="display:flex; gap:5px;">
-                    <button class="action-btn-small btn-secondary" onclick="window.openMatchDetails('${match.key}')" style="width:auto; padding:2px 10px;">Vedi</button>
-                    <button class="action-btn-small btn-danger" onclick="window.deleteHistoryItem('${match.key}')" style="width:auto; padding:2px 6px;">🗑️</button>
+                    <button class="action-btn-small btn-secondary" onclick="window.openMatchDetails('${itemKey}')" style="width:auto; padding:2px 10px;">Vedi</button>
+                    <button class="action-btn-small btn-danger" onclick="window.deleteHistoryItem('${itemKey}')" style="width:auto; padding:2px 6px;">🗑️</button>
                 </div>
             </div>
         `;
@@ -1101,14 +1102,23 @@ function showProfileScreen() {
 window.showProfileScreen = showProfileScreen;
 
 window.openMatchDetails = function(matchKey) {
-    if (!window.userMatchHistory) return;
-    const match = window.userMatchHistory.find(m => m.key === matchKey);
-    if (!match || !els.matchDetailsBody || !els.matchDetailsModal) return;
+    if (!window.userMatchHistory || !matchKey) return;
+    const match = window.userMatchHistory.find(m => (
+        m.key === matchKey ||
+        m.id === matchKey ||
+        String(m.key) === String(matchKey) ||
+        String(m.id) === String(matchKey) ||
+        String(m.ts) === String(matchKey)
+    ));
+    if (!match || !els.matchDetailsBody || !els.matchDetailsModal) {
+        if (typeof showToast === 'function') showToast("Dettagli partita non trovati.");
+        return;
+    }
 
     const renderDetails = (detailsList) => {
         els.matchDetailsBody.innerHTML = '';
         const h3 = els.matchDetailsModal.querySelector('h3');
-        if (h3) h3.textContent = `Dettagli Match - ${match.mode.toUpperCase()}`;
+        if (h3) h3.textContent = `Dettagli Match - ${(match.mode || 'GIOCO').toUpperCase()}`;
 
         const frag = document.createDocumentFragment();
         (detailsList || []).forEach(row => {
@@ -1150,8 +1160,8 @@ window.openMatchDetails = function(matchKey) {
         els.matchDetailsModal.style.display = 'flex';
     };
 
-    if (match.details || match.matchDetailsFull) {
-        renderDetails(match.details || match.matchDetailsFull);
+    if (match.details || match.matchDetailsFull || match.matchDetails) {
+        renderDetails(match.details || match.matchDetailsFull || match.matchDetails);
     } else {
         if (typeof showToast === 'function') showToast("Caricamento dettagli partita...");
         db.ref(`users/${window.myId}/history_details/${matchKey}`).once('value').then(snap => {
