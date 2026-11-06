@@ -1209,9 +1209,30 @@ window.openMatchDetails = function(matchKey) {
     if (localDetails) {
         renderDetails(localDetails);
     } else {
-        const fetchKey = match.histKey || match.key || match.id || matchKey;
-        if (fetchKey && db && window.myId) {
-            if (typeof showToast === 'function') showToast("Caricamento dettagli da server...");
+        if (typeof showToast === 'function') showToast("Caricamento dettagli da server...");
+
+        const findFirebaseKeyAndRender = async () => {
+            let realFirebaseKey = match.histKey || match.key;
+
+            if (!realFirebaseKey || !String(realFirebaseKey).startsWith('-')) {
+                try {
+                    const hSnap = await db.ref(`users/${window.myId}/history`).limitToLast(50).once('value');
+                    if (hSnap.exists()) {
+                        const targetTs = match.ts || (match.date ? new Date(match.date).getTime() : 0);
+                        hSnap.forEach(child => {
+                            const val = child.val();
+                            if (val) {
+                                const childTs = val.ts || (val.date ? (typeof val.date === 'number' ? val.date : new Date(val.date).getTime()) : 0);
+                                if (val.mode === match.mode && (Math.abs(childTs - targetTs) < 60000 || val.score === match.score)) {
+                                    realFirebaseKey = child.key;
+                                }
+                            }
+                        });
+                    }
+                } catch(e) {}
+            }
+
+            const fetchKey = realFirebaseKey || matchKey;
             db.ref(`users/${window.myId}/history_details/${fetchKey}`).once('value').then(snap => {
                 if (snap.exists() && snap.val()) {
                     renderDetails(snap.val());
@@ -1222,9 +1243,9 @@ window.openMatchDetails = function(matchKey) {
                 console.error("Fetch Match Details Error:", err);
                 showToast("Errore caricamento dettagli.");
             });
-        } else {
-            showToast("Dettagli parole non disponibili per questa partita.");
-        }
+        };
+
+        findFirebaseKeyAndRender();
     }
 };
 
