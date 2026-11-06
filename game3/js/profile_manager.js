@@ -1132,16 +1132,28 @@ function showProfileScreen() {
 window.showProfileScreen = showProfileScreen;
 
 window.openMatchDetails = function(matchKey) {
-    if (!window.userMatchHistory || !matchKey) return;
-    const match = window.userMatchHistory.find(m => (
-        m.key === matchKey ||
-        m.id === matchKey ||
-        String(m.key) === String(matchKey) ||
-        String(m.id) === String(matchKey) ||
-        String(m.ts) === String(matchKey)
-    ));
-    if (!match || !els.matchDetailsBody || !els.matchDetailsModal) {
+    if (!window.userMatchHistory || matchKey === undefined || matchKey === null || matchKey === '') return;
+
+    const targetKeyStr = String(matchKey).trim();
+
+    const match = window.userMatchHistory.find(m => {
+        if (!m) return false;
+        const keyStr = m.key ? String(m.key).trim() : '';
+        const idStr = m.id !== undefined ? String(m.id).trim() : '';
+        const tsStr = m.ts !== undefined ? String(m.ts).trim() : '';
+        const dateStr = m.date ? String(m.date).trim() : '';
+
+        return (keyStr === targetKeyStr) || (idStr === targetKeyStr) || (tsStr === targetKeyStr) || (dateStr === targetKeyStr);
+    });
+
+    if (!match) {
+        console.warn("openMatchDetails: Match non trovato per key:", matchKey, "in history:", window.userMatchHistory);
         if (typeof showToast === 'function') showToast("Dettagli partita non trovati.");
+        return;
+    }
+
+    if (!els.matchDetailsBody || !els.matchDetailsModal) {
+        console.warn("openMatchDetails: Modal o Body non trovati nel DOM.");
         return;
     }
 
@@ -1197,7 +1209,7 @@ window.openMatchDetails = function(matchKey) {
     if (localDetails) {
         renderDetails(localDetails);
     } else {
-        const fetchKey = match.key || match.histKey || matchKey;
+        const fetchKey = match.histKey || match.key || match.id || matchKey;
         if (fetchKey && db && window.myId) {
             if (typeof showToast === 'function') showToast("Caricamento dettagli da server...");
             db.ref(`users/${window.myId}/history_details/${fetchKey}`).once('value').then(snap => {
