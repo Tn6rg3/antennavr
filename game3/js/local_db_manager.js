@@ -188,15 +188,6 @@ window.syncFromTelegramCloudStorage = function() {
         });
     });
 };
-                    }
-                } catch(e) {
-                    console.warn("Telegram CloudStorage Parse Error:", e);
-                }
-            }
-            resolve(true);
-        });
-    });
-};
 
 // 5. ESPORTAZIONE BACKUP MANUALE IN CHAT BOT TELEGRAM (.JSON)
 window.exportLocalBackupToTelegramChat = async function() {
