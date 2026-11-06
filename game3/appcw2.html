@@ -775,6 +775,21 @@
                     🔔 Attiva Notifiche di Sistema
                 </button>
             </div>
+
+            <!-- BACKUP & RIPRISTINO DATI LOCALI -->
+            <div class="box-panel" style="margin-top:15px; text-align:left; background: rgba(0,0,0,0.2); border-color: #ffd700;">
+                <h4 style="margin:0 0 10px 0; color:#ffd700; font-size:0.9em; text-transform:uppercase;">💾 Backup & Sincronizzazione Dati</h4>
+                <p style="font-size:0.8em; color:var(--hint-color); margin-bottom:10px;">I tuoi dati locali sono automaticamente sincronizzati nel tuo Cloud Telegram privato. Puoi anche scaricare o caricare un file di backup manuale.</p>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <button onclick="window.exportLocalBackupToTelegramChat()" class="btn-primary" style="padding:10px; font-weight:bold; font-size:0.85em; background:linear-gradient(135deg, #ffd700, #ff9800); color:#000; border:none; cursor:pointer;">
+                        💾 Salva Backup in Chat Telegram (.json)
+                    </button>
+                    <input type="file" id="localBackupFileInput" accept=".json" style="display:none;" onchange="if(this.files[0]) window.importLocalBackupFromJson(this.files[0]);">
+                    <button onclick="document.getElementById('localBackupFileInput').click()" class="btn-secondary" style="padding:10px; font-size:0.85em; cursor:pointer;">
+                        📥 Carica File Backup (.json)
+                    </button>
+                </div>
+            </div>
         </div>
 
         <div class="box-panel" style="flex-grow: 1; min-height:0; display:flex; flex-direction:column; margin-bottom:0;">
@@ -2981,6 +2996,7 @@
     (function() {
         const BUILD_VERSION = "fix_" + Date.now();
         const scripts = [
+            "js/local_db_manager.js",
             "js/app.js",
             "js/cwg_activity_manager.js",
             "js/quiz_data.js",
