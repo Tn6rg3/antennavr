@@ -280,11 +280,16 @@ window.initGlobalNotificationListener = function() {
 
 window.handleNewChatMessage = function(refKey, msg, msgKey) {
     if (!msg) return;
+
+    // Se un gioco qualsiasi è in corso, BLOCCO TOTALE NOTIFICHE CHAT VISIVE ED ACUSTICHE
+    const isAnyGameRunning = gameRunning || isCourseMode || window.isCoopMode || isArcadeMode || (window.currentMode === 'qso') || (window.currentMode === 'transmission');
+    if (isAnyGameRunning) return;
+
     const isGlobal = (refKey === 'globalChat');
     const isCwActive = (localStorage.getItem('cwgame_chat_cw_enabled') === 'true');
 
     const shouldNotifyUI = (isGlobal
-        ? (!isGlobalChatMuted && !gameRunning && (!isChatDrawerOpen || activeChatContext !== 'global'))
+        ? (!isGlobalChatMuted && (!isChatDrawerOpen || activeChatContext !== 'global'))
         : (!isChatDrawerOpen || refKey !== (activeChatContext === 'room' ? roomCode : myTeamId)));
 
     if (shouldNotifyUI) {
@@ -299,7 +304,7 @@ window.handleNewChatMessage = function(refKey, msg, msgKey) {
     }
 
     // 2. Audio CW (Sempre se ON, tranne in partita)
-    if (isCwActive && !gameRunning) {
+    if (isCwActive) {
         if (msgKey !== window.lastPlayedCwMsgKey) {
             window.lastPlayedCwMsgKey = msgKey;
             if (typeof window.enqueueChatCwAudio === 'function') {
