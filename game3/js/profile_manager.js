@@ -1218,12 +1218,22 @@ window.openMatchDetails = function(matchKey) {
                 try {
                     const hSnap = await db.ref(`users/${window.myId}/history`).limitToLast(50).once('value');
                     if (hSnap.exists()) {
-                        const targetTs = match.ts || (match.date ? new Date(match.date).getTime() : 0);
+                        const matchDateStr = (typeof window.getLocalDateString === 'function')
+                            ? window.getLocalDateString(match.date || match.ts)
+                            : String(match.date || '').split('T')[0];
+                        const matchMode = (match.mode || 'standard').toLowerCase();
+                        const matchScore = Number(match.score || 0);
+
                         hSnap.forEach(child => {
                             const val = child.val();
                             if (val) {
-                                const childTs = val.ts || (val.date ? (typeof val.date === 'number' ? val.date : new Date(val.date).getTime()) : 0);
-                                if (val.mode === match.mode && (Math.abs(childTs - targetTs) < 60000 || val.score === match.score)) {
+                                const valDateStr = (typeof window.getLocalDateString === 'function')
+                                    ? window.getLocalDateString(val.date || val.ts)
+                                    : String(val.date || '').split('T')[0];
+                                const valMode = (val.mode || 'standard').toLowerCase();
+                                const valScore = Number(val.score || 0);
+
+                                if (valMode === matchMode && (valScore === matchScore || Math.abs(valScore - matchScore) <= 10) && (valDateStr === matchDateStr || !matchDateStr)) {
                                     realFirebaseKey = child.key;
                                 }
                             }
