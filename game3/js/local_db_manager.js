@@ -209,35 +209,54 @@ window.exportLocalBackupToTelegramChat = async function() {
 
         const jsonStr = JSON.stringify(backupObj, null, 2);
 
-        if (typeof showToast === 'function') showToast("💾 Invio file backup in Chat Telegram...");
+        const modal = document.getElementById('backupModal');
+        const textarea = document.getElementById('backupJsonTextarea');
 
-        const serverUrl = (typeof VALIDATION_SERVER_URL !== 'undefined' && VALIDATION_SERVER_URL)
-            ? VALIDATION_SERVER_URL
-            : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
-
-        const formData = new FormData();
-        formData.append('initData', window.tgInitData || "");
-        formData.append('jsonStr', jsonStr);
-
-        fetch(`${serverUrl}?action=send_backup_doc&userId=${window.myId}`, {
-            method: 'POST',
-            body: formData
-        }).then(res => res.json()).then(data => {
-            alert("💾 BACKUP INVIATO IN CHAT TELEGRAM!\n\nApri la chat con il Bot Telegram per trovare il tuo file .json di backup allegato e salvato per sempre!");
-        }).catch(err => {
-            const fileName = `cwgame_backup_${window.myId || 'user'}_${new Date().toISOString().split('T')[0]}.json`;
-            const blob = new Blob([jsonStr], { type: 'application/json' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            alert("💾 Backup generato! Se usi Telegram mobile, trovi i tuoi dati salvati anche nel Cloud Telegram privato!");
-        });
+        if (modal && textarea) {
+            textarea.value = jsonStr;
+            modal.style.display = 'flex';
+            if (typeof showToast === 'function') showToast("💾 Finestra di Backup aperta!");
+        } else {
+            window.copyBackupToClipboardWithText(jsonStr);
+        }
     } catch(e) {
         alert("Errore generazione backup: " + e.message);
     }
+};
+
+window.copyBackupToClipboard = function() {
+    const textarea = document.getElementById('backupJsonTextarea');
+    if (!textarea || !textarea.value) return;
+
+    window.copyBackupToClipboardWithText(textarea.value);
+};
+
+window.copyBackupToClipboardWithText = function(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert("📋 TESTO BACKUP COPIATO NEGLI APPUNTI!\n\nPuoi incollarlo dove desideri (Note, Chat o File di testo).");
+        }).catch(() => {
+            alert("📋 Testo selezionato! Puoi copiarlo manualmente dalla casella.");
+        });
+    } else {
+        alert("📋 Testo selezionato! Puoi copiarlo manualmente dalla casella.");
+    }
+};
+
+window.downloadBackupFileDirectly = function() {
+    const textarea = document.getElementById('backupJsonTextarea');
+    if (!textarea || !textarea.value) return;
+
+    const jsonStr = textarea.value;
+    const fileName = `cwgame_backup_${window.myId || 'user'}_${new Date().toISOString().split('T')[0]}.json`;
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonStr);
+    const dlAnchorElem = document.createElement('a');
+    dlAnchorElem.setAttribute("href", dataStr);
+    dlAnchorElem.setAttribute("download", fileName);
+    document.body.appendChild(dlAnchorElem);
+    dlAnchorElem.click();
+    dlAnchorElem.remove();
 };
 
 // 6. IMPORTAZIONE BACKUP MANUALE DA FILE .JSON
