@@ -92,7 +92,19 @@ window.showLeaderboardTab = function(modeValue) {
     if (els.lbFilterArea) els.lbFilterArea.style.display = 'none';
     if (els.roomWinnerBanner) els.roomWinnerBanner.style.display = 'none';
     if (els.waitingOthersText) els.waitingOthersText.style.display = 'none';
-    if (els.btnShareDaily) els.btnShareDaily.style.display = 'none';
+
+    if (els.btnShareDaily) {
+        if (totalScore > 0 && ['daily_challenge', 'tri_daily', 'weekly_callsign', 'standard', 'standard_plus', 'callsign', 'la_torre', 'arcade'].includes(currentMode)) {
+            els.btnShareDaily.style.display = 'block';
+            let shareLabel = "📢 Condividi Risultato";
+            if (currentMode === 'daily_challenge') shareLabel = "📢 Condividi Sfida Giornaliera";
+            else if (currentMode === 'tri_daily') shareLabel = "📢 Condividi Sfida Tripla";
+            else if (currentMode === 'weekly_callsign') shareLabel = "📢 Condividi Sfida Nominativi";
+            els.btnShareDaily.textContent = shareLabel;
+        } else {
+            els.btnShareDaily.style.display = 'none';
+        }
+    }
 
     const filterVal = els.lbWordFilter ? els.lbWordFilter.value : 'all';
 
@@ -109,20 +121,15 @@ window.showLeaderboardTab = function(modeValue) {
             }
         };
 
-        if (els.btnShareDaily) {
-        if (totalScore > 0 && ['daily_challenge', 'tri_daily', 'weekly_callsign', 'standard', 'standard_plus', 'callsign', 'la_torre', 'arcade'].includes(currentMode)) {
-            els.btnShareDaily.style.display = 'block';
-            let shareLabel = "📢 Condividi Risultato";
-            if (currentMode === 'daily_challenge') shareLabel = "📢 Condividi Sfida Giornaliera";
-            else if (currentMode === 'tri_daily') shareLabel = "📢 Condividi Sfida Tripla";
-            else if (currentMode === 'weekly_callsign') shareLabel = "📢 Condividi Sfida Nominativi";
-            els.btnShareDaily.textContent = shareLabel;
+        if (els.roomWinnersArea) els.roomWinnersArea.style.display = 'block';
+        if (roomCode) {
+            db.ref(`rooms/${roomCode}/players`).once('value', renderLastMatchOrHistory);
+        } else if (window.lastFinishedRoomCode) {
+            db.ref(`rooms/${window.lastFinishedRoomCode}/players`).once('value', renderLastMatchOrHistory);
         } else {
-            els.btnShareDaily.style.display = 'none';
+            window.fetchAndRenderLastMatchFromHistory();
         }
-    }
-
-    if (modeValue === 'room') {
+    } else if (modeValue === 'my_history') {
         if (els.roomWinnersArea) els.roomWinnersArea.style.display = 'block';
         if (roomCode) {
             db.ref(`rooms/${roomCode}/players`).once('value', renderLastMatchOrHistory);
