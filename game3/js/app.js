@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.303";
+const APP_VERSION = "20261105.304";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -3951,8 +3951,8 @@ window.openMaxWpmRecordsModal = function() {
 
         for (let d = 1; d <= todayNum; d++) {
             const dayStr = `${currentMonthStr}-${String(d).padStart(2, '0')}`;
-            currentMonthDailyPromises.push(db.ref(`leaderboard/daily_challenge/${dayStr}`).once('value').catch(() => null));
-            currentMonthTriPromises.push(db.ref(`leaderboard/tri_daily/${dayStr}`).once('value').catch(() => null));
+            currentMonthDailyPromises.push(db.ref(`leaderboard/daily_challenge/${dayStr}`).orderByChild('score').limitToLast(5).once('value').catch(() => null));
+            currentMonthTriPromises.push(db.ref(`leaderboard/tri_daily/${dayStr}`).orderByChild('totalScore').limitToLast(5).once('value').catch(() => null));
         }
 
         const standardPromise = db.ref('leaderboard/standard').limitToLast(50).once('value').catch(() => null);
