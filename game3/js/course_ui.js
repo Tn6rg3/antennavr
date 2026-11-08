@@ -1117,7 +1117,22 @@ window.finishCourseSession = function() {
 };
 
 window.actualStartCourseGame = function() {
-    if (!window.courseData || !window.courseData.current_day_session) return;
+    if (!window.courseData) return;
+
+    // Se siamo in un giorno di riposo o sessione extra e current_day_session non e ancora creato, creiamolo ora!
+    if (!window.courseData.current_day_session) {
+        const dur = Math.max(5, parseInt(window.courseData.settings?.minutes_z2) || 5);
+        window.courseData.current_day_session = {
+            type: 'Z2',
+            total_seconds: dur * 60,
+            remaining_seconds: dur * 60,
+            completed: false,
+            date: new Date().toISOString().split('T')[0],
+            isExtra: true
+        };
+        if (typeof window.saveCourseState === 'function') window.saveCourseState();
+    }
+
     const modal = document.getElementById('courseSessionModal');
     if (modal) modal.style.display = 'none';
 
