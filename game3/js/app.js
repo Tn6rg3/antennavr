@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.302";
+const APP_VERSION = "20261105.303";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -3027,9 +3027,25 @@ if (els.btnPlayDailyNow) {
 }
 if (els.btnShareDaily) {
     els.btnShareDaily.onclick = () => {
-        const text = `🏆 Ho completato la Sfida Giornaliera Morse!\n🎯 Punteggio: ${totalScore} pt\n🚀 Velocità di picco: ${peakWpm} WPM\n\nProva anche tu su Sfida Telegrafia! 📻\n@${BOT_USERNAME}`;
+        let modeTitle = "Partita Morse";
+        if (currentMode === 'daily_challenge') modeTitle = "Sfida Giornaliera";
+        else if (currentMode === 'tri_daily') modeTitle = "Sfida Tripla";
+        else if (currentMode === 'weekly_callsign') {
+            const dayNames = { 0: "Domenica", 1: "Lunedì", 2: "Martedì", 3: "Mercoledì", 4: "Giovedì", 5: "Venerdì", 6: "Sabato" };
+            const enabledDay = window.weeklyCallsignSettingsCache?.enabledDay !== undefined ? parseInt(window.weeklyCallsignSettingsCache.enabledDay) : 1;
+            const dayName = dayNames[enabledDay] || "Lunedì";
+            modeTitle = `Sfida del ${dayName} (Nominativi)`;
+        } else if (currentMode === 'standard_plus') modeTitle = "Parole +";
+        else if (currentMode === 'callsign') modeTitle = "Nominativi (CW Freak)";
+        else if (currentMode === 'la_torre') modeTitle = "La Torre (Scalata)";
+
+        const text = `🏆 Ho completato la ${modeTitle} su Sfida Telegrafia!\n🎯 Punteggio: ${totalScore} pt\n🚀 Velocità di picco: ${peakWpm} WPM\n\nProva anche tu su Sfida Telegrafia! 📻\n@${BOT_USERNAME}`;
         const url = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}`)}&text=${encodeURIComponent(text)}`;
-        if (tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
+        try {
+            if (tg && tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');
+        } catch(e) {
+            window.open(url, '_blank');
+        }
     };
 }
 

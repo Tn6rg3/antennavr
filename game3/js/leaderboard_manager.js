@@ -109,6 +109,21 @@ window.showLeaderboardTab = function(modeValue) {
             }
         };
 
+        if (els.btnShareDaily) {
+        if (totalScore > 0 && ['daily_challenge', 'tri_daily', 'weekly_callsign', 'standard', 'standard_plus', 'callsign', 'la_torre', 'arcade'].includes(currentMode)) {
+            els.btnShareDaily.style.display = 'block';
+            let shareLabel = "📢 Condividi Risultato";
+            if (currentMode === 'daily_challenge') shareLabel = "📢 Condividi Sfida Giornaliera";
+            else if (currentMode === 'tri_daily') shareLabel = "📢 Condividi Sfida Tripla";
+            else if (currentMode === 'weekly_callsign') shareLabel = "📢 Condividi Sfida Nominativi";
+            els.btnShareDaily.textContent = shareLabel;
+        } else {
+            els.btnShareDaily.style.display = 'none';
+        }
+    }
+
+    if (modeValue === 'room') {
+        if (els.roomWinnersArea) els.roomWinnersArea.style.display = 'block';
         if (roomCode) {
             db.ref(`rooms/${roomCode}/players`).once('value', renderLastMatchOrHistory);
         } else if (window.lastFinishedRoomCode) {
@@ -125,9 +140,6 @@ window.showLeaderboardTab = function(modeValue) {
     } else if (modeValue === 'cwg_activity_monthly') {
         window.fetchAndRenderCwgActivityMonthlyLeaderboard();
     } else if (modeValue === 'daily_challenge') {
-        if (els.btnShareDaily && totalScore > 0 && currentMode === 'daily_challenge') {
-            els.btnShareDaily.style.display = 'block';
-        }
         window.fetchAndRenderGlobalLeaderboard('daily_challenge', null);
     } else if (modeValue === 'trn_global') {
         if (els.trnSubTabs) els.trnSubTabs.style.display = 'flex';

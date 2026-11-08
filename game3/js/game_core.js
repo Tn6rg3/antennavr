@@ -1774,10 +1774,19 @@ window.showMatchShareButtons = function() {
 
     btn.onclick = () => {
         const botUrl = encodeURIComponent(`https://t.me/${BOT_USERNAME}`);
-        let modeName = (window.currentMode || "Match").toUpperCase();
+        let modeName = "Partita Morse";
         if (window.currentMode === 'daily_challenge') modeName = "Sfida Giornaliera";
+        else if (window.currentMode === 'tri_daily') modeName = "Sfida Tripla";
+        else if (window.currentMode === 'weekly_callsign') {
+            const dayNames = { 0: "Domenica", 1: "Lunedì", 2: "Martedì", 3: "Mercoledì", 4: "Giovedì", 5: "Venerdì", 6: "Sabato" };
+            const enabledDay = window.weeklyCallsignSettingsCache?.enabledDay !== undefined ? parseInt(window.weeklyCallsignSettingsCache.enabledDay) : 1;
+            const dayName = dayNames[enabledDay] || "Lunedì";
+            modeName = `Sfida del ${dayName} (Nominativi)`;
+        } else if (window.currentMode === 'standard_plus') modeName = "Parole +";
+        else if (window.currentMode === 'callsign') modeName = "Nominativi (CW Freak)";
+        else if (window.currentMode === 'la_torre') modeName = "La Torre (Scalata)";
 
-        const textMsg = encodeURIComponent(`📻 ${modeName} CW!\nHo totalizzato ${totalScore} pt (Velocità: ${currentWpm} WPM).\nRiesci a fare di meglio?\n@${BOT_USERNAME}`);
+        const textMsg = encodeURIComponent(`🏆 Ho completato la ${modeName} su Sfida Telegrafia!\n🎯 Punteggio: ${totalScore} pt\n🚀 Velocità di picco: ${peakWpm} WPM\n\nRiesci a fare di meglio?\n@${BOT_USERNAME}`);
         const shareUrl = `https://t.me/share/url?url=${botUrl}&text=${textMsg}`;
         try {
             if (tg && tg.openTelegramLink) tg.openTelegramLink(shareUrl); else window.open(shareUrl, '_blank');
