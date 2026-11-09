@@ -626,34 +626,37 @@ window.fetchAndRenderGlobalLeaderboard = async function(tabType, filterWordCount
 
     // 2. SFIDE MULTIPLAYER (Cronologia Match)
     if (tabType.endsWith('_multi') || tabType === 'pingpong') {
-        // Correzione Radice: i dati sono in leaderboard/recent_matches/MODE/WORDCOUNT/MATCHID
         let baseMode = tabType.includes('std') ? 'standard' : (tabType.includes('chars') ? 'chars' : (tabType.includes('quiz') ? 'quiz' : 'pingpong'));
         const dbPath = `leaderboard/recent_matches/${baseMode}${tabType !== 'pingpong' ? '_multi' : ''}`;
-        console.log("LB: Fetching Multi from:", dbPath, "Filter:", filterWordCount);
 
-        // OTTIMIZZAZIONE: Usiamo limitToLast(100) per caricare fino ai primi 100 partecipanti
-        db.ref(dbPath).limitToLast(100).once('value', snapshot => {
+        // OTTIMIZZAZIONE RIGIDA BANDWIDTH: Interroghiamo i sotto-nodi con limitToLast(10) invece dell'intero albero genitore!
+        const fetchWC = (wcKey) => db.ref(`${dbPath}/${wcKey}`).limitToLast(10).once('value').catch(() => null);
+
+        let promises = [];
+        if (filterWordCount !== 'all') {
+            promises.push(fetchWC(filterWordCount));
+        } else {
+            ['10', '20', '30', '50', 'all'].forEach(wcKey => promises.push(fetchWC(wcKey)));
+        }
+
+        Promise.all(promises).then(snaps => {
             let matches = [];
-            if (snapshot.exists()) {
-                snapshot.forEach(wcNode => {
-                    // Se il nodo è una categoria di wordCount (es. '10', '20')
-                    if (filterWordCount === 'all' || wcNode.key === filterWordCount) {
-                        // Se è un nodo wordCount, i match sono figli
-                        wcNode.forEach(mNode => {
-                            const val = mNode.val();
-                            if (val && typeof val === 'object') {
-                                val.id = mNode.key;
-                                val.dbPath = `${dbPath}/${wcNode.key}/${mNode.key}`;
-                                val.wordCount = wcNode.key;
-                                matches.push(val);
-                            }
-                        });
-                    }
-                });
-            }
+            snaps.forEach(snapshot => {
+                if (snapshot && snapshot.exists()) {
+                    const wcKey = snapshot.key;
+                    snapshot.forEach(mNode => {
+                        const val = mNode.val();
+                        if (val && typeof val === 'object') {
+                            val.id = mNode.key;
+                            val.dbPath = `${dbPath}/${wcKey}/${mNode.key}`;
+                            val.wordCount = wcKey;
+                            matches.push(val);
+                        }
+                    });
+                }
+            });
             matches.sort((a,b) => (b.ts || 0) - (a.ts || 0));
-            console.log("LB: Matches found:", matches.length);
-            window.renderMatchesHistoryHTML(matches.slice(0, 20), els.leaderboardContainer);
+            window.renderMatchesHistoryHTML(matches.slice(0, 15), els.leaderboardContainer);
         });
         return;
     }
@@ -734,9 +737,9 @@ window.fetchAndRenderGlobalLeaderboard = async function(tabType, filterWordCount
 
     // 4e. SFIDA NOMINATIVI SETTIMANALE (es. SFIDA DEL LUNEDÌ)
     if (tabType === 'weekly_callsign') {
-        const isBeta = (typeof window.isUserCwgBetaTester === 'function') ? await window.isUserCwgBetaTester() : false;
+        const isBeta = (typeof window.isWeeklyCallsignBetaTester === 'function') ? await window.isWeeklyCallsignBetaTester() : false;
         if (!isBeta) {
-            els.leaderboardContainer.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">⚠️ Questa classifica è attualmente riservata ai Beta Tester autorizzati.</p>`;
+            els.leaderboardContainer.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">⚠️ Questa classifica è attualmente riservata ai tester autorizzati.</p>`;
             return;
         }
 

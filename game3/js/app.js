@@ -1964,8 +1964,8 @@ window.checkWeeklyCallsignVisibility = async function() {
     const btn = document.getElementById('btnWeeklyCallsignChallenge');
     const modalTitle = document.getElementById('weeklyCallsignModalTitle');
 
-    // Restringiamo la visibilità del banner UNICAMENTE agli utenti abilitati all'Activity CWG
-    const isBeta = typeof window.isUserCwgBetaTester === 'function' ? await window.isUserCwgBetaTester() : false;
+    // Verifica visibilità usando il controllo dedicato alla Sfida dei Nominativi
+    const isBeta = typeof window.isWeeklyCallsignBetaTester === 'function' ? await window.isWeeklyCallsignBetaTester() : false;
 
     if (!isBeta) {
         if (container) container.style.display = 'none';
@@ -2057,9 +2057,9 @@ window.allowReplayWeeklyCallsignChallenge = function() {
 window.startWeeklyCallsignChallengeGame = async function() {
     if (!db || !window.myId) return alert("⚠️ Connessione non disponibile.");
 
-    const isBeta = typeof window.isUserCwgBetaTester === 'function' ? await window.isUserCwgBetaTester() : false;
+    const isBeta = typeof window.isWeeklyCallsignBetaTester === 'function' ? await window.isWeeklyCallsignBetaTester() : false;
     if (!isBeta) {
-        return alert("⚠️ La Sfida Nominativi è attualmente riservata agli utenti abilitati all'Activity CWG.");
+        return alert("⚠️ La Sfida Nominativi è attualmente disattivata o riservata ai tester autorizzati.");
     }
 
     const modal = document.getElementById('weeklyCallsignModal');
