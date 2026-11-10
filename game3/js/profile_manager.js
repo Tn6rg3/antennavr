@@ -1365,38 +1365,49 @@ window.updateUserInAllLeaderboards = async function(newName, newUsername, privLb
 // --- LOGICA SALVATAGGIO ERRORI AVANZATI OTTIMIZZATA ---
 
 window.trackAdvancedErrors = function(realWord, userWord, wpm) {
-    if (!myId || !realWord) return;
+    if (!realWord) return;
 
     const normRealWord = (typeof window.normalizeAccents === 'function') ? window.normalizeAccents(realWord) : realWord.toUpperCase();
     const normUserWord = (typeof window.normalizeAccents === 'function') ? window.normalizeAccents(userWord) : userWord.toUpperCase();
 
     const realWords = normRealWord.split(' ').filter(w => w.length > 0);
     const typedWords = normUserWord.split(' ').filter(w => w.length > 0);
-    const statsBase = db.ref(`users/${myId}/stats`);
-    const today = new Date().toISOString().split('T')[0];
+
+    let stats = window.cachedUserStats || {};
+    stats.lengthStats = stats.lengthStats || {};
+    stats.charStats = stats.charStats || {};
+    stats.positionalErrors = stats.positionalErrors || { totalErrors: 0, start: 0, mid: 0, end: 0 };
+    stats.confusionMatrix = stats.confusionMatrix || {};
+    stats.errorsByWpm = stats.errorsByWpm || {};
+    stats.wordErrors = stats.wordErrors || {};
+    stats.bigramErrors = stats.bigramErrors || {};
+    stats.trigramErrors = stats.trigramErrors || {};
+    stats.quadgramErrors = stats.quadgramErrors || {};
 
     realWords.forEach((real, wordIdx) => {
         const typed = typedWords[wordIdx] || "";
         const isWordError = (real !== typed);
         const len = real.length;
 
-        statsBase.child(`lengthStats/${len}/total`).set(firebase.database.ServerValue.increment(1));
+        stats.lengthStats[len] = stats.lengthStats[len] || { total: 0, errors: 0 };
+        stats.lengthStats[len].total++;
 
         for (let char of real) {
             let dbChar = (typeof window.firebaseEscape === 'function') ? window.firebaseEscape(char) : char.replace(/\./g, '_dot_');
-            statsBase.child(`charStats/${dbChar}/attempts`).set(firebase.database.ServerValue.increment(1));
+            stats.charStats[dbChar] = stats.charStats[dbChar] || { attempts: 0, errors: 0 };
+            stats.charStats[dbChar].attempts++;
         }
 
         if (isWordError) {
-            statsBase.child(`lengthStats/${len}/errors`).set(firebase.database.ServerValue.increment(1));
+            stats.lengthStats[len].errors++;
 
             for (let i = 0; i < real.length; i++) {
                 if (real[i] !== typed[i]) {
                     const pos = i / (real.length - 1 || 1);
-                    statsBase.child(`positionalErrors/totalErrors`).set(firebase.database.ServerValue.increment(1));
-                    if (pos <= 0.33) statsBase.child(`positionalErrors/start`).set(firebase.database.ServerValue.increment(1));
-                    else if (pos >= 0.66) statsBase.child(`positionalErrors/end`).set(firebase.database.ServerValue.increment(1));
-                    else statsBase.child(`positionalErrors/mid`).set(firebase.database.ServerValue.increment(1));
+                    stats.positionalErrors.totalErrors++;
+                    if (pos <= 0.33) stats.positionalErrors.start++;
+                    else if (pos >= 0.66) stats.positionalErrors.end++;
+                    else stats.positionalErrors.mid++;
 
                     const realChar = real[i];
                     const typedChar = typed[i] || "OMESSO";
@@ -1407,41 +1418,46 @@ window.trackAdvancedErrors = function(realWord, userWord, wpm) {
                     };
                     let dbReal = safeKey(realChar);
                     let dbTyped = safeKey(typedChar);
-                    statsBase.child(`charStats/${dbReal}/errors`).set(firebase.database.ServerValue.increment(1));
-                    statsBase.child(`confusionMatrix/${dbReal}->${dbTyped}`).set(firebase.database.ServerValue.increment(1));
-                    statsBase.child(`errorsByWpm/${wpm}/${dbReal}`).set(firebase.database.ServerValue.increment(1));
+
+                    stats.charStats[dbReal] = stats.charStats[dbReal] || { attempts: 0, errors: 0 };
+                    stats.charStats[dbReal].errors++;
+
+                    const confKey = `${dbReal}->${dbTyped}`;
+                    stats.confusionMatrix[confKey] = (stats.confusionMatrix[confKey] || 0) + 1;
+
+                    stats.errorsByWpm[wpm] = stats.errorsByWpm[wpm] || {};
+                    stats.errorsByWpm[wpm][dbReal] = (stats.errorsByWpm[wpm][dbReal] || 0) + 1;
                 }
             }
 
-            statsBase.child(`wordErrors/${real}`).transaction(data => {
-                if (!data) return { count: 1, avgWpm: wpm };
-                const oldCount = data.count || (typeof data === 'number' ? data : 0);
-                const oldWpm = data.avgWpm || wpm;
-                const newCount = oldCount + 1;
-                return { count: newCount, avgWpm: Math.round(((oldWpm * oldCount) + wpm) / newCount) };
-            });
+            stats.wordErrors[real] = stats.wordErrors[real] || { count: 0, avgWpm: wpm };
+            stats.wordErrors[real].count++;
+
+            if (real.length >= 2) {
+                for (let i = 0; i <= real.length - 2; i++) {
+                    const bi = real.substring(i, i + 2);
+                    stats.bigramErrors[bi] = (stats.bigramErrors[bi] || 0) + 1;
+                }
+            }
+            if (real.length >= 3) {
+                for (let i = 0; i <= real.length - 3; i++) {
+                    const tri = real.substring(i, i + 3);
+                    stats.trigramErrors[tri] = (stats.trigramErrors[tri] || 0) + 1;
+                }
+            }
+            if (real.length >= 4) {
+                for (let i = 0; i <= real.length - 4; i++) {
+                    const quad = real.substring(i, i + 4);
+                    stats.quadgramErrors[quad] = (stats.quadgramErrors[quad] || 0) + 1;
+                }
+            }
         }
-
-        // N-Grammi (Bigrammi, Trigrammi, Quadrigrammi)
-        const processNGram = (n, nodeName) => {
-            for (let i = 0; i <= real.length - n; i++) {
-                const subReal = real.substring(i, i + n);
-                const subTyped = typed.substring(i, i + n);
-                if (subReal !== subTyped) {
-                    statsBase.child(`${nodeName}/${subReal}`).transaction(data => {
-                        if (!data) return { count: 1, avgWpm: wpm };
-                        const oldCount = data.count || (typeof data === 'number' ? data : 0);
-                        const oldWpm = data.avgWpm || wpm;
-                        return { count: oldCount + 1, avgWpm: Math.round(((oldWpm * oldCount) + wpm) / (oldCount + 1)) };
-                    });
-                }
-            }
-        };
-
-        processNGram(2, 'bigramErrors');
-        processNGram(3, 'trigramErrors');
-        processNGram(4, 'quadgramErrors');
     });
+
+    window.cachedUserStats = stats;
+    if (typeof window.saveLocalUserStats === 'function') {
+        window.saveLocalUserStats(stats);
+    }
 };
 
 // --- AZIONI PULSANTI ---

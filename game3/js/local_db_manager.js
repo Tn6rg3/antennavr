@@ -42,6 +42,38 @@ window.initLocalDatabase = function() {
     });
 };
 
+window.saveLocalUserStats = function(statsObj) {
+    if (!window.isLocalDbReady || !window.localDb || !statsObj) return;
+    try {
+        const tx = window.localDb.transaction(['userStats'], 'readwrite');
+        const store = tx.objectStore('userStats');
+        store.put({ id: 'mainStats', data: statsObj });
+    } catch(e) {
+        console.warn("LocalDB: Errore salvataggio userStats", e);
+    }
+};
+
+window.loadLocalUserStats = function() {
+    return new Promise((resolve) => {
+        if (!window.isLocalDbReady || !window.localDb) {
+            resolve({});
+            return;
+        }
+        try {
+            const tx = window.localDb.transaction(['userStats'], 'readonly');
+            const store = tx.objectStore('userStats');
+            const request = store.get('mainStats');
+            request.onsuccess = function(e) {
+                const res = e.target.result;
+                resolve(res && res.data ? res.data : {});
+            };
+            request.onerror = function() { resolve({}); };
+        } catch(e) {
+            resolve({});
+        }
+    });
+};
+
 // 2. SALVATAGGIO LOCALE DI UNA PARTITA (INDEXEDDB + TELEGRAM CLOUDSTORAGE)
 window.saveLocalMatchRecord = async function(matchRecord) {
     if (!matchRecord || typeof matchRecord !== 'object') return;
