@@ -13,13 +13,54 @@ window.hideChat = function() {
     });
 };
 
+window.setupChat = function(ref, containerIds, limit = 20) {
+    if (!ref) return;
+
+    const targetIds = Array.isArray(containerIds) ? containerIds : [containerIds];
+    targetIds.forEach(id => {
+        if (listeners.activeChat[id]) {
+            try { listeners.activeChat[id].ref.off('value', listeners.activeChat[id].callback); } catch(e){}
+            delete listeners.activeChat[id];
+        }
+    });
+
+    const callback = (snap) => {
+        if (!snap.exists()) {
+            targetIds.forEach(id => {
+                const c = document.getElementById(id);
+                if (c) c.innerHTML = '<p class="empty-msg">Nessun messaggio.</p>';
+            });
+            return;
+        }
+
+        const messages = [];
+        snap.forEach(child => {
+            const m = child.val();
+            if (m && typeof m === 'object') {
+                messages.push({ key: child.key, ...m });
+            }
+        });
+
+        targetIds.forEach(id => {
+            const c = document.getElementById(id);
+            if (c) window.renderMessagesToContainer(messages, c);
+        });
+    };
+
+    const finalRef = ref.limitToLast(limit);
+    finalRef.on('value', callback);
+
+    targetIds.forEach(id => {
+        listeners.activeChat[id] = { ref: finalRef, callback: callback };
+    });
+};
+
 window.listenToChat = function() {
     if (window.activeChatContext === 'room' && window.roomCode) {
-        window.setupChat(db.ref(`rooms/${window.roomCode}/chat`), 'lobbyChatMessages', 50);
-        window.setupChat(db.ref(`rooms/${window.roomCode}/chat`), 'chatMessages', 50);
+        window.setupChat(db.ref(`rooms/${window.roomCode}/chat`), ['lobbyChatMessages', 'chatMessages'], 20);
         if (els.chatTitle) els.chatTitle.textContent = "💬 Chat Stanza";
     } else {
-        window.setupChat(db.ref('globalChat'), 'chatMessages', 50);
+        window.setupChat(db.ref('globalChat'), ['chatMessages'], 20);
         if (els.chatTitle) els.chatTitle.textContent = "🌎 Chat Globale";
     }
 };

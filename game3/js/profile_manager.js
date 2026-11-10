@@ -376,14 +376,21 @@ window.loadAdvancedStats = function() {
         return;
     }
 
+    const fetchStatsPromise = (window.cachedUserStats && typeof window.cachedUserStats === 'object')
+        ? Promise.resolve(window.cachedUserStats)
+        : db.ref(`users/${userId}/stats`).once('value').then(snap => {
+            const val = (snap && snap.exists()) ? snap.val() : {};
+            window.cachedUserStats = val;
+            return val;
+        }).catch(() => ({}));
+
     const localHistPromise = (typeof window.loadLocalMatchHistory === 'function') ? window.loadLocalMatchHistory(50) : Promise.resolve([]);
 
     Promise.all([
-        db.ref(`users/${userId}/stats`).once('value').catch(() => null),
+        fetchStatsPromise,
         localHistPromise,
         db.ref(`users/${userId}/history`).limitToLast(50).once('value').catch(() => null)
-    ]).then(([statsSnap, localHist, histSnap]) => {
-        const stats = (statsSnap && statsSnap.exists()) ? statsSnap.val() : {};
+    ]).then(([stats, localHist, histSnap]) => {
         let historyData = localHist || [];
 
         if (historyData.length === 0 && histSnap && histSnap.exists()) {

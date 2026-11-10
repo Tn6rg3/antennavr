@@ -1217,43 +1217,23 @@ window.initMandatoryAliasHandlers = function() {
 
                 if (now - lastCleanup > ONE_DAY_MS) {
                     console.log("CW Game: Running daily database garbage collector...");
+                    cleanupRef.set(now); // Lock immediato per evitare esecuzioni simultanee
+
                     // 1. Svuotiamo le chat principali
                     db.ref('globalChat').remove();
                     db.ref('courseChat').remove();
-                    db.ref('courseChats').remove();
 
-                    // 2. Pulizia stanze orfane o scadute (limitata alle ultime 50 stanze)
-                    db.ref('rooms').limitToLast(50).once('value', roomsSnap => {
-                        if (!roomsSnap.exists()) return;
-                        roomsSnap.forEach(rSnap => {
-                            const r = rSnap.val();
-                            const players = r.players || {};
-                            const hasPlayers = Object.keys(players).length > 0;
-                            const isExpired = r.expiresAt && now > r.expiresAt;
-                            const isVeryOld = r.createdAt && (now - r.createdAt) > (ONE_DAY_MS * 2);
-
-                            if (!hasPlayers || isExpired || isVeryOld) {
-                                console.log(`GC: Rimuovo stanza ${rSnap.key} (Motivo: Orfana/Scaduta)`);
-                                rSnap.ref.remove();
-                                db.ref(`public_lobby_rooms/${rSnap.key}`).remove();
+                    // 2. Pulizia lobby pubblica e stanze scadute
+                    db.ref('public_lobby_rooms').limitToLast(30).once('value', lobbySnap => {
+                        if (!lobbySnap.exists()) return;
+                        lobbySnap.forEach(lSnap => {
+                            const lData = lSnap.val();
+                            if (lData && lData.expiresAt && now > lData.expiresAt) {
+                                lSnap.ref.remove();
+                                db.ref(`rooms/${lSnap.key}`).remove();
                             }
                         });
                     });
-
-                    // 3. Pulizia lobby pubblica
-                    db.ref('public_lobby_rooms').limitToLast(50).once('value', lobbySnap => {
-                        if (!lobbySnap.exists()) return;
-                        lobbySnap.forEach(lSnap => {
-                            db.ref(`rooms/${lSnap.key}`).once('value', rCheck => {
-                                if (!rCheck.exists()) {
-                                    console.log(`GC: Rimuovo lobby fantasma ${lSnap.key}`);
-                                    lSnap.ref.remove();
-                                }
-                            });
-                        });
-                    });
-
-                    cleanupRef.set(now);
                 }
             });
         } catch(e) { console.warn("Cleanup error:", e); }
