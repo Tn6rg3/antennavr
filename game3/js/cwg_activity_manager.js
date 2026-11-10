@@ -901,16 +901,82 @@ window.startCwgKeysExchangePhase = function() {
 window.onCwgRxKeyInputChanged = function() {
     const rxInput = document.getElementById('cwgRxKeyInput');
     const rxKey = rxInput ? rxInput.value.trim().toUpperCase() : "";
-    const saveBtn = document.getElementById('btnSaveCwgQso');
 
     if (rxKey.length === 8) {
         if (!window.isCwgInitiator || !window.cwgGeneratedTxKey) {
             window.requestCwgTxKey();
         }
-        if (saveBtn) saveBtn.disabled = false;
+        window.publishCwgExchangeKeyStatus(rxKey);
     } else {
+        const saveBtn = document.getElementById('btnSaveCwgQso');
         if (saveBtn) saveBtn.disabled = true;
     }
+};
+
+window.publishCwgExchangeKeyStatus = function(rxKey) {
+    const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || "");
+    const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
+    const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
+    const year = new Date().getFullYear();
+    const dateStr = year + "-" + String(new Date().getMonth() + 1).padStart(2, '0') + "-" + String(new Date().getDate()).padStart(2, '0');
+
+    if (!myCall || !partnerCall || !db) return;
+
+    const callsArray = [myCall, partnerCall].sort();
+    const sharedQsoKey = callsArray.join('_') + '_' + band + '_' + dateStr;
+    window.cwgActiveSharedKey = sharedQsoKey;
+
+    if (window.cwgExchangeListenerRef) {
+        try { window.cwgExchangeListenerRef.off(); } catch(e) {}
+    }
+
+    const exchangeRef = db.ref(`activity_cwg/keys_exchange/${sharedQsoKey}/${myCall}`);
+    exchangeRef.onDisconnect().remove();
+    exchangeRef.set({
+        myCall: myCall,
+        partnerCall: partnerCall,
+        rxKey: rxKey,
+        txKey: window.cwgGeneratedTxKey || "",
+        ts: Date.now()
+    }).catch(() => {});
+
+    // Ascolto del nodo dell'altro operatore
+    const partnerExchangeRef = db.ref(`activity_cwg/keys_exchange/${sharedQsoKey}/${partnerCall}`);
+    window.cwgExchangeListenerRef = partnerExchangeRef;
+
+    partnerExchangeRef.on('value', snap => {
+        const saveBtn = document.getElementById('btnSaveCwgQso');
+        const stepHelp = document.getElementById('cwgKeysStepHelpText');
+
+        if (snap.exists() && snap.val() && snap.val().rxKey && snap.val().rxKey.length === 8) {
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.style.background = "#4caf50";
+            }
+            if (stepHelp) {
+                stepHelp.textContent = `🟢 ENTRAMBI GLI OPERATORI HANNO INSERITO LE CHIAVI! Clicca "SALVA E REGISTRA QSO" per convalidare ed assegnare +2 Punti a ciascuno!`;
+                stepHelp.style.color = "#00ff66";
+            }
+        } else {
+            if (saveBtn) saveBtn.disabled = true;
+            if (stepHelp) {
+                stepHelp.textContent = `⏳ CHIAVE INSERITA. In attesa che anche ${partnerCall} inserisca la sua chiave...`;
+                stepHelp.style.color = "#ff9800";
+            }
+        }
+    });
+
+    // Ascolta anche se l'altro operatore ha già inviato il salvataggio definitivo sul server
+    const savedRef = db.ref(`activity_cwg/keys_exchange/${sharedQsoKey}/saved`);
+    window.cwgSavedListenerRef = savedRef;
+    savedRef.on('value', sSnap => {
+        if (sSnap.exists() && sSnap.val() && sSnap.val().by !== myCall) {
+            const data = sSnap.val();
+            alert(`✅ QSO CONVALIDATO E SALVATO DALL'ALTRO OPERATORE (${data.by})!\n\nPunti Assegnati: +${data.points || 2} pt a ciascun telegrafista!`);
+            window.resetCwgForm();
+            if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
+        }
+    });
 };
 
 window.requestCwgTxKey = async function() {
@@ -1001,7 +1067,19 @@ window.saveCwgQsoLog = async function() {
             window.monthlyLeaderboardCache = {};
             window.maxWpmRecordsCache = {};
 
-            alert(`✅ QSO CONVALIDATO E SALVATO!\n\nPunti Assegnati: +${resData.points || 1} pt\n\n${resData.message || ""}`);
+            // Notifichiamo all'altro operatore che il QSO e stato salvato con successo dal server!
+            const year = new Date().getFullYear();
+            const dateStr = year + "-" + String(new Date().getMonth() + 1).padStart(2, '0') + "-" + String(new Date().getDate()).padStart(2, '0');
+            const callsArray = [myCall, partnerCall].sort();
+            const sharedQsoKey = callsArray.join('_') + '_' + band + '_' + dateStr;
+
+            db.ref(`activity_cwg/keys_exchange/${sharedQsoKey}/saved`).set({
+                by: myCall,
+                points: resData.points || 2,
+                ts: Date.now()
+            }).catch(() => {});
+
+            alert(`✅ QSO CONVALIDATO E SALVATO!\n\nPunti Assegnati: +${resData.points || 2} pt a ciascun telegrafista!\n\n${resData.message || ""}`);
             window.resetCwgForm();
             if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
         } else {
