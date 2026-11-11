@@ -1280,13 +1280,19 @@ window.deleteHistoryItem = async function(key) {
             db.ref(`users/${window.myId}/history_details/${key}`).remove().catch(() => {});
         }
 
-        // 3. Rimuove dalla memoria ed aggiorna la UI in 0ms
+        // 3. Rimuove dalla memoria
         if (Array.isArray(window.userMatchHistory)) {
             window.userMatchHistory = window.userMatchHistory.filter(m => (
                 String(m.key) !== String(key) &&
                 String(m.id) !== String(key) &&
-                String(m.ts) !== String(key)
+                String(m.ts) !== String(key) &&
+                String(m.histKey) !== String(key)
             ));
+        }
+
+        // 4. Aggiorna immediatamente Telegram CloudStorage per evitare il ripristino al ricaricamento
+        if (typeof window.autoSyncToTelegramCloudStorage === 'function') {
+            await window.autoSyncToTelegramCloudStorage();
         }
 
         if (typeof showToast === 'function') showToast("Partita eliminata dallo storico.");
