@@ -329,9 +329,14 @@ window.loadProfileInfo = async function() {
     const frag = document.createDocumentFragment();
     window.userMatchHistory.slice(0, 15).forEach(match => {
         const dateStr = formatRecordDate(match);
-        let modeIcon = match.mode === 'callsign' ? '🎙️' : match.mode === 'pingpong' ? '🏓' : match.mode === 'chars' ? '⌨️' : (match.mode === 'daily_challenge' ? '📅' : '🔤');
+        let modeIcon = match.mode === 'callsign' ? '🎙️' : match.mode === 'pingpong' ? '🏓' : match.mode === 'chars' ? '⌨️' : (match.mode === 'daily_challenge' ? '📅' : (match.mode === 'tri_daily' ? '🏆' : '🔤'));
 
         const itemKey = match.key || match.id || match.ts || Date.now();
+        const isRestoreAllowed = (match.mode === 'daily_challenge' || match.mode === 'tri_daily');
+        const restoreBtnHtml = isRestoreAllowed
+            ? `<button class="action-btn-small btn-champ" onclick="window.restoreMatchToLeaderboard('${itemKey}')" title="Ripristina in classifica" style="width:auto; padding:2px 8px; background:#ff9800; border-color:#e65100;">🔄</button>`
+            : '';
+
         const li = document.createElement('li');
         li.style.cssText = "flex-direction:column; align-items:flex-start; padding:8px;";
         li.innerHTML = `
@@ -343,6 +348,7 @@ window.loadProfileInfo = async function() {
                 <span><b>${match.score || 0} pt</b> <small>(${match.wpm || 20} WPM)</small></span>
                 <div style="display:flex; gap:5px;">
                     <button class="action-btn-small btn-secondary" onclick="window.openMatchDetails('${itemKey}')" style="width:auto; padding:2px 10px;">Vedi</button>
+                    ${restoreBtnHtml}
                     <button class="action-btn-small btn-danger" onclick="window.deleteHistoryItem('${itemKey}')" style="width:auto; padding:2px 6px;">🗑️</button>
                 </div>
             </div>
@@ -1297,6 +1303,87 @@ window.deleteHistoryItem = async function(key) {
 
         if (typeof showToast === 'function') showToast("Partita eliminata dallo storico.");
         window.loadProfileInfo();
+    }
+};
+
+window.restoreMatchToLeaderboard = async function(matchKey) {
+    if (!window.userMatchHistory || !matchKey || !db || !window.myId) return;
+
+    const targetKeyStr = String(matchKey).trim();
+    const match = window.userMatchHistory.find(m => {
+        if (!m) return false;
+        const keyStr = m.key ? String(m.key).trim() : '';
+        const idStr = m.id !== undefined ? String(m.id).trim() : '';
+        const tsStr = m.ts !== undefined ? String(m.ts).trim() : '';
+        return (keyStr === targetKeyStr) || (idStr === targetKeyStr) || (tsStr === targetKeyStr);
+    });
+
+    if (!match) return alert("⚠️ Partita non trovata nello storico.");
+
+    const mode = (match.mode || '').toLowerCase();
+    const matchTs = match.ts || (match.date ? new Date(match.date).getTime() : Date.now());
+    const dateStr = (typeof window.getLocalDateString === 'function')
+        ? window.getLocalDateString(matchTs)
+        : new Date(matchTs).toISOString().split('T')[0];
+
+    const score = Number(match.score || 0);
+    const wpm = Number(match.wpm || 20);
+
+    if (mode === 'daily_challenge') {
+        const lbRef = db.ref(`leaderboard/daily_challenge/${dateStr}/${window.myId}`);
+        await lbRef.set({
+            name: window.myName,
+            username: window.myPrivacy ? "" : (window.tgUsername || ""),
+            score: score,
+            peakWpm: wpm,
+            date: dateStr,
+            ts: matchTs
+        });
+        if (typeof showToast === 'function') showToast("✅ Sfida Giornaliera ripristinata in Classifica!");
+        alert(`✅ Sfida Giornaliera del ${dateStr} ripristinata in Classifica!\n\nPunteggio: ${score} pt (${wpm} WPM)`);
+    } else if (mode === 'tri_daily') {
+        const slotId = match.slotId || (match.wordCount === 10 ? 'morning' : (match.wordCount === 15 ? 'afternoon' : 'evening'));
+
+        await db.ref(`users/${window.myId}/tri_daily_attempt/${dateStr}/${slotId}`).update({
+            played: true,
+            completed: true,
+            score: score,
+            peakWpm: wpm,
+            timestamp: matchTs
+        });
+
+        const attemptSnap = await db.ref(`users/${window.myId}/tri_daily_attempt/${dateStr}`).once('value');
+        const attempt = attemptSnap.exists() ? (attemptSnap.val() || {}) : {};
+
+        let totalScoreSum = 0;
+        let completedSlotsCount = 0;
+        let bestPeakWpm = 0;
+
+        ['morning', 'afternoon', 'evening'].forEach(s => {
+            if (attempt[s] && typeof attempt[s].score === 'number' && attempt[s].score > 0) {
+                totalScoreSum += Number(attempt[s].score) || 0;
+                completedSlotsCount++;
+                if ((Number(attempt[s].peakWpm) || 0) > bestPeakWpm) bestPeakWpm = Number(attempt[s].peakWpm) || 0;
+            }
+        });
+
+        await db.ref(`leaderboard/tri_daily/${dateStr}/${window.myId}`).set({
+            name: window.myName,
+            username: window.myPrivacy ? "" : (window.tgUsername || ""),
+            totalScore: totalScoreSum,
+            completedSlots: completedSlotsCount,
+            peakWpm: bestPeakWpm || wpm,
+            morningScore: attempt.morning?.score || 0,
+            afternoonScore: attempt.afternoon?.score || 0,
+            eveningScore: attempt.evening?.score || 0,
+            date: dateStr,
+            ts: matchTs
+        });
+
+        if (typeof showToast === 'function') showToast("✅ Sessione Sfida Tripla ripristinata in Classifica!");
+        alert(`✅ Sessione Sfida Tripla del ${dateStr} (${slotId.toUpperCase()}) ripristinata in Classifica!\n\nPunteggio Cumulativo Totale: ${totalScoreSum} pt (${completedSlotsCount}/3 Sessioni)`);
+    } else {
+        alert("⚠️ Il ripristino in classifica è disponibile per la Sfida Giornaliera e la Sfida Tripla.");
     }
 };
 
