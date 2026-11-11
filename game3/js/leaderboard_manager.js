@@ -335,36 +335,62 @@ window.fetchAndRenderTriDailyLeaderboard = function() {
     const todayStr = window.getLocalDateString();
     container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Caricamento Classifica Tripla del ${todayStr}...</p>`;
 
-    // SELF-HEALING AUTOMATICO: Ricalcola e ripristina la somma del giocatore corrente dai suoi tentativi su Firebase
+    // SELF-HEALING AUTOMATICO AVANZATO: Ripristina e ricalcola le sessioni sia da tri_daily_attempt che dallo storico di oggi
     if (db && window.myId) {
-        db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}`).once('value', attemptSnap => {
-            if (attemptSnap.exists()) {
-                const attempt = attemptSnap.val() || {};
-                let totalScoreSum = 0;
-                let completedSlotsCount = 0;
-                let bestPeakWpm = 0;
+        Promise.all([
+            db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}`).once('value').catch(() => null),
+            db.ref(`users/${window.myId}/history`).orderByChild('mode').equalTo('tri_daily').once('value').catch(() => null)
+        ]).then(([attemptSnap, histSnap]) => {
+            let attempt = (attemptSnap && attemptSnap.exists()) ? (attemptSnap.val() || {}) : {};
 
-                ['morning', 'afternoon', 'evening'].forEach(s => {
-                    if (attempt[s] && typeof attempt[s].score === 'number' && attempt[s].completed) {
-                        totalScoreSum += Number(attempt[s].score) || 0;
-                        completedSlotsCount++;
-                        if ((Number(attempt[s].peakWpm) || 0) > bestPeakWpm) bestPeakWpm = Number(attempt[s].peakWpm) || 0;
+            // Recuperiamo eventuali sessioni registrate nello storico di oggi
+            if (histSnap && histSnap.exists()) {
+                histSnap.forEach(child => {
+                    const val = child.val();
+                    if (val) {
+                        const matchDate = (typeof window.getLocalDateString === 'function')
+                            ? window.getLocalDateString(val.date || val.ts)
+                            : String(val.date || '').split('T')[0];
+
+                        if (matchDate === todayStr) {
+                            const slot = val.slotId || (val.wordCount === 10 ? 'morning' : (val.wordCount === 15 ? 'afternoon' : 'evening'));
+                            if (!attempt[slot] || !attempt[slot].score) {
+                                attempt[slot] = {
+                                    played: true,
+                                    completed: true,
+                                    score: Number(val.score) || 0,
+                                    peakWpm: Number(val.wpm) || 20
+                                };
+                            }
+                        }
                     }
                 });
+            }
 
-                if (completedSlotsCount > 0) {
-                    db.ref(`leaderboard/tri_daily/${todayStr}/${window.myId}`).update({
-                        name: window.myName,
-                        username: window.myPrivacy ? "" : (window.tgUsername || ""),
-                        totalScore: totalScoreSum,
-                        completedSlots: completedSlotsCount,
-                        peakWpm: bestPeakWpm,
-                        morningScore: attempt.morning?.score || 0,
-                        afternoonScore: attempt.afternoon?.score || 0,
-                        eveningScore: attempt.evening?.score || 0,
-                        date: (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toLocaleDateString('it-IT')
-                    }).catch(() => {});
+            let totalScoreSum = 0;
+            let completedSlotsCount = 0;
+            let bestPeakWpm = 0;
+
+            ['morning', 'afternoon', 'evening'].forEach(s => {
+                if (attempt[s] && typeof attempt[s].score === 'number' && attempt[s].score > 0) {
+                    totalScoreSum += Number(attempt[s].score) || 0;
+                    completedSlotsCount++;
+                    if ((Number(attempt[s].peakWpm) || 0) > bestPeakWpm) bestPeakWpm = Number(attempt[s].peakWpm) || 0;
                 }
+            });
+
+            if (completedSlotsCount > 0) {
+                db.ref(`leaderboard/tri_daily/${todayStr}/${window.myId}`).update({
+                    name: window.myName,
+                    username: window.myPrivacy ? "" : (window.tgUsername || ""),
+                    totalScore: totalScoreSum,
+                    completedSlots: completedSlotsCount,
+                    peakWpm: bestPeakWpm,
+                    morningScore: attempt.morning?.score || 0,
+                    afternoonScore: attempt.afternoon?.score || 0,
+                    eveningScore: attempt.evening?.score || 0,
+                    date: (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toLocaleDateString('it-IT')
+                }).catch(() => {});
             }
         }).catch(() => {});
     }
