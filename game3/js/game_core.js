@@ -1357,7 +1357,7 @@ window.finishGame = async function() {
                 let todayStr = window.getLocalDateString();
                 const slotId = window.currentTriDailySlotId || (typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot().id : 'morning');
 
-                db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}/${slotId}`).update({
+                const slotData = {
                     played: true,
                     completed: true,
                     score: window.totalScore,
@@ -1365,18 +1365,22 @@ window.finishGame = async function() {
                     peakWpm: window.peakWpm,
                     timestamp: Date.now(),
                     resumeData: null
-                }).then(() => {
+                };
+
+                db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}/${slotId}`).update(slotData).then(() => {
                     db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}`).once('value', attemptSnap => {
                         const attempt = attemptSnap.val() || {};
+                        attempt[slotId] = { ...attempt[slotId], ...slotData };
+
                         let totalScoreSum = 0;
                         let completedSlotsCount = 0;
                         let bestPeakWpm = 0;
 
                         ['morning', 'afternoon', 'evening'].forEach(s => {
-                            if (attempt[s] && attempt[s].score) {
+                            if (attempt[s] && typeof attempt[s].score === 'number' && attempt[s].completed) {
                                 totalScoreSum += Number(attempt[s].score) || 0;
                                 completedSlotsCount++;
-                                if (attempt[s].peakWpm > bestPeakWpm) bestPeakWpm = attempt[s].peakWpm;
+                                if ((Number(attempt[s].peakWpm) || 0) > bestPeakWpm) bestPeakWpm = Number(attempt[s].peakWpm) || 0;
                             }
                         });
 
@@ -1389,7 +1393,8 @@ window.finishGame = async function() {
                             morningScore: attempt.morning?.score || 0,
                             afternoonScore: attempt.afternoon?.score || 0,
                             eveningScore: attempt.evening?.score || 0,
-                            date: new Date().toLocaleDateString('it-IT')
+                            date: (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toLocaleDateString('it-IT'),
+                            ts: Date.now()
                         });
                     });
                 });

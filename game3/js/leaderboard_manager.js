@@ -968,9 +968,12 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
         const actionsScoreDiv = document.createElement('div');
         actionsScoreDiv.style.cssText = "display:flex; align-items:center; gap:8px; justify-content:flex-end;";
 
-        // BOTTONE CANCELLA (Solo per i propri record) - ORA A SINISTRA DEI PUNTI
+        // BOTTONE CANCELLA (Consentito per record normali; BLOCCO REGOLAMENTO per Sfide Ufficiali tranne che per gli Admin)
         const isMyRecord = player.id === window.myId || (isTeam && player.id === window.myTeamId);
-        if (isMyRecord && player.dbPath) {
+        const isScheduledContest = player.dbPath && (player.dbPath.includes('/daily_challenge/') || player.dbPath.includes('/tri_daily/') || player.dbPath.includes('/weekly_callsign_challenge/'));
+        const allowDelete = isMyRecord && player.dbPath && (!isScheduledContest || window.isAdmin);
+
+        if (allowDelete) {
             const delBtn = document.createElement('button');
             delBtn.style.cssText = "background:none; border:none; color:#f44336; cursor:pointer; font-size:1.1em; padding:4px; display:flex; align-items:center; opacity:0.6; transition: opacity 0.2s;";
             delBtn.innerHTML = "🗑️";
