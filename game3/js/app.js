@@ -1042,6 +1042,7 @@ window.initMandatoryAliasHandlers = function() {
                         status: 'online',
                         uid: firebase.auth().currentUser ? firebase.auth().currentUser.uid : "",
                         level: (window.userProgression && window.userProgression.level) ? window.userProgression.level : 1,
+                        pushNotifications: window.myPushNotifs ?? true,
                         ts: firebase.database.ServerValue.TIMESTAMP,
                         lastActive: firebase.database.ServerValue.TIMESTAMP
                     });
@@ -4125,14 +4126,9 @@ if (els.sendChatBtn) {
                             const isAppNotAccessible = !presSnap.exists() || !isFocused || isTimedOut;
 
                             if (isAppNotAccessible) {
-                                console.log("DEBUG_PUSH: Utente inattivo. Controllo preferenze push...");
-                                db.ref(`users/${pId}/pushNotifications`).once('value', (prefSnap) => {
-                                    if (prefSnap.val() !== false) {
-                                        sendPushNotification(pId, txt);
-                                    } else {
-                                        console.log("DEBUG_PUSH: L'utente ha disattivato le notifiche nel profilo.");
-                                    }
-                                });
+                                if (presData.pushNotifications !== false) {
+                                    sendPushNotification(pId, txt);
+                                }
                             } else {
                                 console.log("DEBUG_PUSH: Utente attivo nell'app, push saltata.");
                             }
@@ -4190,11 +4186,9 @@ if (els.sendLobbyChatBtn) {
                         const isAppNotAccessible = !presSnap.exists() || !isFocused || isTimedOut;
 
                         if (isAppNotAccessible) {
-                            db.ref(`users/${pId}/pushNotifications`).once('value', (prefSnap) => {
-                                if (prefSnap.val() !== false) {
-                                    sendPushNotification(pId, txt);
-                                }
-                            });
+                            if (presData.pushNotifications !== false) {
+                                sendPushNotification(pId, txt);
+                            }
                         }
                     });
                 }
