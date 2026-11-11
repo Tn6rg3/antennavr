@@ -403,7 +403,22 @@ window.fetchAndRenderTriDailyLeaderboard = function() {
 
         const players = [];
         snapshot.forEach(child => {
-            players.push({ id: child.key, ...child.val() });
+            const pVal = child.val();
+            if (pVal && typeof pVal === 'object') {
+                const mPts = Number(pVal.morningScore) || 0;
+                const aPts = Number(pVal.afternoonScore) || 0;
+                const ePts = Number(pVal.eveningScore) || 0;
+
+                const realSlots = (mPts > 0 ? 1 : 0) + (aPts > 0 ? 1 : 0) + (ePts > 0 ? 1 : 0);
+                const realTotalScore = mPts + aPts + ePts;
+
+                players.push({
+                    id: child.key,
+                    ...pVal,
+                    completedSlots: Math.max(pVal.completedSlots || 0, realSlots),
+                    totalScore: Math.max(pVal.totalScore || 0, realTotalScore)
+                });
+            }
         });
 
         players.sort((a, b) => (Number(b.totalScore) - Number(a.totalScore)) || (Number(b.peakWpm) - Number(a.peakWpm)));
