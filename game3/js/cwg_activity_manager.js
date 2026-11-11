@@ -25,6 +25,7 @@ window.saveMyActivityCallPreference = function(newCall) {
     localStorage.setItem('cwgame_activity_call', cleanCall);
     if (db && window.myId) {
         db.ref(`users/${window.myId}/activity_call`).set(cleanCall).catch(() => {});
+        db.ref(`activity_cwg/registered_calls/${cleanCall}`).set(true).catch(() => {});
     }
 };
 
@@ -641,7 +642,7 @@ window.checkCwgDoubleHandshakeMatch = async function() {
     const partnerPresenceRef = db.ref(`activity_cwg/handshake/${partnerPresenceKey}`);
     window.cwgLiveQsoListenerRef = partnerPresenceRef;
 
-    db.ref('users').orderByChild('activity_call').equalTo(partnerCall).once('value', uSnap => {
+    db.ref(`activity_cwg/registered_calls/${partnerCall}`).once('value', uSnap => {
         let isRegistered = uSnap.exists();
 
         if (statusBox) {
