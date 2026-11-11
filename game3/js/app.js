@@ -610,14 +610,14 @@ async function startApp() {
 
     // INIZIALIZZAZIONE PREVENTIVA FIREBASE SE NON ANCORA PRONTO
     const firebaseConfig = {
-  apiKey: "AIzaSyDfbWSo7qs5ZH0jx2bRny4SGhRoKb2uDqU",
-  authDomain: "telegrafiabot2.firebaseapp.com",
-  databaseURL: "https://telegrafiabot2-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "telegrafiabot2",
-  storageBucket: "telegrafiabot2.firebasestorage.app",
-  messagingSenderId: "574151516430",
-  appId: "1:574151516430:web:287262b799f0a6ad1b375f"
-};
+        apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk",
+        authDomain: "telegrafiabot.firebaseapp.com",
+        databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "telegrafiabot",
+        storageBucket: "telegrafiabot.firebasestorage.app",
+        messagingSenderId: "575790683327",
+        appId: "1:575790683327:web:db333b0316c8e8ec63a20a"
+    };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     if (!window.db) window.db = firebase.database();
     if (!window.auth) window.auth = firebase.auth();
@@ -898,13 +898,13 @@ window.startApp = startApp;
 
 async function initGame() {
     const firebaseConfig = {
-        apiKey: "AIzaSyAfddNQb_G-sCe0thi36LgpBlj_c-Lerzk",
-        authDomain: "telegrafiabot.firebaseapp.com",
-        databaseURL: "https://telegrafiabot-default-rtdb.europe-west1.firebasedatabase.app",
-        projectId: "telegrafiabot",
-        storageBucket: "telegrafiabot.firebasestorage.app",
-        messagingSenderId: "575790683327",
-        appId: "1:575790683327:web:db333b0316c8e8ec63a20a"
+      apiKey: "AIzaSyDfbWSo7qs5ZH0jx2bRny4SGhRoKb2uDqU",
+      authDomain: "telegrafiabot2.firebaseapp.com",
+      databaseURL: "https://telegrafiabot2-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "telegrafiabot2",
+      storageBucket: "telegrafiabot2.firebasestorage.app",
+      messagingSenderId: "574151516430",
+      appId: "1:574151516430:web:287262b799f0a6ad1b375f"
     };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
@@ -2152,9 +2152,8 @@ window.loadAdminCallsignChallengeSettings = function() {
             }
 
             testerIds.forEach(id => {
-                db.ref(`users/${id}`).once('value', uSnap => {
-                    const uData = uSnap.val() || {};
-                    const name = uData.alias || uData.name || id;
+                db.ref(`users/${id}/name`).once('value', uSnap => {
+                    const name = (uSnap.exists() && uSnap.val()) ? uSnap.val() : id;
 
                     const item = document.createElement('div');
                     item.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:3px 5px; border-bottom:1px solid rgba(255,255,255,0.05);";
@@ -2300,25 +2299,24 @@ window.loadAdminCallsignChallengeSettings = function() {
             }
         } catch(e) {}
 
-        // 2. Cerca nei profili users
+        // 2. Cerca nella presenza utenti (Ottimizzato: legge presence a 0 Byte di storico)
         try {
-            const usersSnap = await db.ref('users').once('value');
+            const usersSnap = await db.ref('presence').once('value');
             if (usersSnap.exists()) {
                 for (const [id, userObj] of Object.entries(usersSnap.val() || {})) {
                     if (!userObj) continue;
                     const uName = (userObj.username || "").toLowerCase();
-                    const aliasName = (userObj.alias || userObj.assignedDefaultName || "").toLowerCase();
+                    const aliasName = (userObj.name || "").toLowerCase();
 
                     const matchesName = (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)));
                     const matchesUser = (uName && (uName === cleanVal || uName.includes(cleanVal)));
-                    const matchesGeneric = (cleanVal.includes('giocat') || cleanVal.includes('anonim')) && (!aliasName || aliasName.includes('giocat') || aliasName.includes('anonim'));
                     const matchesId = (id === cleanVal || id.includes(cleanVal));
 
-                    if (matchesName || matchesUser || matchesGeneric || matchesId) {
+                    if (matchesName || matchesUser || matchesId) {
                         if (!candidates.has(id)) {
                             candidates.set(id, {
                                 id: id,
-                                name: userObj.alias || userObj.assignedDefaultName || userObj.username || "Giocatore / Anonimo",
+                                name: userObj.name || id,
                                 username: userObj.username || ""
                             });
                         }
@@ -2515,12 +2513,8 @@ window.loadAdminCallsignChallengeSettings = function() {
                 await db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).set(window.myId).catch(() => {});
             }
 
-            const [usersSnap, presenceSnap] = await Promise.all([
-                db.ref('users').once('value').catch(() => null),
-                db.ref('presence').once('value').catch(() => null)
-            ]);
-
-            const usersData = (usersSnap && usersSnap.exists()) ? usersSnap.val() : {};
+            const presenceSnap = await db.ref('presence').once('value').catch(() => null);
+            const usersData = {};
             const presenceData = (presenceSnap && presenceSnap.exists()) ? presenceSnap.val() : {};
 
             let incompleteIds = new Set();
