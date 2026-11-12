@@ -2282,6 +2282,14 @@
         <div class="box-panel" style="border-color: #00bcd4; background: rgba(0, 188, 212, 0.05); padding: 12px; text-align: left;">
             <b style="color: #00bcd4; font-size: 0.9em; display:block; margin-bottom: 8px;">📝 Registrazione Log QSO</b>
 
+            <!-- BANNER RIPRISTINO QSO ACTIVITY IN CORSO -->
+            <div id="cwgResumeBanner" style="display:none; background:linear-gradient(135deg, #00bcd4, #008ba3); border:2px solid #00ff66; border-radius:8px; padding:10px; margin-bottom:12px; text-align:center; box-shadow:0 4px 15px rgba(0,255,102,0.3);">
+                <b style="color:#ffffff; font-size:0.95em; display:block; margin-bottom:6px;" id="cwgResumeBannerText">📻 QSO ACTIVITY IN CORSO IN RADIO!</b>
+                <button onclick="window.resumeCwgQsoOnWake()" class="btn-success" style="width:100%; padding:8px; font-weight:bold; font-size:0.9em; background:#00ff66; color:#000; border:none; cursor:pointer;">
+                    ▶️ RIPRENDI SCHERMATA QSO ACTIVITY 🚀
+                </button>
+            </div>
+
             <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px;">
                 <div>
                     <label style="font-size:0.75em; color:var(--champ-color); font-weight:bold; display:block; margin-bottom:2px;">Il Tuo Call:</label>
