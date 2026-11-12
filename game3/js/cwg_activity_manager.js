@@ -630,11 +630,12 @@ window.checkCwgDoubleHandshakeMatch = async function() {
     const myPresenceKey = `${myCall}_${partnerCall}_${band}`;
     window.cwgMyPresenceKey = myPresenceKey;
     const myPresenceRef = db.ref(`activity_cwg/handshake/${myPresenceKey}`);
-    myPresenceRef.onDisconnect().remove();
+    myPresenceRef.onDisconnect().update({ appStatus: 'app_closed', ts: Date.now() });
     myPresenceRef.set({
         myCall: myCall,
         partnerCall: partnerCall,
         band: band,
+        appStatus: document.hidden ? 'app_paused' : 'active',
         ts: nowTs
     }).catch(() => {});
 
@@ -645,7 +646,7 @@ window.checkCwgDoubleHandshakeMatch = async function() {
     db.ref(`activity_cwg/registered_calls/${partnerCall}`).once('value', uSnap => {
         let isRegistered = uSnap.exists();
 
-        if (statusBox) {
+        if (statusBox && !window.cwgQsoActiveInGame) {
             statusBox.style.display = "block";
             statusBox.style.background = "#ffffff";
             statusBox.style.border = "2px solid #ff9800";
@@ -666,7 +667,7 @@ window.checkCwgDoubleHandshakeMatch = async function() {
         if (!snap.exists()) {
             // SE IL QSO ERA IN CORSO E IL CORRISPONDENTE ANNULLA O SI SCOLLEGA:
             if (window.cwgQsoTimerInterval || window.cwgQsoActiveInGame) {
-                alert(`⚠️ Il corrispondente ${partnerCall} ha abbandonato o annullato il QSO.\n\nIl collegamento è stato annullato (0 Punti).`);
+                alert(`⚠️ Il corrispondente ${partnerCall} ha annullato il QSO.\n\nIl collegamento è stato annullato (0 Punti).`);
                 window.resetCwgForm();
             }
             return;
@@ -674,12 +675,24 @@ window.checkCwgDoubleHandshakeMatch = async function() {
 
         const data = snap.val() || {};
         const partnerTs = data.ts || 0;
+        const partnerStatus = data.appStatus || 'active';
+        const partnerDiff = Date.now() - partnerTs;
+        const isPartnerAppClosed = (partnerStatus === 'app_closed' || partnerDiff > 25000);
 
-        // VERIFICA DI FRESCHEZZA STRETTA: Entrambi i timestamp devono essere stati creati a meno di 60 secondi di distanza!
-        if (Math.abs(nowTs - partnerTs) <= 60000) {
-            window.cwgQsoActiveInGame = true;
-            if (statusBox) {
-                statusBox.style.display = "block";
+        if (statusBox && window.cwgQsoActiveInGame) {
+            statusBox.style.display = "block";
+            if (isPartnerAppClosed) {
+                statusBox.style.background = "#fff3cd";
+                statusBox.style.border = "2px solid #ff9800";
+                statusBox.textContent = "";
+
+                const span = document.createElement('span');
+                span.style.color = "#b78103";
+                span.style.fontSize = "0.85em";
+                span.style.fontWeight = "bold";
+                span.textContent = `⚠️ ATTENZIONE: ${partnerCall} ha minimizzato l'app o chiuso Telegram! Avvisalo via radio per farlo rientrare! (Timer QSO in corso)`;
+                statusBox.appendChild(span);
+            } else {
                 statusBox.style.background = "#ffffff";
                 statusBox.style.border = "2px solid #4caf50";
                 statusBox.textContent = "";
@@ -688,9 +701,14 @@ window.checkCwgDoubleHandshakeMatch = async function() {
                 span.style.color = "#000000";
                 span.style.fontSize = "0.85em";
                 span.style.fontWeight = "bold";
-                span.textContent = `🟢 CORRISPONDENZA CONFERMATA CON ${partnerCall}! QSO AVVIATO!`;
+                span.textContent = `🟢 CORRISPONDENZA CONFERMATA CON ${partnerCall}! QSO AVVIATO! (Partner in App)`;
                 statusBox.appendChild(span);
             }
+        }
+
+        // VERIFICA DI FRESCHEZZA STRETTA: Entrambi i timestamp devono essere stati creati a meno di 60 secondi di distanza!
+        if (Math.abs(nowTs - partnerTs) <= 60000) {
+            window.cwgQsoActiveInGame = true;
 
             // Inizializza la Chat Privata di Servizio per questo QSO
             if (typeof window.initCwgPrivateChat === 'function') {
@@ -771,11 +789,14 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
 
     const startBtn = document.getElementById('btnCwgStartTimer');
     const cancelBtn = document.getElementById('btnCwgCancelQso');
+    const finishEarlyBtn = document.getElementById('btnCwgFinishEarly');
+
     if (startBtn) {
         startBtn.disabled = true;
         startBtn.textContent = "🟢 QSO IN CORSO...";
     }
     if (cancelBtn) cancelBtn.style.display = "block";
+    if (finishEarlyBtn) finishEarlyBtn.style.display = "block";
 
     const qsoStartTs = Date.now() - (Number(initialElapsedSeconds) * 1000);
     window.cwgQsoStartTimestamp = qsoStartTs;
@@ -835,6 +856,27 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
     window.cwgQsoTimerInterval = setInterval(() => {
         updateTimerUI();
     }, 1000);
+};
+
+window.finishCwgQsoEarly = function() {
+    if (confirm("Vuoi concludere il QSO in anticipo e passare all'inserimento delle Chiavi di Sicurezza?")) {
+        if (window.cwgQsoTimerInterval) {
+            clearInterval(window.cwgQsoTimerInterval);
+            window.cwgQsoTimerInterval = null;
+        }
+        const finishEarlyBtn = document.getElementById('btnCwgFinishEarly');
+        if (finishEarlyBtn) finishEarlyBtn.style.display = 'none';
+
+        const endNow = new Date();
+        const endHh = String(endNow.getHours()).padStart(2, '0');
+        const endMm = String(endNow.getMinutes()).padStart(2, '0');
+        const endTimeInput = document.getElementById('cwgLogEndTime');
+        if (endTimeInput && (!endTimeInput.value || endTimeInput.value.trim() === "")) {
+            endTimeInput.value = `${endHh}:${endMm}`;
+        }
+
+        window.startCwgKeysExchangePhase();
+    }
 };
 
 window.startCwgKeysExchangePhase = function() {
