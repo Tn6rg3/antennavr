@@ -969,31 +969,6 @@ window.startCwgKeysExchangePhase = function() {
         }
     }, 1000);
 };
-        }
-
-        const perc = Math.max(0, (left / 120) * 100);
-        if (fillBar) {
-            fillBar.style.width = `${perc}%`;
-            fillBar.style.background = left < 30 ? "#ff5252" : "#ffffff";
-        }
-
-        if (left <= 0) {
-            clearInterval(window.cwgExchangeTimerInterval);
-            window.cwgExchangeTimerInterval = null;
-
-            const rxInput = document.getElementById('cwgRxKeyInput');
-            const rxKey = rxInput ? rxInput.value.trim() : "";
-
-            if (rxKey.length === 8) {
-                showToast("⏱️ Tempo di scambio scaduto. Salvataggio automatico del Log...");
-                window.saveCwgQsoLog();
-            } else {
-                alert("⏱️ TEMPO LIMITE SCADUTO (2 Minuti superati)!\n\nNon è stata inserita una Chiave valida entro il tempo limite. Il QSO viene annullato (0 Punti).");
-                window.resetCwgForm();
-            }
-        }
-    }, 1000);
-};
 
 window.onCwgRxKeyInputChanged = function() {
     const rxInput = document.getElementById('cwgRxKeyInput');
