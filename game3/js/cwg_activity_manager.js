@@ -27,6 +27,61 @@ window.saveMyActivityCallPreference = function(newCall) {
         db.ref(`users/${window.myId}/activity_call`).set(cleanCall).catch(() => {});
         db.ref(`activity_cwg/registered_calls/${cleanCall}`).set(true).catch(() => {});
     }
+    if (typeof window.listenToCwgDirectInvites === 'function') {
+        window.listenToCwgDirectInvites();
+    }
+};
+
+window.listenToCwgDirectInvites = function() {
+    const myCall = window.cleanCallsignString(localStorage.getItem('cwgame_activity_call') || window.myName || "");
+    if (!myCall || !db || window.isCwgDirectInviteListenerActive) return;
+    window.isCwgDirectInviteListenerActive = true;
+
+    db.ref(`activity_cwg/direct_invites/${myCall}`).on('value', snap => {
+        if (!snap.exists()) return;
+        const inv = snap.val() || {};
+
+        const activeScreen = document.querySelector('.screen.active-screen')?.id;
+        const isActivityScreenOpen = (activeScreen === 'cwgActivityScreen');
+        const isQsoActive = (window.cwgQsoActiveInGame || !!window.cwgQsoTimerInterval || localStorage.getItem('cwgame_active_qso_session') !== null);
+
+        // REGOLE DI NON DISTURBO RIGIDE:
+        // 1. Se l'utente sta giocando una partita normale o del corso
+        // 2. Se l'utente ha GIÀ la schermata dell'Activity aperta
+        // 3. Se l'utente sta GIÀ facendo un QSO con un altro operatore
+        // 4. Se l'invito è più vecchio di 2 minuti
+        if (window.gameRunning || window.isCourseMode || isActivityScreenOpen || isQsoActive || (Date.now() - (inv.ts || 0) > 120000)) {
+            return;
+        }
+
+        const fromCall = inv.fromCall;
+        const band = (inv.band || '40m').toUpperCase();
+
+        const modal = document.getElementById('cwgActivityInviteModal');
+        const modalText = document.getElementById('cwgActivityInviteText');
+        const acceptBtn = document.getElementById('btnAcceptCwgActivityInvite');
+
+        if (modal && modalText) {
+            modalText.innerHTML = `<b>${fromCall}</b> ti ha inserito come corrispondente nel Log Activity sulla banda <b>${band}</b> per avviare il QSO!<br><br>Vuoi accedere all'Activity per convalidare il collegamento?`;
+            modal.style.display = 'flex';
+
+            if (acceptBtn) {
+                acceptBtn.onclick = async () => {
+                    modal.style.display = 'none';
+                    db.ref(`activity_cwg/direct_invites/${myCall}`).remove().catch(() => {});
+
+                    if (typeof window.openCwgActivityScreen === 'function') {
+                        await window.openCwgActivityScreen();
+                        const partnerInput = document.getElementById('cwgLogPartnerCall');
+                        const bandSelect = document.getElementById('cwgLogBandSelect');
+                        if (partnerInput) partnerInput.value = fromCall;
+                        if (bandSelect && inv.band) bandSelect.value = inv.band.toLowerCase();
+                        window.checkCwgDoubleHandshakeMatch();
+                    }
+                };
+            }
+        }
+    });
 };
 
 window.openCwgActivityScreenImpl = async function() {
@@ -59,6 +114,10 @@ window.openCwgActivityScreenImpl = async function() {
 
     if (typeof window.showScreen === 'function') {
         window.showScreen('cwgActivityScreen');
+    }
+
+    if (typeof window.listenToCwgDirectInvites === 'function') {
+        window.listenToCwgDirectInvites();
     }
 
     if (typeof window.initCwgSettingsRealtimeListener === 'function') {
@@ -652,6 +711,15 @@ window.checkCwgDoubleHandshakeMatch = async function() {
             return;
         }
     } catch(e) {}
+
+    // Inserisce il segnale di invito diretto per il partner
+    if (db && partnerCall && partnerCall.length >= 2 && myCall) {
+        db.ref(`activity_cwg/direct_invites/${partnerCall}`).set({
+            fromCall: myCall,
+            band: band,
+            ts: firebase.database.ServerValue.TIMESTAMP
+        }).catch(() => {});
+    }
 
     // Inizializza immediatamente la Chat Privata tra i due Call
     if (typeof window.initCwgPrivateChat === 'function') {
