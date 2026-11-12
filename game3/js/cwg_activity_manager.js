@@ -805,6 +805,14 @@ window.startCwgQsoTimer = function() {
     }
 };
 
+window.getCwgQsoDurationMinutes = function() {
+    return window.cwgSettingsCache?.qsoDurationMinutes || 4;
+};
+
+window.getCwgKeysDurationMinutes = function() {
+    return window.cwgSettingsCache?.keysDurationMinutes || 2;
+};
+
 window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator = true) {
     window.isCwgInitiator = isInitiator;
 
@@ -822,14 +830,12 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
 
     const startBtn = document.getElementById('btnCwgStartTimer');
     const cancelBtn = document.getElementById('btnCwgCancelQso');
-    const finishEarlyBtn = document.getElementById('btnCwgFinishEarly');
 
     if (startBtn) {
         startBtn.disabled = true;
         startBtn.textContent = "🟢 QSO IN CORSO...";
     }
     if (cancelBtn) cancelBtn.style.display = "block";
-    if (finishEarlyBtn) finishEarlyBtn.style.display = "block";
 
     const qsoStartTs = Date.now() - (Number(initialElapsedSeconds) * 1000);
     window.cwgQsoStartTimestamp = qsoStartTs;
@@ -848,6 +854,9 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
     const timerDisp = document.getElementById('cwgQsoTimerDisplay');
     const fillBar = document.getElementById('cwgTimerProgressFill');
 
+    const targetQsoMinutes = window.getCwgQsoDurationMinutes();
+    const targetQsoSeconds = targetQsoMinutes * 60;
+
     const updateTimerUI = () => {
         const curNow = Date.now();
         const realSecs = Math.floor((curNow - window.cwgQsoStartTimestamp) / 1000);
@@ -856,18 +865,20 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
 
         const mins = String(Math.floor(currentSecs / 60)).padStart(2, '0');
         const secs = String(currentSecs % 60).padStart(2, '0');
+        const totalMinsStr = String(targetQsoMinutes).padStart(2, '0');
+
         if (timerDisp) {
-            timerDisp.textContent = `${mins}:${secs} / 04:00`;
+            timerDisp.textContent = `${mins}:${secs} / ${totalMinsStr}:00`;
             timerDisp.style.color = "#00ff66";
         }
 
-        const perc = Math.min(100, (currentSecs / 240) * 100);
+        const perc = Math.min(100, (currentSecs / targetQsoSeconds) * 100);
         if (fillBar) {
             fillBar.style.width = `${perc}%`;
             fillBar.style.background = "#00ff66";
         }
 
-        if (currentSecs >= 240) {
+        if (currentSecs >= targetQsoSeconds) {
             if (window.cwgQsoTimerInterval) {
                 clearInterval(window.cwgQsoTimerInterval);
                 window.cwgQsoTimerInterval = null;
@@ -891,27 +902,6 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
     }, 1000);
 };
 
-window.finishCwgQsoEarly = function() {
-    if (confirm("Vuoi concludere il QSO in anticipo e passare all'inserimento delle Chiavi di Sicurezza?")) {
-        if (window.cwgQsoTimerInterval) {
-            clearInterval(window.cwgQsoTimerInterval);
-            window.cwgQsoTimerInterval = null;
-        }
-        const finishEarlyBtn = document.getElementById('btnCwgFinishEarly');
-        if (finishEarlyBtn) finishEarlyBtn.style.display = 'none';
-
-        const endNow = new Date();
-        const endHh = String(endNow.getHours()).padStart(2, '0');
-        const endMm = String(endNow.getMinutes()).padStart(2, '0');
-        const endTimeInput = document.getElementById('cwgLogEndTime');
-        if (endTimeInput && (!endTimeInput.value || endTimeInput.value.trim() === "")) {
-            endTimeInput.value = `${endHh}:${endMm}`;
-        }
-
-        window.startCwgKeysExchangePhase();
-    }
-};
-
 window.startCwgKeysExchangePhase = function() {
     const keysSec = document.getElementById('cwgKeysSection');
     const timerDisp = document.getElementById('cwgQsoTimerDisplay');
@@ -919,18 +909,24 @@ window.startCwgKeysExchangePhase = function() {
     const stepHelp = document.getElementById('cwgKeysStepHelpText');
     const txBox = document.getElementById('cwgTxKeyDisplayBox');
 
+    const keysMinutes = window.getCwgKeysDurationMinutes();
+    const keysTotalSeconds = keysMinutes * 60;
+    const qsoMinutes = window.getCwgQsoDurationMinutes();
+    const qsoTotalSeconds = qsoMinutes * 60;
+    const maxTotalSeconds = qsoTotalSeconds + keysTotalSeconds;
+
     if (keysSec) keysSec.style.display = "block";
 
     if (window.isCwgInitiator) {
         window.requestCwgTxKey();
         if (stepHelp) {
-            stepHelp.textContent = "① Trasmetti la tua Chiave TX in Morse a B, e scrivi qui sotto la Chiave RX che B ti invierà entro 2 minuti!";
+            stepHelp.textContent = `① Trasmetti la tua Chiave TX in Morse a B, e scrivi qui sotto la Chiave RX che B ti invierà entro ${keysMinutes} minut${keysMinutes === 1 ? 'o' : 'i'}!`;
             stepHelp.style.color = "#ffffff";
         }
     } else {
         if (txBox) txBox.style.display = "none";
         if (stepHelp) {
-            stepHelp.textContent = "① Ricevi la Chiave Morse di A ed inseriscila nel campo qui sotto entro 2 minuti per sbloccare la tua Chiave TX!";
+            stepHelp.textContent = `① Ricevi la Chiave Morse di A ed inseriscila nel campo qui sotto entro ${keysMinutes} minut${keysMinutes === 1 ? 'o' : 'i'} per sbloccare la tua Chiave TX!`;
             stepHelp.style.color = "#ffffff";
         }
     }
@@ -939,15 +935,40 @@ window.startCwgKeysExchangePhase = function() {
 
     window.cwgExchangeTimerInterval = setInterval(() => {
         const totalElapsed = Math.floor((Date.now() - (window.cwgQsoStartTimestamp || Date.now())) / 1000);
-        window.cwgExchangeSecondsLeft = Math.max(0, 360 - totalElapsed);
+        window.cwgExchangeSecondsLeft = Math.max(0, maxTotalSeconds - totalElapsed);
         const left = window.cwgExchangeSecondsLeft;
 
         const mins = String(Math.floor(left / 60)).padStart(2, '0');
         const secs = String(left % 60).padStart(2, '0');
 
         if (timerDisp) {
-            timerDisp.textContent = `⏱️ SCAMBIO CHIAVI: ${mins}:${secs}`;
+            timerDisp.textContent = `⏱️ SCAMBIO CHIAVI (${keysMinutes}m): ${mins}:${secs}`;
             timerDisp.style.color = left < 30 ? "#ff5252" : "#ffffff";
+        }
+
+        const perc = Math.max(0, (left / keysTotalSeconds) * 100);
+        if (fillBar) {
+            fillBar.style.width = `${perc}%`;
+            fillBar.style.background = left < 30 ? "#ff5252" : "#ffffff";
+        }
+
+        if (left <= 0) {
+            clearInterval(window.cwgExchangeTimerInterval);
+            window.cwgExchangeTimerInterval = null;
+
+            const rxInput = document.getElementById('cwgRxKeyInput');
+            const rxKey = rxInput ? rxInput.value.trim() : "";
+
+            if (rxKey.length === 8) {
+                showToast("⏱️ Tempo di scambio scaduto. Salvataggio automatico del Log...");
+                window.saveCwgQsoLog();
+            } else {
+                alert(`⏱️ TEMPO LIMITE SCADUTO (${keysMinutes} Minut${keysMinutes === 1 ? 'o' : 'i'} superat${keysMinutes === 1 ? 'o' : 'i'})!\n\nNon è stata inserita una Chiave valida entro il tempo limite. Il QSO viene annullato (0 Punti).`);
+                window.resetCwgForm();
+            }
+        }
+    }, 1000);
+};
         }
 
         const perc = Math.max(0, (left / 120) * 100);
