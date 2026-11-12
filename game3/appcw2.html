@@ -1739,12 +1739,29 @@
 
             <!-- AREA ADMIN: CONFIGURAZIONE PROGRAMMAZIONE ACTIVITY - CWG -->
             <div style="border-top: 1px solid rgba(0,188,212,0.4); padding-top: 10px; margin-top:10px; text-align:left;">
-                <h4 style="margin: 0 0 8px 0; color: #00bcd4; font-size: 0.95em;">📻 Programmazione Oraria Activity - CWG</h4>
+                <h4 style="margin: 0 0 8px 0; color: #00bcd4; font-size: 0.95em;">📻 Programmazione & Edizioni Activity - CWG</h4>
 
                 <div style="margin-bottom:8px; background:rgba(0,188,212,0.1); padding:6px; border-radius:6px; border:1px solid #00bcd4;">
                     <label style="font-size:0.8em; font-weight:bold; color:#00bcd4; display:flex; align-items:center; gap:6px; cursor:pointer;">
                         <input type="checkbox" id="adminCwgAllUsersCheckbox"> 🌐 ABILITA ACTIVITY PER TUTTI GLI UTENTI
                     </label>
+                </div>
+
+                <!-- PERIODO ACTIVITY (DA - A) E TITOLO EDIZIONE -->
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-bottom:8px;">
+                    <div>
+                        <label style="font-size:0.7em; color:var(--hint-color); display:block; margin-bottom:2px;">Data Inizio:</label>
+                        <input type="date" id="adminCwgStartDate" onchange="window.updateAdminCwgAutoTitle()" style="width:100%; padding:4px; font-size:0.8em; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size:0.7em; color:var(--hint-color); display:block; margin-bottom:2px;">Data Fine:</label>
+                        <input type="date" id="adminCwgEndDate" onchange="window.updateAdminCwgAutoTitle()" style="width:100%; padding:4px; font-size:0.8em; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
+                    </div>
+                </div>
+
+                <div style="margin-bottom:8px;">
+                    <label style="font-size:0.7em; color:var(--hint-color); display:block; margin-bottom:2px;">Titolo Edizione Activity (es. ACTIVITY CWG 11/26 o 11-12/26):</label>
+                    <input type="text" id="adminCwgTitle" placeholder="es. ACTIVITY CWG 11/26" style="width:100%; padding:6px; font-size:0.85em; font-weight:bold; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
                 </div>
 
                 <div style="margin-bottom:8px;">
@@ -1777,9 +1794,22 @@
                     </div>
                 </div>
 
-                <button onclick="window.saveAdminCwgScheduleSettings()" class="btn-success" style="width:100%; padding:8px; font-weight:bold; background:#00bcd4; border:none; color:#000; cursor:pointer;">
-                    💾 SALVA PROGRAMMAZIONE ACTIVITY
-                </button>
+                <div style="display:flex; gap:6px; margin-bottom:10px;">
+                    <button onclick="window.saveAdminCwgScheduleSettings()" class="btn-success" style="flex:2; padding:8px; font-weight:bold; background:#00bcd4; border:none; color:#000; cursor:pointer;">
+                        💾 SALVA PROGRAMMAZIONE
+                    </button>
+                    <button onclick="window.clearCurrentCwgLeaderboard()" class="btn-danger" style="flex:1; padding:8px; font-weight:bold; font-size:0.75em; cursor:pointer;">
+                        🗑️ AZZERA CLASSIFICA
+                    </button>
+                </div>
+
+                <!-- ELENCO EDIZIONI SALVATE ED ARCHIVIATE -->
+                <div style="margin-top:10px; background:rgba(0,0,0,0.2); padding:8px; border-radius:6px; border:1px solid rgba(0,188,212,0.2);">
+                    <b style="font-size:0.8em; color:#00bcd4; display:block; margin-bottom:4px;">📜 Edizioni Activity Archiviate:</b>
+                    <div id="adminCwgEditionsList" style="max-height:120px; overflow-y:auto; font-size:0.75em;">
+                        <p style="color:var(--hint-color); margin:2px 0;">Nessuna edizione archiviata.</p>
+                    </div>
+                </div>
             </div>
 
             <!-- AREA ADMIN: CONFIGURAZIONE SFIDA NOMINATIVI DEL GIORNO (es. SFIDA DEL LUNEDÌ) -->
