@@ -33,6 +33,34 @@ window.fetchDictionary = async function(url, lang) {
     }
 };
 
+window.populateWordLengthSelectOptions = function() {
+    const select = document.getElementById('wordLengthInput');
+    if (!select) return;
+
+    const currentVal = select.value || "0";
+    let maxLen = 12;
+
+    const dict = (window.masterDictionary && window.masterDictionary.length > 0)
+        ? window.masterDictionary
+        : ((window.itDictionaryCombined && window.itDictionaryCombined.length > 0) ? window.itDictionaryCombined : []);
+
+    if (dict && dict.length > 0) {
+        dict.forEach(w => {
+            if (w && w.length > maxLen) maxLen = w.length;
+        });
+    }
+
+    select.innerHTML = '<option value="0" id="txt_word_len_any">Qualsiasi</option>';
+
+    for (let i = 3; i <= maxLen; i++) {
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = String(i);
+        if (String(i) === String(currentVal)) opt.selected = true;
+        select.appendChild(opt);
+    }
+};
+
 window.updateDictionary = function() {
     // Uniamo 'parole.txt' e 'parole2.txt' in un unico master dictionary italiano completo e ricchissimo
     const combinedIt = Array.from(new Set([
@@ -45,6 +73,10 @@ window.updateDictionary = function() {
     window.masterDictionary = (currentLang === 'en' && window.enDictionary && window.enDictionary.length > 0)
         ? window.enDictionary
         : combinedIt;
+
+    if (typeof window.populateWordLengthSelectOptions === 'function') {
+        window.populateWordLengthSelectOptions();
+    }
 };
 
 window.getDailyWords = function(num) {

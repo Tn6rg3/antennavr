@@ -3453,7 +3453,6 @@ window.resumeTriDailySession = function(slotId, resumeData) {
         }
     }, 600);
 };
-};
 
 window.startTriDailySession = function(slotId) {
     window.resetGameState();
