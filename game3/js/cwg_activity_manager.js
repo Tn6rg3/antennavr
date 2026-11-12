@@ -66,6 +66,29 @@ window.openCwgActivityScreenImpl = async function() {
         window.listenToCwgLiveQsosTable();
     }
 
+    // Controlliamo se qualcuno ha risposto ad un nostro Spot CQ recentemente
+    if (db && myActivityCall) {
+        db.ref('activity_cwg/cq_accepted').orderByChild('spotCall').equalTo(myActivityCall).once('value', snap => {
+            if (snap.exists()) {
+                snap.forEach(c => {
+                    const val = c.val();
+                    if (val && val.responderCall && (Date.now() - (val.ts || 0) < 300000)) {
+                        const partnerInput = document.getElementById('cwgLogPartnerCall');
+                        const bandSelect = document.getElementById('cwgLogBandSelect');
+
+                        if (partnerInput && (!partnerInput.value || partnerInput.value.trim() === "")) {
+                            partnerInput.value = val.responderCall;
+                        }
+                        if (bandSelect && val.band) {
+                            bandSelect.value = val.band.toLowerCase();
+                        }
+                        window.checkCwgDoubleHandshakeMatch();
+                    }
+                });
+            }
+        });
+    }
+
     // Controlliamo se c'è una sessione QSO già attiva da ripristinare anziché azzerare
     const activeSessionRaw = localStorage.getItem('cwgame_active_qso_session');
     if (activeSessionRaw) {
@@ -250,9 +273,17 @@ window.sendCwgCqSpotInChat = function() {
                     partnerInput.value = responderCall;
                 }
 
+                // Se l'ideatore dello spot non si trova nella schermata Activity CWG, la apriamo subito in automatico!
+                const activeScreen = document.querySelector('.screen.active-screen')?.id;
+                if (activeScreen !== 'cwgActivityScreen' && typeof window.showScreen === 'function') {
+                    window.showScreen('cwgActivityScreen');
+                }
+
                 if (typeof showToast === 'function') {
                     showToast(`📡 ${responderCall} ha risposto al tuo Spot CQ su ${band}! Avvio QSO...`);
                 }
+
+                alert(`📡 ${responderCall} HA RISPOSTO AL TUO SPOT CQ SULLA BANDA ${band}!\n\nIl suo Call (${responderCall}) è stato inserito automaticamente. Il QSO parte in automatico!`);
 
                 const startBtn = document.getElementById('btnCwgStartTimer');
                 const cancelBtn = document.getElementById('btnCwgCancelQso');
@@ -260,6 +291,11 @@ window.sendCwgCqSpotInChat = function() {
                     startBtn.disabled = true;
                     startBtn.textContent = "⏳ IN ATTESA DEL CORRISPONDENTE...";
                 }
+                if (cancelBtn) cancelBtn.style.display = "block";
+
+                window.checkCwgDoubleHandshakeMatch();
+            }
+        });
                 if (cancelBtn) cancelBtn.style.display = "block";
 
                 window.checkCwgDoubleHandshakeMatch();
@@ -679,42 +715,44 @@ window.checkCwgDoubleHandshakeMatch = async function() {
         const partnerDiff = Date.now() - partnerTs;
         const isPartnerAppClosed = (partnerStatus === 'app_closed' || partnerDiff > 25000);
 
-        if (statusBox && window.cwgQsoActiveInGame) {
-            statusBox.style.display = "block";
-            if (isPartnerAppClosed) {
-                statusBox.style.background = "#fff3cd";
-                statusBox.style.border = "2px solid #ff9800";
-                statusBox.textContent = "";
-
-                const span = document.createElement('span');
-                span.style.color = "#b78103";
-                span.style.fontSize = "0.85em";
-                span.style.fontWeight = "bold";
-                span.textContent = `⚠️ ATTENZIONE: ${partnerCall} ha minimizzato l'app o chiuso Telegram! Avvisalo via radio per farlo rientrare! (Timer QSO in corso)`;
-                statusBox.appendChild(span);
-            } else {
-                statusBox.style.background = "#ffffff";
-                statusBox.style.border = "2px solid #4caf50";
-                statusBox.textContent = "";
-
-                const span = document.createElement('span');
-                span.style.color = "#000000";
-                span.style.fontSize = "0.85em";
-                span.style.fontWeight = "bold";
-                span.textContent = `🟢 CORRISPONDENZA CONFERMATA CON ${partnerCall}! QSO AVVIATO! (Partner in App)`;
-                statusBox.appendChild(span);
-            }
-        }
-
         // VERIFICA DI FRESCHEZZA STRETTA: Entrambi i timestamp devono essere stati creati a meno di 60 secondi di distanza!
         if (Math.abs(nowTs - partnerTs) <= 60000) {
             window.cwgQsoActiveInGame = true;
 
-            // Inizializza la Chat Privata di Servizio per questo QSO
+            // 1. AGGIORNIAMO SUBITO IL BOX DI STATO PER ENTRAMBI I DISPOSITIVI!
+            if (statusBox) {
+                statusBox.style.display = "block";
+                if (isPartnerAppClosed) {
+                    statusBox.style.background = "#fff3cd";
+                    statusBox.style.border = "2px solid #ff9800";
+                    statusBox.textContent = "";
+
+                    const span = document.createElement('span');
+                    span.style.color = "#b78103";
+                    span.style.fontSize = "0.85em";
+                    span.style.fontWeight = "bold";
+                    span.textContent = `⚠️ ATTENZIONE: ${partnerCall} ha minimizzato l'app o chiuso Telegram! Avvisalo via radio per farlo rientrare! (Timer QSO in corso)`;
+                    statusBox.appendChild(span);
+                } else {
+                    statusBox.style.background = "#ffffff";
+                    statusBox.style.border = "2px solid #4caf50";
+                    statusBox.textContent = "";
+
+                    const span = document.createElement('span');
+                    span.style.color = "#000000";
+                    span.style.fontSize = "0.85em";
+                    span.style.fontWeight = "bold";
+                    span.textContent = `🟢 CORRISPONDENZA CONFERMATA CON ${partnerCall}! QSO AVVIATO! (Partner in App)`;
+                    statusBox.appendChild(span);
+                }
+            }
+
+            // 2. Inizializza la Chat Privata di Servizio per questo QSO
             if (typeof window.initCwgPrivateChat === 'function') {
                 window.initCwgPrivateChat(myCall, partnerCall, band);
             }
 
+            // 3. Avvia il Timer per entrambi se non ancora avviato
             if (!window.cwgQsoTimerInterval && window.cwgQsoTimerSeconds === 0) {
                 if (typeof showToast === 'function') {
                     showToast(`🟢 Corrispondenza confermata tra ${myCall} e ${partnerCall}! Timer 4 Minuti avviato.`);
