@@ -61,6 +61,10 @@ window.openCwgActivityScreenImpl = async function() {
         window.showScreen('cwgActivityScreen');
     }
 
+    if (typeof window.updateCwgTimerDisplaysUI === 'function') {
+        window.updateCwgTimerDisplaysUI();
+    }
+
     // Attiviamo l'ascolto della tabella dei QSO in corso nel gioco
     if (typeof window.listenToCwgLiveQsosTable === 'function') {
         window.listenToCwgLiveQsosTable();
@@ -166,14 +170,14 @@ window.resetCwgForm = function() {
     const statusBox = document.getElementById('cwgHandshakeStatusBox');
 
     if (statusBox) statusBox.style.display = "none";
-    if (timerDisp) {
-        timerDisp.textContent = "00:00 / 04:00 (STANDBY)";
-        timerDisp.style.color = "#ff9800";
-    }
     if (fillBar) fillBar.style.width = "0%";
     if (keysSec) keysSec.style.display = "none";
     if (txBox) txBox.style.display = "none";
     if (saveBtn) saveBtn.disabled = true;
+
+    if (typeof window.updateCwgTimerDisplaysUI === 'function') {
+        window.updateCwgTimerDisplaysUI();
+    }
     if (cancelBtn) cancelBtn.style.display = "none";
     if (rxInput) {
         rxInput.value = "";
@@ -811,6 +815,22 @@ window.getCwgQsoDurationMinutes = function() {
 
 window.getCwgKeysDurationMinutes = function() {
     return window.cwgSettingsCache?.keysDurationMinutes || 2;
+};
+
+window.updateCwgTimerDisplaysUI = function() {
+    const targetQsoMinutes = window.getCwgQsoDurationMinutes();
+    const totalMinsStr = String(targetQsoMinutes).padStart(2, '0');
+
+    const timerDisp = document.getElementById('cwgQsoTimerDisplay');
+    const startBtn = document.getElementById('btnCwgStartTimer');
+
+    if (timerDisp && (!window.cwgQsoTimerInterval || window.cwgQsoTimerSeconds === 0)) {
+        timerDisp.textContent = `00:00 / ${totalMinsStr}:00`;
+    }
+
+    if (startBtn && (!startBtn.disabled || startBtn.textContent.includes('AVVIA'))) {
+        startBtn.textContent = `▶️ AVVIA QSO & TIMER ${targetQsoMinutes} MINUTI`;
+    }
 };
 
 window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator = true) {
