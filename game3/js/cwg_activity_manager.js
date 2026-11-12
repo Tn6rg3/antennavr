@@ -70,13 +70,13 @@ window.openCwgActivityScreenImpl = async function() {
         window.listenToCwgLiveQsosTable();
     }
 
-    // Controlliamo se qualcuno ha risposto ad un nostro Spot CQ recentemente
+    // Controlliamo se qualcuno ha risposto ad un nostro Spot CQ recentemente (senza query non indicizzate)
     if (db && myActivityCall) {
-        db.ref('activity_cwg/cq_accepted').orderByChild('spotCall').equalTo(myActivityCall).once('value', snap => {
+        db.ref('activity_cwg/cq_accepted').once('value', snap => {
             if (snap.exists()) {
                 snap.forEach(c => {
                     const val = c.val();
-                    if (val && val.responderCall && (Date.now() - (val.ts || 0) < 300000)) {
+                    if (val && val.spotCall === myActivityCall && val.responderCall && (Date.now() - (val.ts || 0) < 300000)) {
                         const partnerInput = document.getElementById('cwgLogPartnerCall');
                         const bandSelect = document.getElementById('cwgLogBandSelect');
 
@@ -90,7 +90,7 @@ window.openCwgActivityScreenImpl = async function() {
                     }
                 });
             }
-        });
+        }).catch(() => {});
     }
 
     // Controlliamo se c'è una sessione QSO già attiva da ripristinare anziché azzerare
@@ -809,6 +809,22 @@ window.startCwgQsoTimer = function() {
     }
 };
 
+window.fetchCwgSettingsAsync = async function() {
+    if (window.cwgSettingsCache && typeof window.cwgSettingsCache === 'object' && window.cwgSettingsCache.qsoDurationMinutes) {
+        return window.cwgSettingsCache;
+    }
+    try {
+        if (db) {
+            const snap = await db.ref('appConfig/cwg_activity_settings').once('value');
+            if (snap.exists() && snap.val()) {
+                window.cwgSettingsCache = snap.val();
+                return snap.val();
+            }
+        }
+    } catch(e) {}
+    return {};
+};
+
 window.getCwgQsoDurationMinutes = function() {
     return window.cwgSettingsCache?.qsoDurationMinutes || 4;
 };
@@ -817,7 +833,8 @@ window.getCwgKeysDurationMinutes = function() {
     return window.cwgSettingsCache?.keysDurationMinutes || 2;
 };
 
-window.updateCwgTimerDisplaysUI = function() {
+window.updateCwgTimerDisplaysUI = async function() {
+    await window.fetchCwgSettingsAsync();
     const targetQsoMinutes = window.getCwgQsoDurationMinutes();
     const totalMinsStr = String(targetQsoMinutes).padStart(2, '0');
 
@@ -825,7 +842,7 @@ window.updateCwgTimerDisplaysUI = function() {
     const startBtn = document.getElementById('btnCwgStartTimer');
 
     if (timerDisp && (!window.cwgQsoTimerInterval || window.cwgQsoTimerSeconds === 0)) {
-        timerDisp.textContent = `00:00 / ${totalMinsStr}:00`;
+        timerDisp.textContent = `00:00 / ${totalMinsStr}:00 (STANDBY)`;
     }
 
     if (startBtn && (!startBtn.disabled || startBtn.textContent.includes('AVVIA'))) {
