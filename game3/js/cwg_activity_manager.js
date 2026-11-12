@@ -296,11 +296,6 @@ window.sendCwgCqSpotInChat = function() {
                 window.checkCwgDoubleHandshakeMatch();
             }
         });
-                if (cancelBtn) cancelBtn.style.display = "block";
-
-                window.checkCwgDoubleHandshakeMatch();
-            }
-        });
     }
 };
 
