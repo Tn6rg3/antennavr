@@ -1382,7 +1382,20 @@ window.initMandatoryAliasHandlers = function() {
                 const banner = document.getElementById('updateBanner');
                 if (banner) {
                     banner.style.display = 'block';
-                    banner.innerHTML = `🚀 Nuova Versione ${latestStr} Disponibile! <button id="updateBannerBtn" onclick="window.forceAppUpdate()" style="width:auto; display:inline-block; margin-left:10px; padding:5px 15px; background:white; color:#ff9800; border-radius: 20px; font-size: 0.9em; border:none; cursor:pointer; font-weight:bold;">Aggiorna ora 🚀</button>`;
+                    banner.innerHTML = '';
+
+                    const textSpan = document.createElement('span');
+                    const safeVer = (typeof window.escapeHtml === 'function') ? window.escapeHtml(latestStr) : latestStr.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    textSpan.textContent = `🚀 Nuova Versione ${safeVer} Disponibile! `;
+
+                    const btn = document.createElement('button');
+                    btn.id = 'updateBannerBtn';
+                    btn.style.cssText = 'width:auto; display:inline-block; margin-left:10px; padding:5px 15px; background:white; color:#ff9800; border-radius:20px; font-size:0.9em; border:none; cursor:pointer; font-weight:bold;';
+                    btn.textContent = 'Aggiorna ora 🚀';
+                    btn.onclick = () => window.forceAppUpdate();
+
+                    banner.appendChild(textSpan);
+                    banner.appendChild(btn);
                 }
 
                 if (typeof showToast === 'function') {
@@ -1879,6 +1892,13 @@ window.loadAdminCwgScheduleSettings = function() {
                 if (el) el.checked = (days[d] !== false);
             }
 
+            if (document.getElementById('adminCwgQsoDuration')) {
+                document.getElementById('adminCwgQsoDuration').value = s.qsoDurationMinutes || 4;
+            }
+            if (document.getElementById('adminCwgKeysDuration')) {
+                document.getElementById('adminCwgKeysDuration').value = s.keysDurationMinutes || 2;
+            }
+
             if (s.slot1) {
                 if (document.getElementById('cwgSlot1Start')) document.getElementById('cwgSlot1Start').value = s.slot1.start || "08:00";
                 if (document.getElementById('cwgSlot1End')) document.getElementById('cwgSlot1End').value = s.slot1.end || "12:00";
@@ -1900,6 +1920,9 @@ window.saveAdminCwgScheduleSettings = function() {
     const startDate = document.getElementById('adminCwgStartDate')?.value || "";
     const endDate = document.getElementById('adminCwgEndDate')?.value || "";
     let title = document.getElementById('adminCwgTitle')?.value.trim() || "";
+
+    const qsoDurationMinutes = Math.max(1, parseInt(document.getElementById('adminCwgQsoDuration')?.value) || 4);
+    const keysDurationMinutes = Math.max(1, parseInt(document.getElementById('adminCwgKeysDuration')?.value) || 2);
 
     if (!title && startDate) {
         window.updateAdminCwgAutoTitle();
@@ -1931,6 +1954,8 @@ window.saveAdminCwgScheduleSettings = function() {
         startDate: startDate,
         endDate: endDate,
         title: title || "ACTIVITY CWG",
+        qsoDurationMinutes: qsoDurationMinutes,
+        keysDurationMinutes: keysDurationMinutes,
         enabledDays: days,
         slot1: slot1,
         slot2: slot2,
