@@ -3197,16 +3197,21 @@ window.renderTriDailyHubCards = function() {
             const resumeData = slotObj.resumeData || null;
             const resumeNextIndex = resumeData ? (Number(resumeData.wordIndex) + 2) : 1;
 
+            const isCurrentSlotActive = (currentSlot.id === s.id);
+
             if (isWithdrawn) {
                 badgeSpan.style.color = "#f44336";
                 badgeSpan.textContent = "🏃 Rinunciata";
             } else if (isCompleted) {
                 badgeSpan.style.color = "#4caf50";
                 badgeSpan.textContent = `✅ ${score} pt (${finalWpm} WPM)`;
-            } else if (isPlayed) {
+            } else if (isPlayed && isCurrentSlotActive) {
                 badgeSpan.style.color = "#ff9800";
                 badgeSpan.textContent = `⚠️ Interrotta (Riprendi da ${resumeNextIndex}/${s.words})`;
-            } else if (currentSlot.id === s.id) {
+            } else if (isPlayed) {
+                badgeSpan.style.color = "#ff9800";
+                badgeSpan.textContent = `⚠️ Interrotta (Tempo Scaduto)`;
+            } else if (isCurrentSlotActive) {
                 badgeSpan.style.color = "#ff9800";
                 badgeSpan.style.animation = "pulse 1.5s infinite";
                 badgeSpan.textContent = "🚀 IN CORSO";
@@ -3225,7 +3230,9 @@ window.renderTriDailyHubCards = function() {
             infoDiv.textContent = `${s.words} Parole | Incremento WPM: ${s.step}`;
             card.appendChild(infoDiv);
 
-            if (currentSlot.id === s.id && !isCompleted && !isWithdrawn) {
+            const shouldShowButtons = isCurrentSlotActive && !isCompleted && !isWithdrawn;
+
+            if (shouldShowButtons) {
                 const btnDiv = document.createElement('div');
                 btnDiv.style.cssText = "display:flex; gap:8px; margin-top:10px;";
 
@@ -3369,7 +3376,7 @@ window.resumeTriDailySession = function(slotId, resumeData) {
     const totalWordsCount = slotInfo.wordCount || 10;
 
     if (nextWordIndex >= totalWordsCount) {
-        window.finishGame();
+        if (typeof window.finishGame === 'function') window.finishGame();
         return;
     }
 
@@ -3379,16 +3386,23 @@ window.resumeTriDailySession = function(slotId, resumeData) {
     window.currentWpm = window.baseWpm = resumeData.currentWpm || 15;
     window.peakWpm = Math.max(resumeData.peakWpm || 15, window.currentWpm);
     window.totalScore = resumeData.totalScore || 0;
+    wordIndex = nextWordIndex;
     window.wordIndex = nextWordIndex;
     window.requestedWordCount = totalWordsCount;
-    window.matchDetailsArray = resumeData.matchDetailsArray || [];
+    matchDetailsArray = resumeData.matchDetailsArray || [];
+    window.matchDetailsArray = matchDetailsArray;
     window.currentTone = parseInt(localStorage.getItem(STORAGE_PREF_TONE)) || 600;
 
     roomCode = "SOLO_TRI_" + window.myId;
     gameWords = window.getTriDailyWords(window.requestedWordCount);
 
+    if (els.permanentGameInput) {
+        els.permanentGameInput.value = "";
+        els.permanentGameInput.disabled = false;
+    }
+
     if (typeof window.showScreen === 'function') {
-        window.showScreen('gameScreen');
+        window.showScreen('gameArea');
     }
 
     // Ricostruiamo la tabella delle parole già svolte
@@ -3397,25 +3411,48 @@ window.resumeTriDailySession = function(slotId, resumeData) {
         window.matchDetailsArray.forEach(row => {
             const tr = document.createElement('tr');
             const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed || "-";
-            const tdReal = document.createElement('td'); window.renderDiffSecure(tdReal, row.real, row.typed);
-            const tdWpm = document.createElement('td'); tdWpm.textContent = `${row.wpm || window.currentWpm} WPM`;
-            const tdPoints = document.createElement('td'); tdPoints.textContent = `+${row.points || 0}`;
+            const tdReal = document.createElement('td');
+            if (typeof window.renderDiffSecure === 'function') {
+                window.renderDiffSecure(tdReal, row.real, row.typed || '');
+            } else {
+                tdReal.textContent = row.real;
+            }
+            const tdWpm = document.createElement('td');
+            tdWpm.style.textAlign = 'center';
+            tdWpm.style.fontWeight = 'bold';
+            tdWpm.style.color = '#ff9800';
+            tdWpm.style.fontSize = '0.85em';
+            tdWpm.textContent = `${row.wpm || window.currentWpm} WPM`;
+
+            const tdPoints = document.createElement('td');
+            tdPoints.style.textAlign = 'center';
+            tdPoints.style.color = row.points > 0 ? "#00ff66" : "#f44336";
+            tdPoints.style.fontWeight = 'bold';
+            tdPoints.textContent = row.points > 0 ? `+${row.points}` : "0";
+
             tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdWpm); tr.appendChild(tdPoints);
             els.tableBody.appendChild(tr);
         });
+        if (els.tableWrapper) els.tableWrapper.scrollTop = els.tableWrapper.scrollHeight;
     }
 
-    if (els.scoreDisplay) els.scoreDisplay.textContent = `${window.totalScore} pt`;
+    if (els.scoreDisplay) els.scoreDisplay.textContent = `Punti: ${window.totalScore}`;
     if (els.wpmDisplay) els.wpmDisplay.textContent = `WPM: ${window.currentWpm}`;
     if (els.wordIndexDisplay) els.wordIndexDisplay.textContent = `${nextWordIndex + 1} / ${totalWordsCount}`;
+
+    gameRunning = true;
+    inputActive = true;
+    lastWordStartTime = Date.now();
 
     showToast(`🔄 Sessione ripresa dalla Parola ${nextWordIndex + 1} di ${totalWordsCount}! (+${window.totalScore} pt salvati)`);
 
     setTimeout(() => {
-        if (typeof playMorseAudio === 'function') {
+        if (gameRunning && typeof playMorseAudio === 'function' && gameWords[nextWordIndex]) {
             playMorseAudio(gameWords[nextWordIndex].toUpperCase(), window.currentWpm);
+            if (els.permanentGameInput) els.permanentGameInput.focus();
         }
     }, 600);
+};
 };
 
 window.startTriDailySession = function(slotId) {
