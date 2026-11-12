@@ -1775,6 +1775,18 @@
                     <input type="text" id="adminCwgTitle" placeholder="es. ACTIVITY CWG 11/26" style="width:100%; padding:6px; font-size:0.85em; font-weight:bold; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
                 </div>
 
+                <!-- DURATA TIMER QSO E SCAMBIO CHIAVI (PERSONALIZZABILI) -->
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-bottom:8px; background:rgba(0,0,0,0.2); padding:6px; border-radius:6px; border:1px solid rgba(0,188,212,0.2);">
+                    <div>
+                        <label style="font-size:0.7em; color:#00bcd4; font-weight:bold; display:block; margin-bottom:2px;">Timer QSO (Minuti):</label>
+                        <input type="number" id="adminCwgQsoDuration" value="4" min="1" max="30" style="width:100%; padding:4px; font-size:0.85em; font-weight:bold; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size:0.7em; color:var(--champ-color); font-weight:bold; display:block; margin-bottom:2px;">Scambio Chiavi (Minuti):</label>
+                        <input type="number" id="adminCwgKeysDuration" value="2" min="1" max="10" style="width:100%; padding:4px; font-size:0.85em; font-weight:bold; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
+                    </div>
+                </div>
+
                 <div style="margin-bottom:8px;">
                     <label style="font-size:0.75em; color:var(--text-color); display:block; margin-bottom:4px; font-weight:bold;">Giorni Abilitati:</label>
                     <div style="display:flex; flex-wrap:wrap; gap:8px; font-size:0.75em;">
