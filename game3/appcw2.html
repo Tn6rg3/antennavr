@@ -108,6 +108,23 @@
     <button id="btnCloseFeedbackModal" class="btn-success" style="width: 100%;">GRAZIE, CHIUDI ✅</button>
 </div>
 
+<!-- POPUP INVITO DIRETTO ACTIVITY CWG -->
+<div id="cwgActivityInviteModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 6000; border: 2px solid #00bcd4; border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,188,212,0.4); text-align: center;">
+    <span style="font-size: 3em; margin-bottom: 6px;">📻</span>
+    <h3 id="cwgActivityInviteTitle" style="color: #00bcd4; margin: 0 0 8px 0; font-size: 1.1em;">INVITO ACTIVITY CWG</h3>
+    <div id="cwgActivityInviteText" style="font-size: 0.9em; color: var(--text-color); margin-bottom: 16px; line-height: 1.4;">
+        <!-- Messaggio caricato dinamicamente -->
+    </div>
+    <div style="display:flex; gap:8px;">
+        <button id="btnAcceptCwgActivityInvite" class="btn-success" style="flex:2; padding:10px; font-weight:bold; background:#00bcd4; border:none; color:#000; cursor:pointer;">
+            ▶️ ENTRA IN ACTIVITY CWG 🚀
+        </button>
+        <button onclick="document.getElementById('cwgActivityInviteModal').style.display='none'" class="btn-secondary" style="flex:1; padding:10px; cursor:pointer;">
+            CHIUDI
+        </button>
+    </div>
+</div>
+
 <!-- POPUP SFIDA GIORNALIERA -->
 <div id="dailyChallengeModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 450px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5000; border: 2px solid var(--champ-color); border-radius: 14px; padding: 18px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.6); text-align: center; max-height: 95vh; overflow-y: auto;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
