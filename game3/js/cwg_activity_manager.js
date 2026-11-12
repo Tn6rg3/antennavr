@@ -61,6 +61,10 @@ window.openCwgActivityScreenImpl = async function() {
         window.showScreen('cwgActivityScreen');
     }
 
+    if (typeof window.initCwgSettingsRealtimeListener === 'function') {
+        window.initCwgSettingsRealtimeListener();
+    }
+
     if (typeof window.updateCwgTimerDisplaysUI === 'function') {
         window.updateCwgTimerDisplaysUI();
     }
@@ -809,7 +813,22 @@ window.startCwgQsoTimer = function() {
     }
 };
 
+window.initCwgSettingsRealtimeListener = function() {
+    if (!db || window.isCwgSettingsListenerActive) return;
+    window.isCwgSettingsListenerActive = true;
+
+    db.ref('appConfig/cwg_activity_settings').on('value', snap => {
+        if (snap.exists() && snap.val()) {
+            window.cwgSettingsCache = snap.val();
+            if (typeof window.updateCwgTimerDisplaysUI === 'function') {
+                window.updateCwgTimerDisplaysUI();
+            }
+        }
+    });
+};
+
 window.fetchCwgSettingsAsync = async function() {
+    window.initCwgSettingsRealtimeListener();
     if (window.cwgSettingsCache && typeof window.cwgSettingsCache === 'object' && window.cwgSettingsCache.qsoDurationMinutes) {
         return window.cwgSettingsCache;
     }

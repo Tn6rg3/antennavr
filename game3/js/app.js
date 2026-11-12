@@ -1949,7 +1949,7 @@ window.saveAdminCwgScheduleSettings = function() {
         end: document.getElementById('cwgSlot2End')?.value || ""
     };
 
-    db.ref('appConfig/cwg_activity_settings').set({
+    const settingsData = {
         allUsersEnabled: allUsersEnabled,
         startDate: startDate,
         endDate: endDate,
@@ -1960,9 +1960,15 @@ window.saveAdminCwgScheduleSettings = function() {
         slot1: slot1,
         slot2: slot2,
         updatedAt: Date.now()
-    }).then(() => {
+    };
+
+    db.ref('appConfig/cwg_activity_settings').set(settingsData).then(() => {
+        window.cwgSettingsCache = settingsData;
+        if (typeof window.updateCwgTimerDisplaysUI === 'function') {
+            window.updateCwgTimerDisplaysUI();
+        }
         if (typeof showToast === 'function') showToast("✅ Programmazione ed Edizione Activity salvata!");
-        alert(`✅ Programmazione ed Edizione Activity salvata con successo!\n\nTitolo: ${title || "ACTIVITY CWG"}`);
+        alert(`✅ Programmazione ed Edizione Activity salvata con successo!\n\nTitolo: ${title || "ACTIVITY CWG"}\nTimer QSO: ${qsoDurationMinutes} min | Chiavi: ${keysDurationMinutes} min`);
         window.checkCwgBetaVisibility?.();
     }).catch(e => {
         alert("Errore salvataggio: " + e.message);
