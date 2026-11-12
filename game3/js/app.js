@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.304";
+const APP_VERSION = "20261105.305";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1807,32 +1807,66 @@ window.checkCwgBetaVisibility = async function() {
     }
 };
 
+window.updateAdminCwgAutoTitle = function() {
+    const startInput = document.getElementById('adminCwgStartDate');
+    const endInput = document.getElementById('adminCwgEndDate');
+    const titleInput = document.getElementById('adminCwgTitle');
+
+    if (!startInput || !endInput || !titleInput) return;
+    if (titleInput.value && titleInput.value.trim() !== "") return;
+
+    const sVal = startInput.value;
+    const eVal = endInput.value;
+    if (!sVal) return;
+
+    const sDate = new Date(sVal);
+    const eDate = eVal ? new Date(eVal) : sDate;
+
+    const sMonth = String(sDate.getMonth() + 1).padStart(2, '0');
+    const sYear = String(sDate.getFullYear()).slice(-2);
+    const eMonth = String(eDate.getMonth() + 1).padStart(2, '0');
+    const eYear = String(eDate.getFullYear()).slice(-2);
+
+    let autoTitle = "";
+    if (sMonth === eMonth && sYear === eYear) {
+        autoTitle = `ACTIVITY CWG ${sMonth}/${sYear}`;
+    } else {
+        autoTitle = `ACTIVITY CWG ${sMonth}-${eMonth}/${sYear}`;
+    }
+    titleInput.value = autoTitle;
+};
+
 window.loadAdminCwgScheduleSettings = function() {
     if (!db) return;
 
     db.ref('appConfig/cwg_activity_settings').once('value', snap => {
-        if (!snap.exists()) return;
-        const s = snap.val() || {};
-        const days = s.enabledDays || {};
+        if (snap.exists()) {
+            const s = snap.val() || {};
+            const days = s.enabledDays || {};
 
-        if (document.getElementById('adminCwgAllUsersCheckbox')) {
-            document.getElementById('adminCwgAllUsersCheckbox').checked = (s.allUsersEnabled === true);
-        }
+            if (document.getElementById('adminCwgAllUsersCheckbox')) {
+                document.getElementById('adminCwgAllUsersCheckbox').checked = (s.allUsersEnabled === true);
+            }
+            if (document.getElementById('adminCwgStartDate')) document.getElementById('adminCwgStartDate').value = s.startDate || "";
+            if (document.getElementById('adminCwgEndDate')) document.getElementById('adminCwgEndDate').value = s.endDate || "";
+            if (document.getElementById('adminCwgTitle')) document.getElementById('adminCwgTitle').value = s.title || "";
 
-        for (let d = 0; d <= 6; d++) {
-            const el = document.getElementById(`cwgDay${d}`);
-            if (el) el.checked = (days[d] !== false);
-        }
+            for (let d = 0; d <= 6; d++) {
+                const el = document.getElementById(`cwgDay${d}`);
+                if (el) el.checked = (days[d] !== false);
+            }
 
-        if (s.slot1) {
-            if (document.getElementById('cwgSlot1Start')) document.getElementById('cwgSlot1Start').value = s.slot1.start || "08:00";
-            if (document.getElementById('cwgSlot1End')) document.getElementById('cwgSlot1End').value = s.slot1.end || "12:00";
-        }
+            if (s.slot1) {
+                if (document.getElementById('cwgSlot1Start')) document.getElementById('cwgSlot1Start').value = s.slot1.start || "08:00";
+                if (document.getElementById('cwgSlot1End')) document.getElementById('cwgSlot1End').value = s.slot1.end || "12:00";
+            }
 
-        if (s.slot2) {
-            if (document.getElementById('cwgSlot2Start')) document.getElementById('cwgSlot2Start').value = s.slot2.start || "";
-            if (document.getElementById('cwgSlot2End')) document.getElementById('cwgSlot2End').value = s.slot2.end || "";
+            if (s.slot2) {
+                if (document.getElementById('cwgSlot2Start')) document.getElementById('cwgSlot2Start').value = s.slot2.start || "";
+                if (document.getElementById('cwgSlot2End')) document.getElementById('cwgSlot2End').value = s.slot2.end || "";
+            }
         }
+        window.renderAdminCwgEditionsList();
     });
 };
 
@@ -1840,6 +1874,14 @@ window.saveAdminCwgScheduleSettings = function() {
     if (!db || !window.isAdmin) return;
 
     const allUsersEnabled = !!document.getElementById('adminCwgAllUsersCheckbox')?.checked;
+    const startDate = document.getElementById('adminCwgStartDate')?.value || "";
+    const endDate = document.getElementById('adminCwgEndDate')?.value || "";
+    let title = document.getElementById('adminCwgTitle')?.value.trim() || "";
+
+    if (!title && startDate) {
+        window.updateAdminCwgAutoTitle();
+        title = document.getElementById('adminCwgTitle')?.value.trim() || "";
+    }
 
     const days = {
         0: !!document.getElementById('cwgDay0')?.checked,
@@ -1863,17 +1905,115 @@ window.saveAdminCwgScheduleSettings = function() {
 
     db.ref('appConfig/cwg_activity_settings').set({
         allUsersEnabled: allUsersEnabled,
+        startDate: startDate,
+        endDate: endDate,
+        title: title || "ACTIVITY CWG",
         enabledDays: days,
         slot1: slot1,
         slot2: slot2,
         updatedAt: Date.now()
     }).then(() => {
-        if (typeof showToast === 'function') showToast("✅ Programmazione Activity salvata!");
-        alert("✅ Programmazione Activity salvata con successo!");
+        if (typeof showToast === 'function') showToast("✅ Programmazione ed Edizione Activity salvata!");
+        alert(`✅ Programmazione ed Edizione Activity salvata con successo!\n\nTitolo: ${title || "ACTIVITY CWG"}`);
         window.checkCwgBetaVisibility?.();
     }).catch(e => {
         alert("Errore salvataggio: " + e.message);
     });
+};
+
+window.clearCurrentCwgLeaderboard = async function() {
+    if (!db || !window.isAdmin) return;
+
+    const titleInput = document.getElementById('adminCwgTitle')?.value.trim();
+    const startDate = document.getElementById('adminCwgStartDate')?.value || "";
+    const endDate = document.getElementById('adminCwgEndDate')?.value || "";
+    const currentMonthStr = new Date().getFullYear() + "-" + String(new Date().getMonth() + 1).padStart(2, '0');
+
+    let title = titleInput || `ACTIVITY CWG ${String(new Date().getMonth() + 1).padStart(2, '0')}/${String(new Date().getFullYear()).slice(-2)}`;
+
+    if (!confirm(`CONFERMA ARCHIVIAZIONE AD AZZERAMENTO:\n\nVuoi archiviare la classifica corrente sotto il nome '${title}' ed azzerarla per la nuova edizione?`)) {
+        return;
+    }
+
+    try {
+        const snap = await db.ref(`leaderboard/cwg_activity_monthly/${currentMonthStr}`).once('value');
+        const standings = snap.exists() ? snap.val() : {};
+        const count = Object.keys(standings).length;
+
+        const editionKey = "edition_" + String(title).replace(/[^a-zA-Z0-9]/g, '_') + "_" + Date.now();
+
+        // 1. Salviamo l'edizione archiviata su Firebase
+        await db.ref(`leaderboard/cwg_activity_editions/${editionKey}`).set({
+            title: title,
+            startDate: startDate,
+            endDate: endDate,
+            archivedAt: Date.now(),
+            participantCount: count,
+            standings: standings
+        });
+
+        // 2. Azzeriamo la classifica corrente su Firebase
+        await db.ref(`leaderboard/cwg_activity_monthly/${currentMonthStr}`).remove();
+
+        window.monthlyLeaderboardCache = {};
+        if (typeof showToast === 'function') showToast("✅ Classifica archiviata ed azzerata!");
+        alert(`✅ CLASSIFICA ARCHIVIATA CON SUCCESSO!\n\nTitolo Archiviato: ${title}\nPartecipanti preservati: ${count}\n\nLa classifica corrente su Firebase è stata azzerata per la nuova edizione.`);
+        window.renderAdminCwgEditionsList();
+    } catch(e) {
+        alert("Errore azzeramento classifica: " + e.message);
+    }
+};
+
+window.renderAdminCwgEditionsList = function() {
+    const listCont = document.getElementById('adminCwgEditionsList');
+    if (!listCont || !db) return;
+
+    db.ref('leaderboard/cwg_activity_editions').once('value', snap => {
+        listCont.innerHTML = '';
+        if (!snap.exists()) {
+            listCont.innerHTML = '<p style="color:var(--hint-color); margin:2px 0;">Nessuna edizione archiviata.</p>';
+            return;
+        }
+
+        const editions = [];
+        snap.forEach(c => {
+            editions.push({ key: c.key, ...c.val() });
+        });
+
+        editions.sort((a,b) => (b.archivedAt || 0) - (a.archivedAt || 0));
+
+        const frag = document.createDocumentFragment();
+        editions.forEach(ed => {
+            const row = document.createElement('div');
+            row.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:4px 6px; border-bottom:1px solid rgba(255,255,255,0.05);";
+
+            const infoSpan = document.createElement('span');
+            const dStr = ed.archivedAt ? new Date(ed.archivedAt).toLocaleDateString('it-IT') : '';
+            infoSpan.textContent = `📜 ${ed.title || 'ACTIVITY'} (${ed.participantCount || 0} part. - ${dStr})`;
+
+            const delBtn = document.createElement('button');
+            delBtn.style.cssText = "background:none; border:none; color:#f44336; cursor:pointer; font-weight:bold; font-size:0.8em; margin:0;";
+            delBtn.textContent = "🗑️";
+            delBtn.title = "Elimina questa edizione archiviata";
+            delBtn.onclick = () => window.deleteArchivedCwgEdition(ed.key, ed.title);
+
+            row.appendChild(infoSpan);
+            row.appendChild(delBtn);
+            frag.appendChild(row);
+        });
+
+        listCont.appendChild(frag);
+    });
+};
+
+window.deleteArchivedCwgEdition = function(editionKey, title) {
+    if (!db || !window.isAdmin) return;
+    if (confirm(`Eliminare definitivamente l'edizione archiviata '${title || editionKey}'?`)) {
+        db.ref(`leaderboard/cwg_activity_editions/${editionKey}`).remove().then(() => {
+            if (typeof showToast === 'function') showToast("Edizione eliminata.");
+            window.renderAdminCwgEditionsList();
+        });
+    }
 };
 
 // --- GESTIONE SFIDA NOMINATIVI DEL GIORNO (es. SFIDA DEL LUNEDÌ - 50 NOMINATIVI) ---

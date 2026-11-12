@@ -615,13 +615,21 @@ window.fetchAndRenderCwgActivityMonthlyLeaderboard = async function() {
     const now = new Date();
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Caricamento Classifica Activity - CWG (${currentMonthStr})...</p>`;
+    container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Caricamento Classifica Activity - CWG...</p>`;
 
     if (!db) return;
 
+    let displayTitle = `ACTIVITY CWG ${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getFullYear()).slice(-2)}`;
+    try {
+        const setSnap = await db.ref('appConfig/cwg_activity_settings/title').once('value');
+        if (setSnap.exists() && setSnap.val()) {
+            displayTitle = setSnap.val().trim();
+        }
+    } catch(e) {}
+
     db.ref(`leaderboard/cwg_activity_monthly/${currentMonthStr}`).orderByChild('totalPoints').limitToLast(100).once('value', snap => {
         if (!snap.exists()) {
-            container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Nessun QSO registrato finora nel mese di ${currentMonthStr}.</p>`;
+            container.innerHTML = `<div style="background:rgba(0,188,212,0.1); padding:10px; border-radius:8px; border:1px solid #00bcd4; margin-bottom:12px; text-align:center;"><b style="color:#00bcd4;">📻 ${displayTitle} (${currentMonthStr})</b></div><p style="text-align:center; color:var(--hint-color); padding:20px;">Nessun QSO registrato finora per questa edizione.</p>`;
             return;
         }
 
@@ -635,7 +643,7 @@ window.fetchAndRenderCwgActivityMonthlyLeaderboard = async function() {
 
         let html = `
             <div style="background:rgba(0,188,212,0.1); padding:10px; border-radius:8px; border:1px solid #00bcd4; margin-bottom:12px; text-align:center;">
-                <b style="color:#00bcd4;">📻 Classifica Mensile Activity - CWG (${currentMonthStr})</b>
+                <b style="color:#00bcd4;">📻 ${displayTitle} (${currentMonthStr})</b>
                 <div style="font-size:0.8em; color:var(--hint-color); margin-top:4px;">Punti accumulati nei QSO convalidati (1 pt singolo, 2 pt reciproco incrociato)</div>
             </div>
             <table class="leaderboard-table" style="width:100%; border-collapse:collapse; font-size:0.85em;">
