@@ -1198,14 +1198,29 @@ window.openMatchDetails = function(matchKey) {
             tdWpm.textContent = `${row.wpm || match.wpm || 20} WPM`;
 
             const tdActions = document.createElement('td');
-            tdActions.style.textAlign = 'center';
+            tdActions.style.cssText = 'text-align:center; display:flex; align-items:center; justify-content:center; gap:6px;';
 
             const ptsSpan = document.createElement('span');
             ptsSpan.style.color = color;
             ptsSpan.style.fontWeight = 'bold';
-            ptsSpan.style.display = 'block';
             ptsSpan.textContent = row.points > 0 ? `+${row.points}` : row.points;
             tdActions.appendChild(ptsSpan);
+
+            if (row.real) {
+                const audioBtn = document.createElement('button');
+                audioBtn.className = 'action-btn-small btn-secondary';
+                audioBtn.style.cssText = 'width:26px; padding:1px 0; font-size:0.75em; margin:0; cursor:pointer;';
+                audioBtn.textContent = '🔊';
+                audioBtn.title = 'Riascolta in codice Morse';
+                const rowWpm = row.wpm || match.wpm || 20;
+                audioBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    if (typeof window.playMorseAudio === 'function') {
+                        window.playMorseAudio(row.real, rowWpm, true);
+                    }
+                };
+                tdActions.appendChild(audioBtn);
+            }
 
             tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdWpm); tr.appendChild(tdActions);
             frag.appendChild(tr);
