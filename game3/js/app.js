@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.305";
+const APP_VERSION = "20261105.306";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1374,16 +1374,20 @@ window.initMandatoryAliasHandlers = function() {
             const latestStr = snap.val() ? String(snap.val()).trim() : "";
             const currentStr = String(APP_VERSION).trim();
             if (latestStr && latestStr !== currentStr) {
-                if (els.updateBanner) els.updateBanner.style.display = 'block';
+                console.warn(`App: Nuova versione disponibile su Firebase (${latestStr} vs locale ${currentStr})`);
 
-                const lastReloadedVersion = localStorage.getItem('cwgame_last_reloaded_version');
-                if (lastReloadedVersion !== latestStr) {
-                    localStorage.setItem('cwgame_last_reloaded_version', latestStr);
-                    console.warn(`App: Nuova versione ${latestStr} rilevata. Ricaricamento forzato in corso...`);
-                    window.location.reload(true);
+                const banner = document.getElementById('updateBanner');
+                if (banner) {
+                    banner.style.display = 'block';
+                    banner.innerHTML = `🚀 Nuova Versione ${latestStr} Disponibile! <button id="updateBannerBtn" onclick="window.forceAppUpdate()" style="width:auto; display:inline-block; margin-left:10px; padding:5px 15px; background:white; color:#ff9800; border-radius: 20px; font-size: 0.9em; border:none; cursor:pointer; font-weight:bold;">Aggiorna ora 🚀</button>`;
+                }
+
+                if (typeof showToast === 'function') {
+                    showToast(`🚀 Nuova versione ${latestStr} disponibile! Clicca su Aggiorna in cima.`);
                 }
             } else {
-                if (els.updateBanner) els.updateBanner.style.display = 'none';
+                const banner = document.getElementById('updateBanner');
+                if (banner) banner.style.display = 'none';
             }
         });
 
