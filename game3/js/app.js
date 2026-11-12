@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.304";
+const APP_VERSION = "20261105.306";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1373,6 +1373,9 @@ window.initMandatoryAliasHandlers = function() {
         db.ref('appConfig/latestVersion').once('value', snap => {
             const latestStr = snap.val() ? String(snap.val()).trim() : "";
             const currentStr = String(APP_VERSION).trim();
+            if (document.getElementById('adminLatestVersionInput')) {
+                document.getElementById('adminLatestVersionInput').value = latestStr;
+            }
             if (latestStr && latestStr !== currentStr) {
                 console.warn(`App: Nuova versione disponibile su Firebase (${latestStr} vs locale ${currentStr})`);
 
@@ -1390,6 +1393,22 @@ window.initMandatoryAliasHandlers = function() {
                 if (banner) banner.style.display = 'none';
             }
         });
+
+window.saveAdminLatestVersion = function() {
+    if (!db || !window.isAdmin) return;
+    const input = document.getElementById('adminLatestVersionInput');
+    const newVer = input ? input.value.trim() : "";
+
+    if (!newVer) return alert("⚠️ Inserisci un numero di versione valido (es. 20261112.500).");
+
+    db.ref('appConfig/latestVersion').set(String(newVer)).then(() => {
+        if (typeof showToast === 'function') showToast("🚀 Nuova versione pubblicata!");
+        alert(`🚀 Nuova versione ${newVer} pubblicata su Firebase con successo!\n\nTutti gli utenti vedranno il banner di aggiornamento.`);
+        window.location.reload(true);
+    }).catch(e => {
+        alert("Errore salvataggio versione: " + e.message);
+    });
+};
 
     window.populateGameModesUI?.();
     window.checkGameTypeUI?.();
