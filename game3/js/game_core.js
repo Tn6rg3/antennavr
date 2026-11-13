@@ -1334,7 +1334,6 @@ window.finishGame = async function() {
     if (db) {
         const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
         db.ref(`appConfig/dailyMatchesCount/${todayStr}`).set(firebase.database.ServerValue.increment(1)).catch(() => {});
-        db.ref('appConfig/totalMatchesCount').set(firebase.database.ServerValue.increment(1)).catch(() => {});
     }
 
     if (window.totalScore > 0 && !window.roomCode.startsWith("TRN_")) {
