@@ -217,10 +217,11 @@ window.finishMemoryCwGame = function() {
     const mins = String(Math.floor(window.memorySeconds / 60)).padStart(2, '0');
     const secs = String(window.memorySeconds % 60).padStart(2, '0');
 
-    // Salviamo il punteggio su Firebase se disponibile
+    // Salviamo il punteggio e il record Max WPM su Firebase se disponibile
     if (typeof db !== 'undefined' && db && window.myId) {
         const wpmInput = document.getElementById('startWpmInput');
         const wpm = wpmInput ? (parseInt(wpmInput.value) || 20) : 20;
+        window.peakWpm = wpm;
 
         db.ref(`leaderboard/arcade/memory_cw/${window.myId}`).once('value', snap => {
             const oldScore = snap.exists() ? (snap.val().score || 0) : 0;
@@ -235,6 +236,26 @@ window.finishMemoryCwGame = function() {
                 });
             }
         });
+
+        // Aggiorniamo anche il nodo dei Record Max WPM Mensili per Memory CW
+        const now = new Date();
+        const curMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const maxWpmPath = `leaderboard/max_wpm_records/${curMonthStr}/memory_cw`;
+
+        db.ref(maxWpmPath).once('value', maxSnap => {
+            const currentRecord = maxSnap.val();
+            const currentMaxWpm = currentRecord ? (Number(currentRecord.wpm) || 0) : 0;
+
+            if (!currentRecord || wpm > currentMaxWpm) {
+                db.ref(maxWpmPath).set({
+                    name: window.myName || "Telegrafista",
+                    wpm: wpm,
+                    score: totalFinalScore,
+                    date: (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0],
+                    ts: Date.now()
+                }).catch(() => {});
+            }
+        }).catch(() => {});
     }
 
     alert(`🎉 COMPLIMENTI! HAI COMPLETATO IL MEMORY CW!\n\nCoppie Trovate: ${window.memoryMatchedPairs} / ${window.memoryTotalPairs}\nTempo Impiegato: ${mins}:${secs}\nTentativi: ${window.memoryAttempts}\nPunteggio Finale: ${totalFinalScore} pt`);

@@ -1797,7 +1797,7 @@ window.showMatchShareButtons = function() {
         else if (window.currentMode === 'callsign') modeName = "Nominativi (CW Freak)";
         else if (window.currentMode === 'la_torre') modeName = "La Torre (Scalata)";
 
-        const textMsg = encodeURIComponent(`🏆 Ho completato la ${modeName} su Sfida Telegrafia!\n🎯 Punteggio: ${totalScore} pt\n🚀 Velocità di picco: ${peakWpm} WPM\n\nRiesci a fare di meglio?\n@${BOT_USERNAME}`);
+        const textMsg = encodeURIComponent(`🏆 Ho completato la ${modeName} su Sfida Telegrafia!\n🎯 Punti: ${totalScore} pt 🚀 WPM max: ${peakWpm} WPM\nProva anche tu: @${BOT_USERNAME}`);
         const shareUrl = `https://t.me/share/url?url=${botUrl}&text=${textMsg}`;
         try {
             if (tg && tg.openTelegramLink) tg.openTelegramLink(shareUrl); else window.open(shareUrl, '_blank');
