@@ -246,7 +246,6 @@ window.openCwgActivityScreenImpl = async function() {
             }
         } catch(e) {}
     }
-    }
 
     window.resetCwgForm();
 };
