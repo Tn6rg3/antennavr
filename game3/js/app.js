@@ -1370,6 +1370,21 @@ window.initMandatoryAliasHandlers = function() {
         updateVers();
         setTimeout(updateVers, 1500); // Forza dopo caricamento altri script
 
+        // --- CONTATORE GLOBALE PARTITE GIOCATE (4 BYTE FIREBASE) ---
+        window.initTotalMatchesCounterListener = function() {
+            if (!db || window.isMatchesCounterListenerActive) return;
+            window.isMatchesCounterListenerActive = true;
+
+            db.ref('appConfig/totalMatchesCount').on('value', snap => {
+                const badge = document.getElementById('totalMatchesBadge');
+                if (badge) {
+                    const val = snap.exists() ? (Number(snap.val()) || 0) : 0;
+                    badge.textContent = `🎮 Partite: ${val.toLocaleString('it-IT')}`;
+                }
+            });
+        };
+        window.initTotalMatchesCounterListener();
+
         db.ref('appConfig/latestVersion').once('value', snap => {
             const latestStr = snap.val() ? String(snap.val()).trim() : "";
             const currentStr = String(APP_VERSION).trim();

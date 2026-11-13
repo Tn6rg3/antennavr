@@ -1330,6 +1330,11 @@ window.finishGame = async function() {
         myPlayerRef.onDisconnect().cancel();
     }
 
+    // --- INCREMENTO CONTATORE GLOBALE PARTITE GIOCATE (4 BYTE FIREBASE) ---
+    if (db) {
+        db.ref('appConfig/totalMatchesCount').set(firebase.database.ServerValue.increment(1)).catch(() => {});
+    }
+
     if (window.totalScore > 0 && !window.roomCode.startsWith("TRN_")) {
         console.log("FinishGame: Scheduling Rating Check for mode", window.currentMode);
         // --- NUOVO: CONTROLLO VALUTAZIONE GIOCO ---
