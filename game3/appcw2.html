@@ -2444,6 +2444,9 @@
                 <div style="margin-bottom:8px;">
                     <label style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:2px;">1. Inserisci la Chiave Ricevuta dal Corrispondente (8 Caratteri):</label>
                     <input type="text" id="cwgRxKeyInput" placeholder="es. K9X2M7P4..." autocomplete="off" maxlength="8" oninput="window.onCwgRxKeyInputChanged()" style="width:100%; padding:8px; font-size:1em; font-family:monospace; font-weight:bold; text-transform:uppercase; background:#fff; color:#000; border:2px solid var(--champ-color); border-radius:6px; box-sizing:border-box;">
+                    <button id="btnConfirmCwgKey" onclick="window.confirmCwgRxKey()" class="btn-success" style="width:100%; padding:8px; font-weight:bold; font-size:0.85em; margin-top:6px; background:#4caf50; border:none; color:#fff;" disabled>
+                        CONFERMA CHIAVE INSERITA ✅
+                    </button>
                 </div>
 
                 <div id="cwgTxKeyDisplayBox" style="display:none; background:#ffffff; border:2px solid #4caf50; border-radius:8px; padding:10px; margin-bottom:10px; text-align:center;">
