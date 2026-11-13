@@ -32,7 +32,10 @@ window.saveMyActivityCallPreference = function(newCall) {
     }
 };
 
-window.listenToCwgDirectInvites = function() {
+window.listenToCwgDirectInvites = async function() {
+    const isBeta = (typeof window.isUserCwgBetaTester === 'function') ? await window.isUserCwgBetaTester() : false;
+    if (!isBeta) return;
+
     let myCall = window.cleanCallsignString(localStorage.getItem('cwgame_activity_call') || window.myName || "");
     if (!myCall || !db || window.isCwgDirectInviteListenerActive) return;
     window.isCwgDirectInviteListenerActive = true;
@@ -55,32 +58,47 @@ window.listenToCwgDirectInvites = function() {
         }
 
         const fromCall = inv.fromCall;
-        const band = (inv.band || '40m').toUpperCase();
+        const band = (inv.band || '40m').toLowerCase();
 
-        const modal = document.getElementById('cwgActivityInviteModal');
-        const modalText = document.getElementById('cwgActivityInviteText');
-        const acceptBtn = document.getElementById('btnAcceptCwgActivityInvite');
-
-        if (modal && modalText) {
-            modalText.innerHTML = `<b>${fromCall}</b> ti ha inserito come corrispondente nel Log Activity sulla banda <b>${band}</b> per avviare il QSO!<br><br>Vuoi accedere all'Activity per convalidare il collegamento?`;
-            modal.style.display = 'flex';
-
-            if (acceptBtn) {
-                acceptBtn.onclick = async () => {
-                    modal.style.display = 'none';
-                    db.ref(`activity_cwg/direct_invites/${myCall}`).remove().catch(() => {});
-
-                    if (typeof window.openCwgActivityScreen === 'function') {
-                        await window.openCwgActivityScreen();
-                        const partnerInput = document.getElementById('cwgLogPartnerCall');
-                        const bandSelect = document.getElementById('cwgLogBandSelect');
-                        if (partnerInput) partnerInput.value = fromCall;
-                        if (bandSelect && inv.band) bandSelect.value = inv.band.toLowerCase();
-                        window.checkCwgDoubleHandshakeMatch();
-                    }
-                };
+        // VERIFICA RIGIDA: La notifica compare SOLO SE l'utente A (fromCall) è FISICAMENTE ONLINE ED IN ACTIVITY!
+        db.ref(`activity_cwg/handshake/${fromCall}_${myCall}_${band}`).once('value', hSnap => {
+            if (!hSnap.exists()) {
+                db.ref(`activity_cwg/direct_invites/${myCall}`).remove().catch(() => {});
+                return;
             }
-        }
+
+            const hData = hSnap.val() || {};
+            const isSenderInactive = (hData.appStatus === 'app_closed' || (Date.now() - (hData.ts || 0) > 20000));
+            if (isSenderInactive) {
+                db.ref(`activity_cwg/direct_invites/${myCall}`).remove().catch(() => {});
+                return;
+            }
+
+            const modal = document.getElementById('cwgActivityInviteModal');
+            const modalText = document.getElementById('cwgActivityInviteText');
+            const acceptBtn = document.getElementById('btnAcceptCwgActivityInvite');
+
+            if (modal && modalText) {
+                modalText.innerHTML = `<b>${fromCall}</b> è attualmente in Activity sulla banda <b>${band.toUpperCase()}</b> e ti sta aspettando!<br><br>Vuoi accedere all'Activity per avviare il QSO?`;
+                modal.style.display = 'flex';
+
+                if (acceptBtn) {
+                    acceptBtn.onclick = async () => {
+                        modal.style.display = 'none';
+                        db.ref(`activity_cwg/direct_invites/${myCall}`).remove().catch(() => {});
+
+                        if (typeof window.openCwgActivityScreen === 'function') {
+                            await window.openCwgActivityScreen();
+                            const partnerInput = document.getElementById('cwgLogPartnerCall');
+                            const bandSelect = document.getElementById('cwgLogBandSelect');
+                            if (partnerInput) partnerInput.value = fromCall;
+                            if (bandSelect && band) bandSelect.value = band.toLowerCase();
+                            window.checkCwgDoubleHandshakeMatch();
+                        }
+                    };
+                }
+            }
+        });
     });
 };
 
