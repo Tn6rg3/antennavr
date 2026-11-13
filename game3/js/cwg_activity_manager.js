@@ -1022,10 +1022,21 @@ window.updateCwgTimerDisplaysUI = async function() {
 
 window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator = true) {
     window.isCwgInitiator = isInitiator;
+    window.cwgQsoCompletedSuccessfully = false;
 
     const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || "");
     const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
     const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
+
+    // Pulizia preventiva vecchi nodi di salvataggio di test su questa banda per la sessione corrente
+    if (db && myCall && partnerCall) {
+        const year = new Date().getFullYear();
+        const dateStr = year + "-" + String(new Date().getMonth() + 1).padStart(2, '0') + "-" + String(new Date().getDate()).padStart(2, '0');
+        const callsArray = [myCall, partnerCall].sort();
+        const sharedQsoKey = callsArray.join('_') + '_' + band + '_' + dateStr;
+        db.ref(`activity_cwg/keys_exchange/${sharedQsoKey}/saved`).remove().catch(() => {});
+        db.ref(`activity_cwg/keys_exchange/${sharedQsoKey}/${myCall}`).remove().catch(() => {});
+    }
 
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, '0');
@@ -1283,15 +1294,22 @@ window.publishCwgExchangeKeyStatus = function(rxKey, isConfirmed = false) {
         }
     });
 
-    // Ascolta anche se l'altro operatore ha già inviato il salvataggio definitivo sul server
+    // Ascolta se l'altro operatore ha inviato il salvataggio definitivo per QUESTA sessione specifica
     const savedRef = db.ref(`activity_cwg/keys_exchange/${sharedQsoKey}/saved`);
     window.cwgSavedListenerRef = savedRef;
     savedRef.on('value', sSnap => {
-        if (sSnap.exists() && sSnap.val() && sSnap.val().by !== myCall) {
+        if (sSnap.exists() && sSnap.val()) {
             const data = sSnap.val();
-            alert(`✅ QSO CONCLUSO E CONVALIDATO DALL'ALTRO OPERATORE (${data.by})!\n\nPunti Assegnati: +${data.points || 2} pt a ciascun telegrafista!`);
-            window.resetCwgForm();
-            if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
+            const savedTs = Number(data.ts || 0);
+            const currentQsoStartTs = Number(window.cwgQsoStartTimestamp || 0);
+
+            // Verifichiamo che il salvataggio appartenga esattamente alla sessione di questo QSO specifico!
+            if (data.by !== myCall && savedTs >= currentQsoStartTs && currentQsoStartTs > 0) {
+                window.cwgQsoCompletedSuccessfully = true;
+                alert(`✅ QSO CONCLUSO E CONVALIDATO DALL'ALTRO OPERATORE (${data.by})!\n\nPunti Assegnati: +${data.points || 2} pt a ciascun telegrafista!`);
+                window.resetCwgForm();
+                if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
+            }
         }
     });
 };
