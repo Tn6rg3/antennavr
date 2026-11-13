@@ -1370,31 +1370,30 @@ window.initMandatoryAliasHandlers = function() {
         updateVers();
         setTimeout(updateVers, 1500); // Forza dopo caricamento altri script
 
-        // --- CONTATORE GLOBALE PARTITE GIOCATE (4 BYTE FIREBASE) ---
+        // --- CONTATORE GIORNALIERO PARTITE GIOCATE (4 BYTE FIREBASE) ---
         window.initTotalMatchesCounterListener = function() {
             if (!db || window.isMatchesCounterListenerActive) return;
             window.isMatchesCounterListenerActive = true;
+
+            const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
 
             const updateBadge = (val) => {
                 const badge = document.getElementById('totalMatchesBadge');
                 if (badge) {
                     const num = Number(val) || 0;
-                    badge.textContent = `🎮 Partite: ${num.toLocaleString('it-IT')}`;
+                    badge.textContent = `🎮 Partite Oggi: ${num.toLocaleString('it-IT')}`;
                 }
             };
 
-            db.ref('appConfig/totalMatchesCount').on('value', snap => {
+            db.ref(`appConfig/dailyMatchesCount/${todayStr}`).on('value', snap => {
                 if (snap.exists() && snap.val() !== null) {
                     updateBadge(snap.val());
                 } else {
-                    db.ref('activity/totalMatchesCount').on('value', snap2 => {
-                        if (snap2.exists() && snap2.val() !== null) {
-                            updateBadge(snap2.val());
-                        }
-                    });
+                    updateBadge(0);
                 }
             });
         };
+        window.initTotalMatchesCounterListener();
         window.initTotalMatchesCounterListener();
 
         db.ref('appConfig/latestVersion').once('value', snap => {
