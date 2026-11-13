@@ -1996,8 +1996,8 @@ window.clearCurrentCwgLeaderboard = async function() {
 
         const editionKey = "edition_" + String(title).replace(/[^a-zA-Z0-9]/g, '_') + "_" + Date.now();
 
-        // 1. Salviamo l'edizione archiviata su Firebase
-        await db.ref(`leaderboard/cwg_activity_editions/${editionKey}`).set({
+        // 1. Salviamo l'edizione archiviata su Firebase a livello principale
+        await db.ref(`cwg_activity_editions/${editionKey}`).set({
             title: title,
             startDate: startDate,
             endDate: endDate,
@@ -2022,7 +2022,7 @@ window.renderAdminCwgEditionsList = function() {
     const listCont = document.getElementById('adminCwgEditionsList');
     if (!listCont || !db) return;
 
-    db.ref('leaderboard/cwg_activity_editions').once('value', snap => {
+    db.ref('cwg_activity_editions').once('value', snap => {
         listCont.innerHTML = '';
         if (!snap.exists()) {
             listCont.innerHTML = '<p style="color:var(--hint-color); margin:2px 0;">Nessuna edizione archiviata.</p>';
@@ -2063,7 +2063,7 @@ window.renderAdminCwgEditionsList = function() {
 window.deleteArchivedCwgEdition = function(editionKey, title) {
     if (!db || !window.isAdmin) return;
     if (confirm(`Eliminare definitivamente l'edizione archiviata '${title || editionKey}'?`)) {
-        db.ref(`leaderboard/cwg_activity_editions/${editionKey}`).remove().then(() => {
+        db.ref(`cwg_activity_editions/${editionKey}`).remove().then(() => {
             if (typeof showToast === 'function') showToast("Edizione eliminata.");
             window.renderAdminCwgEditionsList();
         });
