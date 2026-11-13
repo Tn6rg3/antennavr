@@ -1370,41 +1370,30 @@ window.initMandatoryAliasHandlers = function() {
         updateVers();
         setTimeout(updateVers, 1500); // Forza dopo caricamento altri script
 
-        // --- CONTATORE GIORNALIERO PARTITE GIOCATE (4 BYTE FIREBASE CON SELF-HEALING) ---
+        // --- CONTATORE GIORNALIERO PARTITE GIOCATE (PULITO & SENZA CICLI) ---
         window.initTotalMatchesCounterListener = function() {
             if (!db || window.isMatchesCounterListenerActive) return;
             window.isMatchesCounterListenerActive = true;
 
             const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
 
-            const updateBadge = (val) => {
+            const updateBadge = (num) => {
                 const badge = document.getElementById('totalMatchesBadge');
                 if (badge) {
-                    const num = Number(val) || 0;
-                    badge.textContent = `🎮 Partite Oggi: ${num.toLocaleString('it-IT')}`;
+                    badge.textContent = `🎮 Partite Oggi: ${(Number(num) || 0).toLocaleString('it-IT')}`;
                 }
             };
 
-            db.ref(`appConfig/dailyMatchesCount/${todayStr}`).on('value', snap => {
-                if (snap.exists() && snap.val() !== null && Number(snap.val()) > 0) {
-                    updateBadge(snap.val());
+            db.ref(`activity/daily/${todayStr}`).on('value', snap => {
+                if (snap.exists() && snap.val()) {
+                    const count = Object.keys(snap.val()).length;
+                    updateBadge(count);
                 } else {
-                    // SELF-HEALING: Se il contatore di oggi non e ancora stato popolato, recupera le attivita di oggi da activity/daily
-                    db.ref(`activity/daily/${todayStr}`).once('value', actSnap => {
-                        let initCount = 0;
-                        if (actSnap.exists() && actSnap.val()) {
-                            initCount = Object.keys(actSnap.val()).length;
-                        }
-                        if (initCount > 0) {
-                            db.ref(`appConfig/dailyMatchesCount/${todayStr}`).set(initCount).catch(() => {});
-                            updateBadge(initCount);
-                        } else {
-                            updateBadge(0);
-                        }
-                    }).catch(() => updateBadge(0));
+                    updateBadge(0);
                 }
             });
         };
+        window.initTotalMatchesCounterListener();
         window.initTotalMatchesCounterListener();
         window.initTotalMatchesCounterListener();
 
