@@ -31,8 +31,11 @@ window.initLocalDatabase = function() {
             window.localDb = e.target.result;
             window.isLocalDbReady = true;
             console.log("LocalDB: IndexedDB pronto.");
-            // Al caricamento, tenta il ripristino silenzioso da Telegram CloudStorage se IndexedDB è vuoto
-            window.syncFromTelegramCloudStorage().then(() => resolve(true)).catch(() => resolve(true));
+            // Al caricamento, tenta il ripristino da Telegram CloudStorage e da Firebase History Backup
+            Promise.all([
+                window.syncFromTelegramCloudStorage().catch(() => {}),
+                window.syncFromFirebaseHistoryBackup().catch(() => {})
+            ]).then(() => resolve(true)).catch(() => resolve(true));
         };
 
         request.onerror = function(err) {
@@ -220,6 +223,65 @@ window.syncFromTelegramCloudStorage = function() {
             resolve(true);
         });
     });
+};
+
+window.syncFromFirebaseHistoryBackup = async function() {
+    if (!db || !window.myId) return false;
+
+    try {
+        const snap = await db.ref(`users/${window.myId}/history`).limitToLast(50).once('value');
+        if (!snap.exists()) return false;
+
+        const fbMatches = [];
+        snap.forEach(child => {
+            fbMatches.push({ key: child.key, ...child.val() });
+        });
+
+        if (fbMatches.length === 0) return false;
+
+        const localMatches = await window.loadLocalMatchHistory(100);
+        const localKeysSet = new Set(localMatches.map(m => String(m.histKey || m.key || m.id || '')));
+        const localTsSet = new Set(localMatches.map(m => Number(m.ts || (m.date ? new Date(m.date).getTime() : 0))));
+
+        let importedCount = 0;
+        for (const fbItem of fbMatches) {
+            const fbKey = String(fbItem.key || '');
+            const fbTs = Number(fbItem.ts || (fbItem.date ? new Date(fbItem.date).getTime() : 0));
+
+            const exists = (fbKey && localKeysSet.has(fbKey)) || (fbTs && localTsSet.has(fbTs));
+
+            if (!exists && window.isLocalDbReady && window.localDb) {
+                const record = {
+                    ts: fbTs || Date.now(),
+                    date: fbItem.date || (typeof window.getLocalDateString === 'function' ? window.getLocalDateString() : new Date().toISOString().split('T')[0]),
+                    mode: fbItem.mode || 'standard',
+                    score: Number(fbItem.score) || 0,
+                    wpm: Number(fbItem.wpm || fbItem.peakWpm) || 20,
+                    wordCount: Number(fbItem.wordCount) || 10,
+                    histKey: fbKey,
+                    details: []
+                };
+
+                try {
+                    const tx = window.localDb.transaction(['matchHistory'], 'readwrite');
+                    const store = tx.objectStore('matchHistory');
+                    store.add(record);
+                    importedCount++;
+                } catch(e) {}
+            }
+        }
+
+        if (importedCount > 0) {
+            console.log(`LocalDB: Sincronizzate ${importedCount} nuove partite da Firebase sullo storico locale!`);
+            if (typeof window.loadProfileInfo === 'function') {
+                window.loadProfileInfo();
+            }
+        }
+        return true;
+    } catch(e) {
+        console.warn("LocalDB: Sync from Firebase Warning:", e);
+        return false;
+    }
 };
 
 // 5. ESPORTAZIONE BACKUP MANUALE IN CHAT BOT TELEGRAM (.JSON)
