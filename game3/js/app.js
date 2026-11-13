@@ -1364,7 +1364,9 @@ window.initMandatoryAliasHandlers = function() {
         // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
         const updateVers = () => {
             if (els.appVersionDisplay) els.appVersionDisplay.textContent = "v" + APP_VERSION;
-            const footer = document.getElementById('appVersionFooter');
+            const footer
+
+             = document.getElementById('appVersionFooter');
             if (footer) footer.textContent = APP_VERSION;
         };
         updateVers();
@@ -1389,7 +1391,7 @@ window.initMandatoryAliasHandlers = function() {
                     let totalMatchesSum = 0;
                     Object.values(snap.val()).forEach(uData => {
                         if (uData && typeof uData === 'object') {
-                            totalMatchesSum += (Number(uData.count) || 1);
+                            totalMatchesSum += (Number(uData.games) || Number(uData.count) || 1);
                         } else if (typeof uData === 'number') {
                             totalMatchesSum += uData;
                         }
