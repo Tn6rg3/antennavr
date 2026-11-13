@@ -4246,10 +4246,14 @@ window.openMaxWpmRecordsModal = function() {
                         node.forEach(child => {
                             const val = child.val();
                             if (val && typeof val === 'object') {
-                                if (val.wpm !== undefined || val.peakWpm !== undefined) {
-                                    const w = Number(val.peakWpm || val.wpm || 0);
-                                    const recordDate = String(val.date || child.key || "");
-                                    if (window.isDateInCurrentMonth(recordDate) && w > maxW) {
+                                if (val.wpm !== undefined || val.peakWpm !== undefined || val.startWpm !== undefined) {
+                                    const w = Number(val.peakWpm || val.wpm || val.startWpm || 0);
+                                    const recordDate = String(val.date || "");
+                                    const recordTs = val.ts ? Number(val.ts) : 0;
+
+                                    const isCurrentMonth = (!recordDate && !recordTs) || window.isDateInCurrentMonth(recordDate) || (recordTs > 0 && window.isDateInCurrentMonth(new Date(recordTs).toISOString().split('T')[0]));
+
+                                    if (isCurrentMonth && w > maxW) {
                                         maxW = w;
                                         bName = val.name || "Telegrafista";
                                         bScore = val.score || val.totalScore || 0;
