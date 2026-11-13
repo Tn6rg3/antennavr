@@ -1370,7 +1370,7 @@ window.initMandatoryAliasHandlers = function() {
         updateVers();
         setTimeout(updateVers, 1500); // Forza dopo caricamento altri script
 
-        // --- CONTATORE GIORNALIERO PARTITE GIOCATE (4 BYTE FIREBASE) ---
+        // --- CONTATORE GIORNALIERO PARTITE GIOCATE (4 BYTE FIREBASE CON SELF-HEALING) ---
         window.initTotalMatchesCounterListener = function() {
             if (!db || window.isMatchesCounterListenerActive) return;
             window.isMatchesCounterListenerActive = true;
@@ -1386,10 +1386,22 @@ window.initMandatoryAliasHandlers = function() {
             };
 
             db.ref(`appConfig/dailyMatchesCount/${todayStr}`).on('value', snap => {
-                if (snap.exists() && snap.val() !== null) {
+                if (snap.exists() && snap.val() !== null && Number(snap.val()) > 0) {
                     updateBadge(snap.val());
                 } else {
-                    updateBadge(0);
+                    // SELF-HEALING: Se il contatore di oggi non e ancora stato popolato, recupera le attivita di oggi da activity/daily
+                    db.ref(`activity/daily/${todayStr}`).once('value', actSnap => {
+                        let initCount = 0;
+                        if (actSnap.exists() && actSnap.val()) {
+                            initCount = Object.keys(actSnap.val()).length;
+                        }
+                        if (initCount > 0) {
+                            db.ref(`appConfig/dailyMatchesCount/${todayStr}`).set(initCount).catch(() => {});
+                            updateBadge(initCount);
+                        } else {
+                            updateBadge(0);
+                        }
+                    }).catch(() => updateBadge(0));
                 }
             });
         };
