@@ -1370,7 +1370,7 @@ window.initMandatoryAliasHandlers = function() {
         updateVers();
         setTimeout(updateVers, 1500); // Forza dopo caricamento altri script
 
-        // --- CONTATORE GIORNALIERO PARTITE GIOCATE (PULITO & SENZA CICLI) ---
+        // --- CONTATORE GIORNALIERO PARTITE GIOCATE (SOMMA REALE DELLE PARTITE GIOCATE OGGI) ---
         window.initTotalMatchesCounterListener = function() {
             if (!db || window.isMatchesCounterListenerActive) return;
             window.isMatchesCounterListenerActive = true;
@@ -1386,15 +1386,20 @@ window.initMandatoryAliasHandlers = function() {
 
             db.ref(`activity/daily/${todayStr}`).on('value', snap => {
                 if (snap.exists() && snap.val()) {
-                    const count = Object.keys(snap.val()).length;
-                    updateBadge(count);
+                    let totalMatchesSum = 0;
+                    Object.values(snap.val()).forEach(uData => {
+                        if (uData && typeof uData === 'object') {
+                            totalMatchesSum += (Number(uData.count) || 1);
+                        } else if (typeof uData === 'number') {
+                            totalMatchesSum += uData;
+                        }
+                    });
+                    updateBadge(totalMatchesSum);
                 } else {
                     updateBadge(0);
                 }
             });
         };
-        window.initTotalMatchesCounterListener();
-        window.initTotalMatchesCounterListener();
         window.initTotalMatchesCounterListener();
 
         db.ref('appConfig/latestVersion').once('value', snap => {
