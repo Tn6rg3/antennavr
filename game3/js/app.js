@@ -1360,6 +1360,7 @@ window.initMandatoryAliasHandlers = function() {
         window.checkBugFeedback();
         if (typeof window.checkCwgBetaVisibility === 'function') window.checkCwgBetaVisibility();
         if (typeof window.checkWeeklyCallsignVisibility === 'function') window.checkWeeklyCallsignVisibility();
+        if (typeof window.listenToCwgDirectInvites === 'function') window.listenToCwgDirectInvites();
 
         // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
         const updateVers = () => {
@@ -3242,7 +3243,7 @@ if (els.btnShareDaily) {
         else if (currentMode === 'callsign') modeTitle = "Nominativi (CW Freak)";
         else if (currentMode === 'la_torre') modeTitle = "La Torre (Scalata)";
 
-        const text = `🏆 Ho completato la ${modeTitle} su Sfida Telegrafia!\n🎯 Punteggio: ${totalScore} pt\n🚀 Velocità di picco: ${peakWpm} WPM\n\nProva anche tu su Sfida Telegrafia! 📻\n@${BOT_USERNAME}`;
+        const text = `🏆 Ho completato la ${modeTitle} su Sfida Telegrafia!\n🎯 Punti: ${totalScore} pt 🚀 WPM max: ${peakWpm} WPM\nProva anche tu: @${BOT_USERNAME}`;
         const url = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}`)}&text=${encodeURIComponent(text)}`;
         try {
             if (tg && tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank');

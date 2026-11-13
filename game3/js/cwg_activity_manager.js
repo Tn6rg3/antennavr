@@ -32,8 +32,11 @@ window.saveMyActivityCallPreference = function(newCall) {
     }
 };
 
-window.listenToCwgDirectInvites = function() {
-    const myCall = window.cleanCallsignString(localStorage.getItem('cwgame_activity_call') || window.myName || "");
+window.listenToCwgDirectInvites = async function() {
+    const isBeta = (typeof window.isUserCwgBetaTester === 'function') ? await window.isUserCwgBetaTester() : false;
+    if (!isBeta) return;
+
+    let myCall = window.cleanCallsignString(localStorage.getItem('cwgame_activity_call') || window.myName || "");
     if (!myCall || !db || window.isCwgDirectInviteListenerActive) return;
     window.isCwgDirectInviteListenerActive = true;
 
