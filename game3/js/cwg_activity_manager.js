@@ -253,6 +253,7 @@ window.openCwgActivityScreenImpl = async function() {
 window.openCwgActivityScreen = window.openCwgActivityScreenImpl;
 
 window.resetCwgForm = function() {
+    window.cwgQsoCompletedSuccessfully = false;
     if (window.cwgQsoTimerInterval) {
         clearInterval(window.cwgQsoTimerInterval);
         window.cwgQsoTimerInterval = null;
@@ -836,10 +837,12 @@ window.checkCwgDoubleHandshakeMatch = async function() {
     });
 
     partnerPresenceRef.on('value', snap => {
+        // Se il QSO e stato concluso e salvato con successo, ignoriamo gli avvisi di annullamento!
+        if (window.cwgQsoCompletedSuccessfully) return;
+
         if (!snap.exists()) {
-            // SE IL QSO ERA IN CORSO E IL CORRISPONDENTE ANNULLA O SI SCOLLEGA:
             if (window.cwgQsoTimerInterval || window.cwgQsoActiveInGame) {
-                alert(`⚠️ Il corrispondente ${partnerCall} ha annullato il QSO.\n\nIl collegamento è stato annullato (0 Punti).`);
+                alert(`⚠️ Il corrispondente ${partnerCall} ha chiuso il collegamento.`);
                 window.resetCwgForm();
             }
             return;
@@ -848,8 +851,7 @@ window.checkCwgDoubleHandshakeMatch = async function() {
         const data = snap.val() || {};
         const partnerTs = data.ts || 0;
         const partnerStatus = data.appStatus || 'active';
-        const partnerDiff = Date.now() - partnerTs;
-        const isPartnerAppClosed = (partnerStatus === 'app_closed' || partnerDiff > 25000);
+        const isPartnerAppClosed = (partnerStatus === 'app_closed' || partnerStatus === 'app_paused');
 
         // VERIFICA DI FRESCHEZZA STRETTA: Entrambi i timestamp devono essere stati creati a meno di 60 secondi di distanza!
         if (Math.abs(nowTs - partnerTs) <= 60000) {
@@ -1376,6 +1378,8 @@ window.saveCwgQsoLog = async function() {
 window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band, pointsAssigned = 2) {
     if (!db || !myCall || !partnerCall) return;
 
+    window.cwgQsoCompletedSuccessfully = true;
+
     const now = new Date();
     const year = now.getFullYear();
     const monthStr = year + "-" + String(now.getMonth() + 1).padStart(2, '0');
@@ -1394,8 +1398,9 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
 
     const isReciprocal = (pointsAssigned >= 2);
 
+    // 1. ASSEGNAZIONE PUNTI ALL'UTENTE CORRENTE (OPERATORE A)
     const lbRefA = db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${window.myId}`);
-    lbRefA.transaction(curr => {
+    await lbRefA.transaction(curr => {
         if (!curr) {
             return {
                 name: myCall,
@@ -1414,6 +1419,39 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
         };
     }).catch(() => {});
 
+    // 2. ASSEGNAZIONE PUNTI ANCHE AL CORRISPONDENTE (OPERATORE B)
+    db.ref(`leaderboard/cwg_activity_monthly/${monthStr}`).once('value', pSnap => {
+        let partnerFound = false;
+        if (pSnap.exists()) {
+            pSnap.forEach(pChild => {
+                const pVal = pChild.val();
+                if (pVal && (pVal.name === partnerCall || pChild.key === partnerCall)) {
+                    partnerFound = true;
+                    db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${pChild.key}`).transaction(curr => {
+                        if (!curr) return null;
+                        return {
+                            name: curr.name || partnerCall,
+                            totalPoints: (Number(curr.totalPoints) || 0) + pointsAssigned,
+                            validQsos: (Number(curr.validQsos) || 0) + 1,
+                            mutualQsos: (Number(curr.mutualQsos) || 0) + (isReciprocal ? 1 : 0),
+                            lastUpdate: Date.now()
+                        };
+                    }).catch(() => {});
+                }
+            });
+        }
+        if (!partnerFound) {
+            db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${partnerCall}`).set({
+                name: partnerCall,
+                totalPoints: pointsAssigned,
+                validQsos: 1,
+                mutualQsos: isReciprocal ? 1 : 0,
+                lastUpdate: Date.now()
+            }).catch(() => {});
+        }
+    }).catch(() => {});
+
+    // 3. REGISTRAZIONE E NOTIFICA PER L'ALTRO OPERATORE
     await db.ref(`activity_cwg/keys_exchange/${sharedQsoKey}/saved`).set({
         by: myCall,
         points: pointsAssigned,
@@ -1480,7 +1518,38 @@ window.resumeCwgQsoOnWake = function() {
 };
 
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) window.resumeCwgQsoOnWake();
+    if (!document.hidden) {
+        if (window.cwgMyPresenceKey && db) {
+            db.ref(`activity_cwg/handshake/${window.cwgMyPresenceKey}`).update({
+                appStatus: 'active',
+                ts: Date.now()
+            }).catch(() => {});
+        }
+        window.resumeCwgQsoOnWake();
+    } else {
+        if (window.cwgMyPresenceKey && db) {
+            db.ref(`activity_cwg/handshake/${window.cwgMyPresenceKey}`).update({
+                appStatus: 'app_paused',
+                ts: Date.now()
+            }).catch(() => {});
+        }
+    }
 });
-window.addEventListener('pageshow', () => window.resumeCwgQsoOnWake());
-window.addEventListener('focus', () => window.resumeCwgQsoOnWake());
+window.addEventListener('pageshow', () => {
+    if (window.cwgMyPresenceKey && db) {
+        db.ref(`activity_cwg/handshake/${window.cwgMyPresenceKey}`).update({
+            appStatus: 'active',
+            ts: Date.now()
+        }).catch(() => {});
+    }
+    window.resumeCwgQsoOnWake();
+});
+window.addEventListener('focus', () => {
+    if (window.cwgMyPresenceKey && db) {
+        db.ref(`activity_cwg/handshake/${window.cwgMyPresenceKey}`).update({
+            appStatus: 'active',
+            ts: Date.now()
+        }).catch(() => {});
+    }
+    window.resumeCwgQsoOnWake();
+});
