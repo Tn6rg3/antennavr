@@ -1360,6 +1360,7 @@ window.initMandatoryAliasHandlers = function() {
         window.checkBugFeedback();
         if (typeof window.checkCwgBetaVisibility === 'function') window.checkCwgBetaVisibility();
         if (typeof window.checkWeeklyCallsignVisibility === 'function') window.checkWeeklyCallsignVisibility();
+        if (typeof window.listenToCwgDirectInvites === 'function') window.listenToCwgDirectInvites();
 
         // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
         const updateVers = () => {
