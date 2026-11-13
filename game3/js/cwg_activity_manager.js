@@ -823,14 +823,30 @@ window.checkCwgDoubleHandshakeMatch = async function() {
                 window.initCwgPrivateChat(myCall, partnerCall, band);
             }
 
-            // 3. Avvia il Timer per entrambi se non ancora avviato
+            // 3. Avvia il Timer per entrambi calcolando il tempo reale trascorso se la sessione era gia attiva
             if (!window.cwgQsoTimerInterval && window.cwgQsoTimerSeconds === 0) {
-                if (typeof showToast === 'function') {
-                    showToast(`🟢 Corrispondenza confermata tra ${myCall} e ${partnerCall}! Timer 4 Minuti avviato.`);
+                let initialElapsed = 0;
+                let isInitiatorVal = (nowTs <= partnerTs);
+
+                const activeSessionRaw = localStorage.getItem('cwgame_active_qso_session');
+                if (activeSessionRaw) {
+                    try {
+                        const session = JSON.parse(activeSessionRaw);
+                        if (session && session.partnerCall === partnerCall && session.band === band) {
+                            const calcElapsed = Math.floor((Date.now() - (session.qsoStartTs || Date.now())) / 1000);
+                            if (calcElapsed < 360) {
+                                initialElapsed = calcElapsed;
+                                if (session.isInitiator !== undefined) isInitiatorVal = session.isInitiator;
+                            }
+                        }
+                    } catch(e) {}
                 }
 
-                const isInitiator = (nowTs <= partnerTs);
-                window.runCwgQsoTimerCountdown(0, isInitiator);
+                if (typeof showToast === 'function' && initialElapsed === 0) {
+                    showToast(`🟢 Corrispondenza confermata tra ${myCall} e ${partnerCall}! Timer avviato.`);
+                }
+
+                window.runCwgQsoTimerCountdown(initialElapsed, isInitiatorVal);
             }
         }
     });
