@@ -1097,19 +1097,45 @@ window.startCwgKeysExchangePhase = function() {
 window.onCwgRxKeyInputChanged = function() {
     const rxInput = document.getElementById('cwgRxKeyInput');
     const rxKey = rxInput ? rxInput.value.trim().toUpperCase() : "";
+    const confirmBtn = document.getElementById('btnConfirmCwgKey');
 
     if (rxKey.length === 8) {
-        if (!window.isCwgInitiator || !window.cwgGeneratedTxKey) {
-            window.requestCwgTxKey();
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.style.background = "#4caf50";
         }
-        window.publishCwgExchangeKeyStatus(rxKey);
     } else {
-        const saveBtn = document.getElementById('btnSaveCwgQso');
-        if (saveBtn) saveBtn.disabled = true;
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.style.background = "rgba(255,255,255,0.2)";
+        }
     }
 };
 
-window.publishCwgExchangeKeyStatus = function(rxKey) {
+window.confirmCwgRxKey = function() {
+    const rxInput = document.getElementById('cwgRxKeyInput');
+    const rxKey = rxInput ? rxInput.value.trim().toUpperCase() : "";
+    const confirmBtn = document.getElementById('btnConfirmCwgKey');
+
+    if (rxKey.length !== 8) {
+        return alert("⚠️ Inserisci una chiave a 8 caratteri prima di confermare.");
+    }
+
+    if (rxInput) rxInput.disabled = true;
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = "CHIAVE CONFERMATA ✅";
+        confirmBtn.style.background = "#00bcd4";
+    }
+
+    if (!window.isCwgInitiator || !window.cwgGeneratedTxKey) {
+        window.requestCwgTxKey();
+    }
+
+    window.publishCwgExchangeKeyStatus(rxKey, true);
+};
+
+window.publishCwgExchangeKeyStatus = function(rxKey, isConfirmed = false) {
     const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || "");
     const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
     const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
@@ -1132,6 +1158,7 @@ window.publishCwgExchangeKeyStatus = function(rxKey) {
         myCall: myCall,
         partnerCall: partnerCall,
         rxKey: rxKey,
+        confirmed: isConfirmed,
         txKey: window.cwgGeneratedTxKey || "",
         ts: Date.now()
     }).catch(() => {});
@@ -1143,21 +1170,32 @@ window.publishCwgExchangeKeyStatus = function(rxKey) {
     partnerExchangeRef.on('value', snap => {
         const saveBtn = document.getElementById('btnSaveCwgQso');
         const stepHelp = document.getElementById('cwgKeysStepHelpText');
+        const pData = (snap.exists() && snap.val()) ? snap.val() : {};
 
-        if (snap.exists() && snap.val() && snap.val().rxKey && snap.val().rxKey.length === 8) {
+        const partnerConfirmed = (pData.confirmed === true && pData.rxKey && pData.rxKey.length === 8);
+
+        if (isConfirmed && partnerConfirmed) {
             if (saveBtn) {
                 saveBtn.disabled = false;
-                saveBtn.style.background = "#4caf50";
+                saveBtn.style.background = "#00ff66";
+                saveBtn.style.color = "#000000";
+                saveBtn.textContent = "💾 TERMINA E CONVALIDA QSO (+2 PT)";
             }
             if (stepHelp) {
-                stepHelp.textContent = `🟢 ENTRAMBI GLI OPERATORI HANNO INSERITO LE CHIAVI! Clicca "SALVA E REGISTRA QSO" per convalidare ed assegnare +2 Punti a ciascuno!`;
+                stepHelp.textContent = `🟢 ENTRAMBI GLI OPERATORI HANNO CONFERMATO LE CHIAVI! Clicca su "TERMINA E CONVALIDA QSO" per registrare +2 Punti ciascuno!`;
                 stepHelp.style.color = "#00ff66";
+            }
+        } else if (isConfirmed) {
+            if (saveBtn) saveBtn.disabled = true;
+            if (stepHelp) {
+                stepHelp.textContent = `⏳ CHIAVE CONFERMATA. In attesa che anche ${partnerCall} inserisca e confermi la sua chiave...`;
+                stepHelp.style.color = "#ff9800";
             }
         } else {
             if (saveBtn) saveBtn.disabled = true;
             if (stepHelp) {
-                stepHelp.textContent = `⏳ CHIAVE INSERITA. In attesa che anche ${partnerCall} inserisca la sua chiave...`;
-                stepHelp.style.color = "#ff9800";
+                stepHelp.textContent = `① Inserisci la chiave ricevuta e clicca "CONFERMA CHIAVE" per procedere!`;
+                stepHelp.style.color = "#ffffff";
             }
         }
     });
@@ -1168,7 +1206,7 @@ window.publishCwgExchangeKeyStatus = function(rxKey) {
     savedRef.on('value', sSnap => {
         if (sSnap.exists() && sSnap.val() && sSnap.val().by !== myCall) {
             const data = sSnap.val();
-            alert(`✅ QSO CONVALIDATO E SALVATO DALL'ALTRO OPERATORE (${data.by})!\n\nPunti Assegnati: +${data.points || 2} pt a ciascun telegrafista!`);
+            alert(`✅ QSO CONCLUSO E CONVALIDATO DALL'ALTRO OPERATORE (${data.by})!\n\nPunti Assegnati: +${data.points || 2} pt a ciascun telegrafista!`);
             window.resetCwgForm();
             if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
         }
