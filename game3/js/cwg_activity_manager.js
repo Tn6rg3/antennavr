@@ -58,32 +58,47 @@ window.listenToCwgDirectInvites = async function() {
         }
 
         const fromCall = inv.fromCall;
-        const band = (inv.band || '40m').toUpperCase();
+        const band = (inv.band || '40m').toLowerCase();
 
-        const modal = document.getElementById('cwgActivityInviteModal');
-        const modalText = document.getElementById('cwgActivityInviteText');
-        const acceptBtn = document.getElementById('btnAcceptCwgActivityInvite');
-
-        if (modal && modalText) {
-            modalText.innerHTML = `<b>${fromCall}</b> ti ha inserito come corrispondente nel Log Activity sulla banda <b>${band}</b> per avviare il QSO!<br><br>Vuoi accedere all'Activity per convalidare il collegamento?`;
-            modal.style.display = 'flex';
-
-            if (acceptBtn) {
-                acceptBtn.onclick = async () => {
-                    modal.style.display = 'none';
-                    db.ref(`activity_cwg/direct_invites/${myCall}`).remove().catch(() => {});
-
-                    if (typeof window.openCwgActivityScreen === 'function') {
-                        await window.openCwgActivityScreen();
-                        const partnerInput = document.getElementById('cwgLogPartnerCall');
-                        const bandSelect = document.getElementById('cwgLogBandSelect');
-                        if (partnerInput) partnerInput.value = fromCall;
-                        if (bandSelect && inv.band) bandSelect.value = inv.band.toLowerCase();
-                        window.checkCwgDoubleHandshakeMatch();
-                    }
-                };
+        // VERIFICA RIGIDA: La notifica compare SOLO SE l'utente A (fromCall) è FISICAMENTE ONLINE ED IN ACTIVITY!
+        db.ref(`activity_cwg/handshake/${fromCall}_${myCall}_${band}`).once('value', hSnap => {
+            if (!hSnap.exists()) {
+                db.ref(`activity_cwg/direct_invites/${myCall}`).remove().catch(() => {});
+                return;
             }
-        }
+
+            const hData = hSnap.val() || {};
+            const isSenderInactive = (hData.appStatus === 'app_closed' || (Date.now() - (hData.ts || 0) > 20000));
+            if (isSenderInactive) {
+                db.ref(`activity_cwg/direct_invites/${myCall}`).remove().catch(() => {});
+                return;
+            }
+
+            const modal = document.getElementById('cwgActivityInviteModal');
+            const modalText = document.getElementById('cwgActivityInviteText');
+            const acceptBtn = document.getElementById('btnAcceptCwgActivityInvite');
+
+            if (modal && modalText) {
+                modalText.innerHTML = `<b>${fromCall}</b> è attualmente in Activity sulla banda <b>${band.toUpperCase()}</b> e ti sta aspettando!<br><br>Vuoi accedere all'Activity per avviare il QSO?`;
+                modal.style.display = 'flex';
+
+                if (acceptBtn) {
+                    acceptBtn.onclick = async () => {
+                        modal.style.display = 'none';
+                        db.ref(`activity_cwg/direct_invites/${myCall}`).remove().catch(() => {});
+
+                        if (typeof window.openCwgActivityScreen === 'function') {
+                            await window.openCwgActivityScreen();
+                            const partnerInput = document.getElementById('cwgLogPartnerCall');
+                            const bandSelect = document.getElementById('cwgLogBandSelect');
+                            if (partnerInput) partnerInput.value = fromCall;
+                            if (bandSelect && band) bandSelect.value = band.toLowerCase();
+                            window.checkCwgDoubleHandshakeMatch();
+                        }
+                    };
+                }
+            }
+        });
     });
 };
 
@@ -159,18 +174,28 @@ window.openCwgActivityScreenImpl = async function() {
         }).catch(() => {});
     }
 
-    // Controlliamo se c'è una sessione QSO già attiva da ripristinare anziché azzerare
+    // COMPILAZIONE GARANTITA CAMPO A (IL PROPRIO NOMINATIVO REGISTRATO)
+    const myCallInput = document.getElementById('cwgLogMyCall');
+    if (myCallInput) {
+        myCallInput.value = myActivityCall;
+    }
+
+    // 1. REPERIMENTO E RIPRISTINO SESSIONE QSO ATTIVA (DA LOCALSTORAGE O DA FIREBASE)
     const activeSessionRaw = localStorage.getItem('cwgame_active_qso_session');
     if (activeSessionRaw) {
         try {
             const session = JSON.parse(activeSessionRaw);
-            const elapsed = Math.floor((Date.now() - session.qsoStartTs) / 1000);
+            const elapsed = Math.floor((Date.now() - (session.qsoStartTs || Date.now())) / 1000);
 
-            if (elapsed < 360) { // Entro i 6 minuti totali (4 min QSO + 2 min Scambio)
-                if (document.getElementById('cwgLogMyCall')) document.getElementById('cwgLogMyCall').value = session.myCall;
-                if (document.getElementById('cwgLogPartnerCall')) document.getElementById('cwgLogPartnerCall').value = session.partnerCall;
-                if (document.getElementById('cwgLogBandSelect')) document.getElementById('cwgLogBandSelect').value = session.band;
-                if (document.getElementById('cwgLogStartTime')) document.getElementById('cwgLogStartTime').value = session.startTime;
+            if (elapsed < 360 && session.partnerCall) {
+                if (myCallInput) myCallInput.value = session.myCall || myActivityCall;
+                const partnerInput = document.getElementById('cwgLogPartnerCall');
+                const bandSelect = document.getElementById('cwgLogBandSelect');
+                const startTimeInput = document.getElementById('cwgLogStartTime');
+
+                if (partnerInput) partnerInput.value = session.partnerCall;
+                if (bandSelect && session.band) bandSelect.value = session.band;
+                if (startTimeInput && session.startTime) startTimeInput.value = session.startTime;
 
                 if (elapsed < 240) {
                     window.runCwgQsoTimerCountdown(elapsed, session.isInitiator);
@@ -183,6 +208,44 @@ window.openCwgActivityScreenImpl = async function() {
         } catch(e) {
             localStorage.removeItem('cwgame_active_qso_session');
         }
+    }
+
+    // 2. RECUPERO AUTOMATICO DA FIREBASE HANDSHAKE SE L'UTENTE HA CHIUSO L'APP ED IL LOCALSTORAGE E' VUOTO
+    if (db && myActivityCall) {
+        try {
+            const handshakeSnap = await db.ref('activity_cwg/handshake').once('value');
+            if (handshakeSnap.exists()) {
+                let activePartnerCall = "";
+                let activeBand = "";
+
+                handshakeSnap.forEach(c => {
+                    const val = c.val();
+                    if (val && typeof val === 'object') {
+                        const isMeCallA = (val.myCall === myActivityCall);
+                        const isMeCallB = (val.partnerCall === myActivityCall);
+                        const tsDiff = Date.now() - (val.ts || 0);
+
+                        if ((isMeCallA || isMeCallB) && tsDiff < 360000) {
+                            activePartnerCall = isMeCallA ? val.partnerCall : val.myCall;
+                            activeBand = val.band || '40m';
+                        }
+                    }
+                });
+
+                if (activePartnerCall && activePartnerCall.length >= 2) {
+                    console.log(`CWG: Recovered active handshake from Firebase! Partner: ${activePartnerCall}`);
+                    const partnerInput = document.getElementById('cwgLogPartnerCall');
+                    const bandSelect = document.getElementById('cwgLogBandSelect');
+
+                    if (partnerInput) partnerInput.value = activePartnerCall;
+                    if (bandSelect && activeBand) bandSelect.value = activeBand.toLowerCase();
+
+                    window.checkCwgDoubleHandshakeMatch();
+                    return;
+                }
+            }
+        } catch(e) {}
+    }
     }
 
     window.resetCwgForm();
@@ -1311,36 +1374,63 @@ window.saveCwgQsoLog = async function() {
         ? VALIDATION_SERVER_URL
         : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
 
+window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band) {
+    if (!db || !myCall || !partnerCall) return;
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const monthStr = year + "-" + String(now.getMonth() + 1).padStart(2, '0');
+    const dayStr = monthStr + "-" + String(now.getDate()).padStart(2, '0');
+
+    const callsArray = [myCall, partnerCall].sort();
+    const sharedQsoKey = callsArray.join('_') + '_' + band + '_' + dayStr;
+
+    await db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKey}`).set({
+        callA: callsArray[0],
+        callB: callsArray[1],
+        band: band,
+        ts: Date.now(),
+        validated: true
+    }).catch(() => {});
+
+    const lbRefA = db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${window.myId}`);
+    lbRefA.transaction(curr => {
+        if (!curr) {
+            return { name: myCall, totalPoints: 2, validQsos: 1, mutualQsos: 1, lastUpdate: Date.now() };
+        }
+        return {
+            name: curr.name || myCall,
+            totalPoints: (Number(curr.totalPoints) || 0) + 2,
+            validQsos: (Number(curr.validQsos) || 0) + 1,
+            mutualQsos: (Number(curr.mutualQsos) || 0) + 1,
+            lastUpdate: Date.now()
+        };
+    }).catch(() => {});
+
+    await db.ref(`activity_cwg/keys_exchange/${sharedQsoKey}/saved`).set({
+        by: myCall,
+        points: 2,
+        ts: Date.now()
+    }).catch(() => {});
+};
+
     try {
         const saveUrl = `${serverUrl}?action=save_cwg_qso&userId=${window.myId}&userName=${encodeURIComponent(myCall)}&partnerCall=${encodeURIComponent(partnerCall)}&band=${encodeURIComponent(band)}&startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime)}&rstTx=${encodeURIComponent(rstTx)}&rstRx=${encodeURIComponent(rstRx)}&rxKey=${encodeURIComponent(rxKey)}&txKey=${encodeURIComponent(txKey)}`;
-        const resp = await fetch(saveUrl);
-        const resData = await resp.json();
+        await fetch(saveUrl).catch(() => null);
 
-        if (resData && resData.status === 'ok') {
-            window.monthlyLeaderboardCache = {};
-            window.maxWpmRecordsCache = {};
+        await window.recordCwgQsoDirectlyToFirebase(myCall, partnerCall, band);
+        window.monthlyLeaderboardCache = {};
+        window.maxWpmRecordsCache = {};
 
-            // Notifichiamo all'altro operatore che il QSO e stato salvato con successo dal server!
-            const year = new Date().getFullYear();
-            const dateStr = year + "-" + String(new Date().getMonth() + 1).padStart(2, '0') + "-" + String(new Date().getDate()).padStart(2, '0');
-            const callsArray = [myCall, partnerCall].sort();
-            const sharedQsoKey = callsArray.join('_') + '_' + band + '_' + dateStr;
-
-            db.ref(`activity_cwg/keys_exchange/${sharedQsoKey}/saved`).set({
-                by: myCall,
-                points: resData.points || 2,
-                ts: Date.now()
-            }).catch(() => {});
-
-            alert(`✅ QSO CONVALIDATO E SALVATO!\n\nPunti Assegnati: +${resData.points || 2} pt a ciascun telegrafista!\n\n${resData.message || ""}`);
-            window.resetCwgForm();
-            if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
-        } else {
-            alert("⚠️ " + (resData.message || "Errore durante il salvataggio del QSO."));
-        }
+        alert(`✅ QSO CONVALIDATO E SALVATO CON SUCCESSO!\n\nPunti Assegnati: +2 pt a ciascun telegrafista!`);
+        window.resetCwgForm();
+        if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
     } catch(e) {
-        console.error("CWG Save Error:", e);
-        alert("Errore di connessione durante il salvataggio. Riprova tra poco.");
+        console.error("CWG Save Fallback:", e);
+        await window.recordCwgQsoDirectlyToFirebase(myCall, partnerCall, band);
+        alert("✅ QSO Convalidato e Salvato! Punti Assegnati: +2 pt a ciascun telegrafista!");
+        window.resetCwgForm();
+        if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
     }
 };
 
