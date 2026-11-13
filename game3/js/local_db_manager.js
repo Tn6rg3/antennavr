@@ -105,7 +105,7 @@ window.saveLocalMatchRecord = async function(matchRecord) {
 };
 
 // 3. LETTURA STORICO PARTITE LOCALE (PER GRAFICI E PROFILO IN 0MS)
-window.loadLocalMatchHistory = function(limit = 50) {
+window.loadLocalMatchHistory = function(limit = 1000) {
     return new Promise((resolve) => {
         if (!window.isLocalDbReady || !window.localDb) {
             resolve([]);
@@ -116,12 +116,13 @@ window.loadLocalMatchHistory = function(limit = 50) {
             const tx = window.localDb.transaction(['matchHistory'], 'readonly');
             const store = tx.objectStore('matchHistory');
             const index = store.index('ts');
-            const request = index.openCursor(null, 'prev'); // Ordinamento decrescente dal più recente
+            // Ordinamento crescente dal più vecchio (prima partita) al più recente
+            const request = index.openCursor(null, 'next');
 
             const results = [];
             request.onsuccess = function(e) {
                 const cursor = e.target.result;
-                if (cursor && results.length < limit) {
+                if (cursor && (limit === 0 || results.length < limit)) {
                     results.push(cursor.value);
                     cursor.continue();
                 } else {

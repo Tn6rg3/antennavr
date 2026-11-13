@@ -390,7 +390,7 @@ window.loadAdvancedStats = function() {
             return val;
         }).catch(() => ({}));
 
-    const localHistPromise = (typeof window.loadLocalMatchHistory === 'function') ? window.loadLocalMatchHistory(50) : Promise.resolve([]);
+    const localHistPromise = (typeof window.loadLocalMatchHistory === 'function') ? window.loadLocalMatchHistory(1000) : Promise.resolve([]);
 
     Promise.all([
         fetchStatsPromise,
