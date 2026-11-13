@@ -399,17 +399,35 @@ window.loadAdvancedStats = function() {
     ]).then(([stats, localHist, histSnap]) => {
         let historyData = localHist || [];
 
-        if (historyData.length === 0 && histSnap && histSnap.exists()) {
+        // Uniamo sempre le partite da Firebase se non ancora presenti nello storico locale (es. cambio PC / Smartphone)
+        if (histSnap && histSnap.exists()) {
             histSnap.forEach(child => {
-                historyData.push({ key: child.key, ...child.val() });
+                const val = child.val();
+                if (val) {
+                    const matchKey = child.key;
+                    const matchTs = val.ts || (val.date ? new Date(val.date).getTime() : 0);
+
+                    const alreadyExists = historyData.some(m => {
+                        const mKey = m.key || m.id || m.histKey;
+                        const mTs = m.ts || (m.date ? new Date(m.date).getTime() : 0);
+                        return (mKey && String(mKey) === String(matchKey)) || (mTs && Math.abs(mTs - matchTs) < 5000);
+                    });
+
+                    if (!alreadyExists) {
+                        historyData.push({ key: matchKey, ...val });
+                    }
+                }
             });
         }
 
-        if (historyData.length === 0 && Array.isArray(window.userMatchHistory) && window.userMatchHistory.length > 0) {
-            historyData = window.userMatchHistory;
-        } else {
-            window.userMatchHistory = historyData;
-        }
+        // Ordiniamo cronologicamente dal più vecchio (prima partita) al più recente
+        historyData.sort((a,b) => {
+            const tsA = a.ts || (a.date ? new Date(a.date).getTime() : 0);
+            const tsB = b.ts || (b.date ? new Date(b.date).getTime() : 0);
+            return tsA - tsB;
+        });
+
+        window.userMatchHistory = historyData;
 
         window.renderAccuracyTrend(stats.accuracySessions || {}, historyData);
         window.renderGamePhaseAnalysis(historyData);
