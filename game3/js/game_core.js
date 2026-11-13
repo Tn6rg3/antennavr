@@ -1333,6 +1333,7 @@ window.finishGame = async function() {
     // --- INCREMENTO CONTATORE GLOBALE PARTITE GIOCATE (4 BYTE FIREBASE) ---
     if (db) {
         db.ref('appConfig/totalMatchesCount').set(firebase.database.ServerValue.increment(1)).catch(() => {});
+        db.ref('activity/totalMatchesCount').set(firebase.database.ServerValue.increment(1)).catch(() => {});
     }
 
     if (window.totalScore > 0 && !window.roomCode.startsWith("TRN_")) {

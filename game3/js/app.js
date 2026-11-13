@@ -1375,11 +1375,23 @@ window.initMandatoryAliasHandlers = function() {
             if (!db || window.isMatchesCounterListenerActive) return;
             window.isMatchesCounterListenerActive = true;
 
-            db.ref('appConfig/totalMatchesCount').on('value', snap => {
+            const updateBadge = (val) => {
                 const badge = document.getElementById('totalMatchesBadge');
                 if (badge) {
-                    const val = snap.exists() ? (Number(snap.val()) || 0) : 0;
-                    badge.textContent = `🎮 Partite: ${val.toLocaleString('it-IT')}`;
+                    const num = Number(val) || 0;
+                    badge.textContent = `🎮 Partite: ${num.toLocaleString('it-IT')}`;
+                }
+            };
+
+            db.ref('appConfig/totalMatchesCount').on('value', snap => {
+                if (snap.exists() && snap.val() !== null) {
+                    updateBadge(snap.val());
+                } else {
+                    db.ref('activity/totalMatchesCount').on('value', snap2 => {
+                        if (snap2.exists() && snap2.val() !== null) {
+                            updateBadge(snap2.val());
+                        }
+                    });
                 }
             });
         };
