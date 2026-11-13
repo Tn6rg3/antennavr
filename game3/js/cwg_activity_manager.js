@@ -1373,7 +1373,7 @@ window.saveCwgQsoLog = async function() {
         ? VALIDATION_SERVER_URL
         : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
 
-window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band) {
+window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band, pointsAssigned = 2) {
     if (!db || !myCall || !partnerCall) return;
 
     const now = new Date();
@@ -1392,42 +1392,55 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
         validated: true
     }).catch(() => {});
 
+    const isReciprocal = (pointsAssigned >= 2);
+
     const lbRefA = db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${window.myId}`);
     lbRefA.transaction(curr => {
         if (!curr) {
-            return { name: myCall, totalPoints: 2, validQsos: 1, mutualQsos: 1, lastUpdate: Date.now() };
+            return {
+                name: myCall,
+                totalPoints: pointsAssigned,
+                validQsos: 1,
+                mutualQsos: isReciprocal ? 1 : 0,
+                lastUpdate: Date.now()
+            };
         }
         return {
             name: curr.name || myCall,
-            totalPoints: (Number(curr.totalPoints) || 0) + 2,
+            totalPoints: (Number(curr.totalPoints) || 0) + pointsAssigned,
             validQsos: (Number(curr.validQsos) || 0) + 1,
-            mutualQsos: (Number(curr.mutualQsos) || 0) + 1,
+            mutualQsos: (Number(curr.mutualQsos) || 0) + (isReciprocal ? 1 : 0),
             lastUpdate: Date.now()
         };
     }).catch(() => {});
 
     await db.ref(`activity_cwg/keys_exchange/${sharedQsoKey}/saved`).set({
         by: myCall,
-        points: 2,
+        points: pointsAssigned,
         ts: Date.now()
     }).catch(() => {});
 };
 
     try {
+        const isFullKeyExchange = (rxKey && rxKey.length === 8 && txKey && txKey.length === 8);
+        const pointsToAward = isFullKeyExchange ? 2 : 1;
+
         const saveUrl = `${serverUrl}?action=save_cwg_qso&userId=${window.myId}&userName=${encodeURIComponent(myCall)}&partnerCall=${encodeURIComponent(partnerCall)}&band=${encodeURIComponent(band)}&startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime)}&rstTx=${encodeURIComponent(rstTx)}&rstRx=${encodeURIComponent(rstRx)}&rxKey=${encodeURIComponent(rxKey)}&txKey=${encodeURIComponent(txKey)}`;
         await fetch(saveUrl).catch(() => null);
 
-        await window.recordCwgQsoDirectlyToFirebase(myCall, partnerCall, band);
+        await window.recordCwgQsoDirectlyToFirebase(myCall, partnerCall, band, pointsToAward);
         window.monthlyLeaderboardCache = {};
         window.maxWpmRecordsCache = {};
 
-        alert(`✅ QSO CONVALIDATO E SALVATO CON SUCCESSO!\n\nPunti Assegnati: +2 pt a ciascun telegrafista!`);
+        const ptText = pointsToAward === 2 ? "+2 pt (Scambio Chiavi Corretto ✅)" : "+1 pt (Collegamento Completato 👍)";
+        alert(`✅ LOG QSO REGISTRATO CON SUCCESSO!\n\nPunti Assegnati: ${ptText}`);
         window.resetCwgForm();
         if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
     } catch(e) {
         console.error("CWG Save Fallback:", e);
-        await window.recordCwgQsoDirectlyToFirebase(myCall, partnerCall, band);
-        alert("✅ QSO Convalidato e Salvato! Punti Assegnati: +2 pt a ciascun telegrafista!");
+        const pointsToAward = (rxKey && rxKey.length === 8) ? 2 : 1;
+        await window.recordCwgQsoDirectlyToFirebase(myCall, partnerCall, band, pointsToAward);
+        alert(`✅ LOG QSO Registrato! Punti Assegnati: +${pointsToAward} pt!`);
         window.resetCwgForm();
         if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
     }
