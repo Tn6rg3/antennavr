@@ -108,28 +108,18 @@ window.showLeaderboardTab = function(modeValue) {
 
     const filterVal = els.lbWordFilter ? els.lbWordFilter.value : 'all';
 
-    if (modeValue === 'room') {
-        els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Caricamento sessione...':'Loading session...'}</p>`;
-
-        const renderLastMatchOrHistory = (snap) => {
-            const playersData = snap.val();
-            if (playersData) {
-                window.renderRoomLeaderboard(playersData);
-            } else {
-                // FALLBACK: Se la stanza è stata eliminata o non esiste, usiamo l'ultimo match dallo storico personale
-                window.fetchAndRenderLastMatchFromHistory();
-            }
-        };
-
-        if (els.roomWinnersArea) els.roomWinnersArea.style.display = 'block';
-        if (roomCode) {
-            db.ref(`rooms/${roomCode}/players`).once('value', renderLastMatchOrHistory);
-        } else if (window.lastFinishedRoomCode) {
-            db.ref(`rooms/${window.lastFinishedRoomCode}/players`).once('value', renderLastMatchOrHistory);
+    const renderLastMatchOrHistory = (snap) => {
+        const playersData = snap && snap.exists() ? snap.val() : null;
+        if (playersData) {
+            window.renderRoomLeaderboard(playersData);
         } else {
             window.fetchAndRenderLastMatchFromHistory();
         }
-    } else if (modeValue === 'my_history') {
+    };
+
+    if (modeValue === 'room' || modeValue === 'last_match') {
+        els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Caricamento sessione...':'Loading session...'}</p>`;
+
         if (els.roomWinnersArea) els.roomWinnersArea.style.display = 'block';
         if (roomCode) {
             db.ref(`rooms/${roomCode}/players`).once('value', renderLastMatchOrHistory);
