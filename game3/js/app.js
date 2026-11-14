@@ -1437,11 +1437,6 @@ window.initMandatoryAliasHandlers = function() {
             }).catch(() => {});
         };
         setTimeout(window.normalizeTodayMatchesCount, 1500);
-                    });
-                }
-            }).catch(() => {});
-        };
-        setTimeout(window.normalizeTodayMatchesCount, 2000);
 
         db.ref('appConfig/latestVersion').once('value', snap => {
             const latestStr = snap.val() ? String(snap.val()).trim() : "";
