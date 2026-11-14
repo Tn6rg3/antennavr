@@ -1293,10 +1293,12 @@ window.finishGame = async function() {
     if (easyHint) easyHint.style.display = 'none';
 
     clearAllTimers();
+    gameRunning = false;
 
-    if (listeners.room) { listeners.room.off(); listeners.room = null; }
-    if (listeners.pingPong) { db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong); listeners.pingPong = null; }
-    if (listeners.quizState && roomCode) { db.ref(`rooms/${roomCode}/quiz_state`).off('value', listeners.quizState); listeners.quizState = null; }
+    if (listeners.room) { try { listeners.room.off(); } catch(e) {} listeners.room = null; }
+    if (listeners.players) { try { listeners.players.off(); } catch(e) {} listeners.players = null; }
+    if (listeners.pingPong) { try { db.ref(`rooms/${roomCode}/pingpong`).off(); } catch(e) {} listeners.pingPong = null; }
+    if (listeners.quizState && roomCode) { try { db.ref(`rooms/${roomCode}/quiz_state`).off(); } catch(e) {} listeners.quizState = null; }
 
     // Se è una partita singola, segnamo la stanza come finita sul server e poi la puliamo
     if (roomCode && window.isSinglePlayer) {
@@ -1330,10 +1332,10 @@ window.finishGame = async function() {
         myPlayerRef.onDisconnect().cancel();
     }
 
-    // --- INCREMENTO CONTATORE GIORNALIERO PARTITE GIOCATE (4 BYTE FIREBASE) ---
-    if (db) {
+    // --- INCREMENTO CONTATORE GIORNALIERO PARTITE GIOCATE ---
+    if (db && myId) {
         const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
-        db.ref(`appConfig/dailyMatchesCount/${todayStr}`).set(firebase.database.ServerValue.increment(1)).catch(() => {});
+        db.ref(`activity/daily/${todayStr}/${myId}/games`).set(firebase.database.ServerValue.increment(1)).catch(() => {});
     }
 
     if (window.totalScore > 0 && !window.roomCode.startsWith("TRN_")) {
@@ -1356,6 +1358,7 @@ window.finishGame = async function() {
             const isActuallyMulti = (pArray.length >= 2) || (!window.isSinglePlayer && gameStartPlayerCount >= 2);
 
             let dbPath;
+            let baseFolder = null;
             if (window.currentMode === 'daily_challenge') {
                 let todayStr = window.getLocalDateString();
                 dbPath = `leaderboard/daily_challenge/${todayStr}/${window.myId}`;
@@ -1443,7 +1446,7 @@ window.finishGame = async function() {
                     'standard_plus': 'standard_plus',
                     'target_training': 'target_training'
                 };
-                const baseFolder = modeMap[window.currentMode] || 'standard';
+                baseFolder = modeMap[window.currentMode] || 'standard';
                 const modeFolder = window.currentMode === 'callsign' ? baseFolder : `${baseFolder}/${!isActuallyMulti ? 'single' : 'multi'}_${window.requestedWordCount}`;
                 dbPath = `leaderboard/${modeFolder}/${window.myId}`;
             }
