@@ -1269,7 +1269,14 @@ window.attachCourseUIListeners = function() {
              }
         };
     }
-    if (els.btnPlayCourseNow) els.btnPlayCourseNow.onclick = () => { if (els.courseSessionModal) els.courseSessionModal.style.display = 'none'; window.actualStartCourseGame(); };
+    const btnPlayNowEl = document.getElementById('btnPlayCourseNow');
+    if (btnPlayNowEl) {
+        btnPlayNowEl.onclick = () => {
+            const modal = document.getElementById('courseSessionModal');
+            if (modal) modal.style.display = 'none';
+            window.actualStartCourseGame();
+        };
+    }
 };
 
 /**
