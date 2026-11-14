@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.309";
+const APP_VERSION = "20261105.311";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1460,7 +1460,10 @@ window.saveAdminLatestVersion = function() {
 
     if (!newVer) return alert("⚠️ Inserisci un numero di versione valido (es. 20261112.500).");
 
-    db.ref('appConfig/latestVersion').set(String(newVer)).then(() => {
+    Promise.all([
+        db.ref('appConfig/latestVersion').set(String(newVer)),
+        db.ref('config/latestVersion').set(String(newVer))
+    ]).then(() => {
         if (typeof showToast === 'function') showToast("🚀 Nuova versione pubblicata!");
         alert(`🚀 Nuova versione ${newVer} pubblicata su Firebase con successo!\n\nTutti gli utenti della community vedranno il banner di aggiornamento.`);
         window.location.reload(true);
@@ -1468,6 +1471,35 @@ window.saveAdminLatestVersion = function() {
         alert("Errore salvataggio versione su Firebase: " + e.message);
     });
 };
+
+window.recalculateTodayActivityFromHistory = async function() {
+    if (!db) return;
+    const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+
+    try {
+        const snap = await db.ref(`activity/daily/${todayStr}`).once('value');
+        if (!snap.exists()) return;
+
+        const uids = Object.keys(snap.val());
+        for (const uid of uids) {
+            const hSnap = await db.ref(`users/${uid}/history`).limitToLast(50).once('value');
+            let realCount = 0;
+            if (hSnap.exists()) {
+                hSnap.forEach(hChild => {
+                    const hVal = hChild.val();
+                    const hTs = hVal ? Number(hVal.ts || hVal.date || 0) : 0;
+                    const hDate = hVal ? String(hVal.date || '') : '';
+                    const isToday = hDate.includes(todayStr) || (hTs > 0 && new Date(hTs).toISOString().startsWith(todayStr));
+                    if (isToday) realCount++;
+                });
+            }
+            if (realCount > 0) {
+                await db.ref(`activity/daily/${todayStr}/${uid}/games`).set(realCount).catch(() => {});
+            }
+        }
+    } catch(e) {}
+};
+setTimeout(window.recalculateTodayActivityFromHistory, 2000);
 
     window.populateGameModesUI?.();
     window.checkGameTypeUI?.();
