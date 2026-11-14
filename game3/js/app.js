@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.305";
+const APP_VERSION = "20261105.306";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1405,27 +1405,27 @@ window.initMandatoryAliasHandlers = function() {
         };
         window.initTotalMatchesCounterListener();
 
-        // --- CORREZIONE AUTOMATICA RADDOPPIO STORICO OGGI (UNA TANTUM PER IL GIORNO CORRENTE) ---
-        window.fixTodayActivityMatchesCount = function() {
+        // --- RIPRISTINO CONTEGGIO REALE MATEMATICO ---
+        window.restoreTrueTodayMatchesCount = function() {
             const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
-            const fixDoneKey = `cwgame_activity_doubled_fix_${todayStr}`;
+            const restoreKey = `cwgame_activity_restore_true_v2_${todayStr}`;
 
-            if (localStorage.getItem(fixDoneKey) || !db) return;
+            if (localStorage.getItem(restoreKey) || !db) return;
+            localStorage.setItem(restoreKey, "true");
 
             db.ref(`activity/daily/${todayStr}`).once('value', snap => {
                 if (snap.exists()) {
-                    localStorage.setItem(fixDoneKey, "true");
                     snap.forEach(child => {
                         const uData = child.val();
-                        if (uData && typeof uData === 'object' && uData.games && uData.games > 1) {
-                            const correctedGames = Math.ceil(Number(uData.games) / 2);
-                            db.ref(`activity/daily/${todayStr}/${child.key}/games`).set(correctedGames).catch(() => {});
+                        if (uData && typeof uData === 'object' && uData.games) {
+                            const restoredGames = Math.round(Number(uData.games) * 2);
+                            db.ref(`activity/daily/${todayStr}/${child.key}/games`).set(restoredGames).catch(() => {});
                         }
                     });
                 }
             }).catch(() => {});
         };
-        setTimeout(window.fixTodayActivityMatchesCount, 2000);
+        setTimeout(window.restoreTrueTodayMatchesCount, 1000);
 
         db.ref('appConfig/latestVersion').once('value', snap => {
             const latestStr = snap.val() ? String(snap.val()).trim() : "";
