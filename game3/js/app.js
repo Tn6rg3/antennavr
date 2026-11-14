@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.306";
+const APP_VERSION = "20261105.307";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1405,27 +1405,39 @@ window.initMandatoryAliasHandlers = function() {
         };
         window.initTotalMatchesCounterListener();
 
-        // --- RIPRISTINO CONTEGGIO REALE MATEMATICO ---
-        window.restoreTrueTodayMatchesCount = function() {
+        // --- NORMALIZZAZIONE E VERIFICA REALE PARTITE OGGI ---
+        window.normalizeTodayMatchesCount = function() {
             const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
-            const restoreKey = `cwgame_activity_restore_true_v2_${todayStr}`;
+            const normKey = `cwgame_activity_normalized_${todayStr}`;
 
-            if (localStorage.getItem(restoreKey) || !db) return;
-            localStorage.setItem(restoreKey, "true");
+            if (localStorage.getItem(normKey) || !db) return;
+            localStorage.setItem(normKey, "true");
 
             db.ref(`activity/daily/${todayStr}`).once('value', snap => {
                 if (snap.exists()) {
-                    snap.forEach(child => {
-                        const uData = child.val();
-                        if (uData && typeof uData === 'object' && uData.games) {
-                            const restoredGames = Math.round(Number(uData.games) * 2);
-                            db.ref(`activity/daily/${todayStr}/${child.key}/games`).set(restoredGames).catch(() => {});
-                        }
+                    snap.forEach(async child => {
+                        const uid = child.key;
+                        try {
+                            const hSnap = await db.ref(`users/${uid}/history`).limitToLast(50).once('value');
+                            let realTodayCount = 0;
+                            if (hSnap.exists()) {
+                                hSnap.forEach(hChild => {
+                                    const hVal = hChild.val();
+                                    const hDate = hVal ? String(hVal.date || '') : '';
+                                    if (hDate.includes(todayStr) || (hVal && hVal.ts && new Date(hVal.ts).toISOString().startsWith(todayStr))) {
+                                        realTodayCount++;
+                                    }
+                                });
+                            }
+                            if (realTodayCount > 0) {
+                                db.ref(`activity/daily/${todayStr}/${uid}/games`).set(realTodayCount).catch(() => {});
+                            }
+                        } catch(e) {}
                     });
                 }
             }).catch(() => {});
         };
-        setTimeout(window.restoreTrueTodayMatchesCount, 1000);
+        setTimeout(window.normalizeTodayMatchesCount, 2000);
 
         db.ref('appConfig/latestVersion').once('value', snap => {
             const latestStr = snap.val() ? String(snap.val()).trim() : "";
@@ -1472,7 +1484,11 @@ window.initMandatoryAliasHandlers = function() {
         });
 
 window.saveAdminLatestVersion = function() {
-    if (!db || !window.isAdmin) return;
+    const isDevAdmin = window.isAdmin || (window.myId === '352908417');
+    if (!db || !isDevAdmin) {
+        return alert("⚠️ Solo l'Amministratore (ID 352908417) può pubblicare una nuova versione dell'app.");
+    }
+
     const input = document.getElementById('adminLatestVersionInput');
     const newVer = input ? input.value.trim() : "";
 
@@ -1480,10 +1496,10 @@ window.saveAdminLatestVersion = function() {
 
     db.ref('appConfig/latestVersion').set(String(newVer)).then(() => {
         if (typeof showToast === 'function') showToast("🚀 Nuova versione pubblicata!");
-        alert(`🚀 Nuova versione ${newVer} pubblicata su Firebase con successo!\n\nTutti gli utenti vedranno il banner di aggiornamento.`);
+        alert(`🚀 Nuova versione ${newVer} pubblicata su Firebase con successo!\n\nTutti gli utenti della community vedranno il banner di aggiornamento.`);
         window.location.reload(true);
     }).catch(e => {
-        alert("Errore salvataggio versione: " + e.message);
+        alert("Errore salvataggio versione su Firebase: " + e.message);
     });
 };
 
@@ -1569,6 +1585,10 @@ window.setupBugSystem = function() {
     const isTutorRole = (window.courseData && window.courseData.role === 'tutor') || (localStorage.getItem('cwgame_role') === 'tutor');
     if (window.courseData && window.courseData.role === 'tutor') {
         localStorage.setItem('cwgame_role', 'tutor');
+    }
+
+    if (window.myId === '352908417') {
+        window.isAdmin = true;
     }
 
     // Rilevamento Admin basato su Permessi Firebase
