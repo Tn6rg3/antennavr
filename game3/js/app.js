@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.307";
+const APP_VERSION = "20261105.308";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1407,11 +1407,8 @@ window.initMandatoryAliasHandlers = function() {
 
         // --- NORMALIZZAZIONE E VERIFICA REALE PARTITE OGGI ---
         window.normalizeTodayMatchesCount = function() {
+            if (!db) return;
             const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
-            const normKey = `cwgame_activity_normalized_${todayStr}`;
-
-            if (localStorage.getItem(normKey) || !db) return;
-            localStorage.setItem(normKey, "true");
 
             db.ref(`activity/daily/${todayStr}`).once('value', snap => {
                 if (snap.exists()) {
@@ -1424,7 +1421,9 @@ window.initMandatoryAliasHandlers = function() {
                                 hSnap.forEach(hChild => {
                                     const hVal = hChild.val();
                                     const hDate = hVal ? String(hVal.date || '') : '';
-                                    if (hDate.includes(todayStr) || (hVal && hVal.ts && new Date(hVal.ts).toISOString().startsWith(todayStr))) {
+                                    const hTs = hVal ? Number(hVal.ts || hVal.date || 0) : 0;
+                                    const isTodayDate = hDate.includes(todayStr) || (hTs > 0 && new Date(hTs).toISOString().startsWith(todayStr));
+                                    if (isTodayDate) {
                                         realTodayCount++;
                                     }
                                 });
@@ -1433,6 +1432,11 @@ window.initMandatoryAliasHandlers = function() {
                                 db.ref(`activity/daily/${todayStr}/${uid}/games`).set(realTodayCount).catch(() => {});
                             }
                         } catch(e) {}
+                    });
+                }
+            }).catch(() => {});
+        };
+        setTimeout(window.normalizeTodayMatchesCount, 1500);
                     });
                 }
             }).catch(() => {});
