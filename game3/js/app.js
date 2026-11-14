@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.308";
+const APP_VERSION = "20261105.309";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1404,39 +1404,6 @@ window.initMandatoryAliasHandlers = function() {
             });
         };
         window.initTotalMatchesCounterListener();
-
-        // --- NORMALIZZAZIONE E VERIFICA REALE PARTITE OGGI ---
-        window.normalizeTodayMatchesCount = function() {
-            if (!db) return;
-            const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
-
-            db.ref(`activity/daily/${todayStr}`).once('value', snap => {
-                if (snap.exists()) {
-                    snap.forEach(async child => {
-                        const uid = child.key;
-                        try {
-                            const hSnap = await db.ref(`users/${uid}/history`).limitToLast(50).once('value');
-                            let realTodayCount = 0;
-                            if (hSnap.exists()) {
-                                hSnap.forEach(hChild => {
-                                    const hVal = hChild.val();
-                                    const hDate = hVal ? String(hVal.date || '') : '';
-                                    const hTs = hVal ? Number(hVal.ts || hVal.date || 0) : 0;
-                                    const isTodayDate = hDate.includes(todayStr) || (hTs > 0 && new Date(hTs).toISOString().startsWith(todayStr));
-                                    if (isTodayDate) {
-                                        realTodayCount++;
-                                    }
-                                });
-                            }
-                            if (realTodayCount > 0) {
-                                db.ref(`activity/daily/${todayStr}/${uid}/games`).set(realTodayCount).catch(() => {});
-                            }
-                        } catch(e) {}
-                    });
-                }
-            }).catch(() => {});
-        };
-        setTimeout(window.normalizeTodayMatchesCount, 1500);
 
         db.ref('appConfig/latestVersion').once('value', snap => {
             const latestStr = snap.val() ? String(snap.val()).trim() : "";
