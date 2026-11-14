@@ -1502,16 +1502,6 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
     if (window.myId && window.myId !== myCall) {
         db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${window.myId}`).remove().catch(() => {});
     }
-        if (!partnerFound) {
-            db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${partnerCall}`).set({
-                name: partnerCall,
-                totalPoints: pointsAssigned,
-                validQsos: 1,
-                mutualQsos: isReciprocal ? 1 : 0,
-                lastUpdate: Date.now()
-            }).catch(() => {});
-        }
-    }).catch(() => {});
 
     // 3. REGISTRAZIONE E NOTIFICA PER L'ALTRO OPERATORE
     await Promise.all([
