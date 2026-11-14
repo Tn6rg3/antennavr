@@ -77,10 +77,11 @@
     }, 20000);
 </script>
 
-<!-- BANNER AGGIORNAMENTO -->
-<div id="updateBanner" style="display:none; position:fixed; top:0; left:0; width:100%; background:#ff9800; color:white; text-align:center; padding:10px; z-index:9999; font-weight:bold; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
+<!-- BANNER AGGIORNAMENTO FISSO IN BASSO -->
+<div id="updateBanner" style="display:none; position:fixed; bottom:0; left:0; width:100%; background:#ff9800; color:white; text-align:center; padding:10px; z-index:9999; font-weight:bold; box-shadow: 0 -2px 10px rgba(0,0,0,0.4);">
     🚀 Nuova Versione Disponibile!
-    <button id="updateBannerBtn" style="width:auto; display:inline-block; margin-left:10px; padding:5px 15px; background:white; color:#ff9800; border-radius: 20px; font-size: 0.9em; border:none; cursor:pointer;">Aggiorna ora</button>
+    <button id="updateBannerBtn" style="width:auto; display:inline-block; margin-left:10px; padding:5px 15px; background:white; color:#ff9800; border-radius: 20px; font-size: 0.9em; border:none; cursor:pointer;">Aggiorna ora 🚀</button>
+    <button onclick="document.getElementById('updateBanner').style.display='none'" style="width:auto; display:inline-block; margin-left:10px; padding:3px 8px; background:rgba(0,0,0,0.2); color:white; border-radius: 12px; font-size: 0.8em; border:none; cursor:pointer;" title="Chiudi avviso">✖️ Nascondi</button>
 </div>
 <!-- CONTENITORE NOTIFICHE TOAST -->
 <div id="toastContainer"></div>
