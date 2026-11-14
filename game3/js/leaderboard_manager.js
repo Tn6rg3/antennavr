@@ -637,10 +637,30 @@ window.fetchAndRenderCwgActivityMonthlyLeaderboard = async function() {
             return;
         }
 
-        const players = [];
+        const playerMap = {};
         snap.forEach(c => {
-            players.push({ id: c.key, ...c.val() });
+            const val = c.val() || {};
+            const call = (val.name || c.key || "").trim().toUpperCase();
+            if (!call) return;
+
+            if (!playerMap[call]) {
+                playerMap[call] = {
+                    id: call,
+                    name: call,
+                    totalPoints: Number(val.totalPoints || 0),
+                    validQsos: Number(val.validQsos || 0),
+                    mutualQsos: Number(val.mutualQsos || 0),
+                    lastUpdate: Number(val.lastUpdate || 0)
+                };
+            } else {
+                playerMap[call].totalPoints = Math.max(playerMap[call].totalPoints, Number(val.totalPoints || 0));
+                playerMap[call].validQsos = Math.max(playerMap[call].validQsos, Number(val.validQsos || 0));
+                playerMap[call].mutualQsos = Math.max(playerMap[call].mutualQsos, Number(val.mutualQsos || 0));
+                if (val.lastUpdate > playerMap[call].lastUpdate) playerMap[call].lastUpdate = val.lastUpdate;
+            }
         });
+
+        const players = Object.values(playerMap);
 
         // Ordinamento per Punti Totali decrescenti, poi QSO Validi decrescenti
         players.sort((a, b) => (Number(b.totalPoints || 0) - Number(a.totalPoints || 0)) || (Number(b.validQsos || 0) - Number(a.validQsos || 0)));

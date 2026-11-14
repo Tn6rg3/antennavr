@@ -247,12 +247,25 @@ window.openCwgActivityScreenImpl = async function() {
         } catch(e) {}
     }
 
-    window.resetCwgForm();
+    // 3. RIPRISTINO NOMINATIVO SALVATO IN SESSIONE (SE L'UTENTE SI È SPOSTATO DA ACTIVITY SENZA PREMERE RIMUOVI SPOT)
+    const savedPartnerCall = sessionStorage.getItem('cwgame_active_partner_call');
+    const savedBand = sessionStorage.getItem('cwgame_active_band');
+
+    if (savedPartnerCall && savedPartnerCall.length >= 2) {
+        const partnerInput = document.getElementById('cwgLogPartnerCall');
+        const bandSelect = document.getElementById('cwgLogBandSelect');
+        if (partnerInput) partnerInput.value = savedPartnerCall;
+        if (bandSelect && savedBand) bandSelect.value = savedBand;
+        window.checkCwgDoubleHandshakeMatch();
+        return;
+    }
 };
 
 window.openCwgActivityScreen = window.openCwgActivityScreenImpl;
 
 window.resetCwgForm = function() {
+    sessionStorage.removeItem('cwgame_active_partner_call');
+    sessionStorage.removeItem('cwgame_active_band');
     window.cwgQsoCompletedSuccessfully = false;
     if (window.cwgQsoTimerInterval) {
         clearInterval(window.cwgQsoTimerInterval);
@@ -442,6 +455,9 @@ window.removeCwgCqSpot = function(silent = false, targetBand = null) {
     if (!silent && !confirm(`Rimuovere lo Spot CQ per ${myCall} dalla Bacheca e dalla Chat Globale?`)) {
         return;
     }
+
+    sessionStorage.removeItem('cwgame_active_partner_call');
+    sessionStorage.removeItem('cwgame_active_band');
 
     const spotId = `cq_spot_${myCall}_${band}`;
     db.ref(`public_lobby_rooms/${spotId}`).remove().catch(() => {});
@@ -748,6 +764,10 @@ window.checkCwgDoubleHandshakeMatch = async function() {
         if (statusBox) statusBox.style.display = "none";
         return;
     }
+
+    // Salva il partner call e la banda in sessione cosi rimane attivo navigando tra le schede
+    sessionStorage.setItem('cwgame_active_partner_call', partnerCall);
+    sessionStorage.setItem('cwgame_active_band', band);
 
     // CHECK RIGIDO ANTI-DUPLICATO SU FIREBASE PER LA GIORNATA ODIERNA
     const now = new Date();
@@ -1436,8 +1456,8 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
 
     const isReciprocal = (pointsAssigned >= 2);
 
-    // 1. ASSEGNAZIONE PUNTI ALL'UTENTE CORRENTE (OPERATORE A)
-    const lbRefA = db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${window.myId}`);
+    // 1. ASSEGNAZIONE PUNTI ALL'OPERATORE A (Chiave primaria: Nominativo)
+    const lbRefA = db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${myCall}`);
     await lbRefA.transaction(curr => {
         if (!curr) {
             return {
@@ -1449,7 +1469,7 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
             };
         }
         return {
-            name: curr.name || myCall,
+            name: myCall,
             totalPoints: (Number(curr.totalPoints) || 0) + pointsAssigned,
             validQsos: (Number(curr.validQsos) || 0) + 1,
             mutualQsos: (Number(curr.mutualQsos) || 0) + (isReciprocal ? 1 : 0),
@@ -1457,27 +1477,31 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
         };
     }).catch(() => {});
 
-    // 2. ASSEGNAZIONE PUNTI ANCHE AL CORRISPONDENTE (OPERATORE B)
-    db.ref(`leaderboard/cwg_activity_monthly/${monthStr}`).once('value', pSnap => {
-        let partnerFound = false;
-        if (pSnap.exists()) {
-            pSnap.forEach(pChild => {
-                const pVal = pChild.val();
-                if (pVal && (pVal.name === partnerCall || pChild.key === partnerCall)) {
-                    partnerFound = true;
-                    db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${pChild.key}`).transaction(curr => {
-                        if (!curr) return null;
-                        return {
-                            name: curr.name || partnerCall,
-                            totalPoints: (Number(curr.totalPoints) || 0) + pointsAssigned,
-                            validQsos: (Number(curr.validQsos) || 0) + 1,
-                            mutualQsos: (Number(curr.mutualQsos) || 0) + (isReciprocal ? 1 : 0),
-                            lastUpdate: Date.now()
-                        };
-                    }).catch(() => {});
-                }
-            });
+    // 2. ASSEGNAZIONE PUNTI ALL'OPERATORE B (Chiave primaria: Nominativo)
+    const lbRefB = db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${partnerCall}`);
+    await lbRefB.transaction(curr => {
+        if (!curr) {
+            return {
+                name: partnerCall,
+                totalPoints: pointsAssigned,
+                validQsos: 1,
+                mutualQsos: isReciprocal ? 1 : 0,
+                lastUpdate: Date.now()
+            };
         }
+        return {
+            name: partnerCall,
+            totalPoints: (Number(curr.totalPoints) || 0) + pointsAssigned,
+            validQsos: (Number(curr.validQsos) || 0) + 1,
+            mutualQsos: (Number(curr.mutualQsos) || 0) + (isReciprocal ? 1 : 0),
+            lastUpdate: Date.now()
+        };
+    }).catch(() => {});
+
+    // Pulizia di sicurezza da eventuali vecchi nodi legati a ID numerico
+    if (window.myId && window.myId !== myCall) {
+        db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${window.myId}`).remove().catch(() => {});
+    }
         if (!partnerFound) {
             db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${partnerCall}`).set({
                 name: partnerCall,
