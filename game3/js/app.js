@@ -1451,8 +1451,15 @@ window.initMandatoryAliasHandlers = function() {
                     btn.textContent = 'Aggiorna ora 🚀';
                     btn.onclick = () => window.forceAppUpdate();
 
+                    const closeBtn = document.createElement('button');
+                    closeBtn.style.cssText = 'width:auto; display:inline-block; margin-left:10px; padding:3px 8px; background:rgba(0,0,0,0.2); color:white; border-radius:12px; font-size:0.8em; border:none; cursor:pointer;';
+                    closeBtn.textContent = '✖️ Nascondi';
+                    closeBtn.title = 'Chiudi avviso';
+                    closeBtn.onclick = () => { banner.style.display = 'none'; };
+
                     banner.appendChild(textSpan);
                     banner.appendChild(btn);
+                    banner.appendChild(closeBtn);
                 }
 
                 if (typeof showToast === 'function') {
