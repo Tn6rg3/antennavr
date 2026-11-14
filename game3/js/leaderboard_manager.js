@@ -699,37 +699,54 @@ window.fetchAndRenderGlobalLeaderboard = async function(tabType, filterWordCount
 
     // 2. SFIDE MULTIPLAYER (Cronologia Match)
     if (tabType.endsWith('_multi') || tabType === 'pingpong') {
-        let baseMode = tabType.includes('std') ? 'standard' : (tabType.includes('chars') ? 'chars' : (tabType.includes('quiz') ? 'quiz' : 'pingpong'));
+        let baseMode = 'standard';
+        if (tabType === 'std_plus_multi' || tabType.includes('standard_plus')) baseMode = 'standard_plus';
+        else if (tabType.includes('target')) baseMode = 'target_training';
+        else if (tabType.includes('code_groups')) baseMode = 'code_groups';
+        else if (tabType.includes('chars')) baseMode = 'chars';
+        else if (tabType.includes('quiz')) baseMode = 'quiz';
+        else if (tabType.includes('pingpong')) baseMode = 'pingpong';
+        else if (tabType.includes('callsign')) baseMode = 'callsign';
+
         const dbPath = `leaderboard/recent_matches/${baseMode}${tabType !== 'pingpong' ? '_multi' : ''}`;
 
-        // OTTIMIZZAZIONE RIGIDA BANDWIDTH: Interroghiamo i sotto-nodi con limitToLast(10) invece dell'intero albero genitore!
         const fetchWC = (wcKey) => db.ref(`${dbPath}/${wcKey}`).limitToLast(10).once('value').catch(() => null);
 
         let promises = [];
-        if (filterWordCount !== 'all') {
-            promises.push(fetchWC(filterWordCount));
+        const validWordCount = (filterWordCount && filterWordCount !== 'all') ? String(filterWordCount) : null;
+
+        if (validWordCount) {
+            promises.push(fetchWC(validWordCount));
         } else {
+            // Se filterWordCount e nullo o 'all', interroghiamo tutti i possibili tagli di parole e la radice del nodo
             ['10', '20', '30', '50', 'all'].forEach(wcKey => promises.push(fetchWC(wcKey)));
+            promises.push(db.ref(dbPath).limitToLast(15).once('value').catch(() => null));
         }
 
         Promise.all(promises).then(snaps => {
             let matches = [];
+            let seenIds = new Set();
+
             snaps.forEach(snapshot => {
                 if (snapshot && snapshot.exists()) {
                     const wcKey = snapshot.key;
                     snapshot.forEach(mNode => {
                         const val = mNode.val();
                         if (val && typeof val === 'object') {
-                            val.id = mNode.key;
-                            val.dbPath = `${dbPath}/${wcKey}/${mNode.key}`;
-                            val.wordCount = wcKey;
-                            matches.push(val);
+                            const matchId = mNode.key;
+                            if (!seenIds.has(matchId)) {
+                                seenIds.add(matchId);
+                                val.id = matchId;
+                                val.dbPath = `${dbPath}/${wcKey}/${matchId}`;
+                                val.wordCount = val.wordCount || wcKey;
+                                matches.push(val);
+                            }
                         }
                     });
                 }
             });
             matches.sort((a,b) => (b.ts || 0) - (a.ts || 0));
-            window.renderMatchesHistoryHTML(matches.slice(0, 15), els.leaderboardContainer);
+            window.renderMatchesHistoryHTML(matches.slice(0, 20), els.leaderboardContainer);
         });
         return;
     }
