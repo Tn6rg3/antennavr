@@ -782,15 +782,6 @@ window.checkCwgDoubleHandshakeMatch = async function() {
             return;
         }
     } catch(e) {}
-                span.style.color = "#d32f2f";
-                span.style.fontWeight = "bold";
-                span.style.fontSize = "0.85em";
-                span.textContent = `⚠️ QSO GIÀ REGISTRATO OGGI! Hai già registrato un QSO sulla banda ${band.toUpperCase()} oggi con ${partnerCall}. Non è possibile effettuare un secondo QSO sulla stessa banda nello stesso giorno.`;
-                statusBox.appendChild(span);
-            }
-            return;
-        }
-    } catch(e) {}
 
     // Inserisce il segnale di invito diretto per il partner
     if (db && partnerCall && partnerCall.length >= 2 && myCall) {
