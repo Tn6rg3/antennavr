@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.311";
+const APP_VERSION = "20261105.313";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1460,10 +1460,7 @@ window.saveAdminLatestVersion = function() {
 
     if (!newVer) return alert("⚠️ Inserisci un numero di versione valido (es. 20261112.500).");
 
-    Promise.all([
-        db.ref('appConfig/latestVersion').set(String(newVer)),
-        db.ref('config/latestVersion').set(String(newVer))
-    ]).then(() => {
+    db.ref('appConfig/latestVersion').set(String(newVer)).then(() => {
         if (typeof showToast === 'function') showToast("🚀 Nuova versione pubblicata!");
         alert(`🚀 Nuova versione ${newVer} pubblicata su Firebase con successo!\n\nTutti gli utenti della community vedranno il banner di aggiornamento.`);
         window.location.reload(true);
