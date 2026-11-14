@@ -729,18 +729,31 @@ window.fetchAndRenderGlobalLeaderboard = async function(tabType, filterWordCount
 
             snaps.forEach(snapshot => {
                 if (snapshot && snapshot.exists()) {
-                    const wcKey = snapshot.key;
-                    snapshot.forEach(mNode => {
-                        const val = mNode.val();
-                        if (val && typeof val === 'object') {
-                            const matchId = mNode.key;
+                    snapshot.forEach(childNode => {
+                        const val = childNode.val();
+                        if (!val || typeof val !== 'object') return;
+
+                        if (val.players) {
+                            const matchId = childNode.key;
                             if (!seenIds.has(matchId)) {
                                 seenIds.add(matchId);
                                 val.id = matchId;
-                                val.dbPath = `${dbPath}/${wcKey}/${matchId}`;
-                                val.wordCount = val.wordCount || wcKey;
+                                val.wordCount = val.wordCount || snapshot.key || 10;
                                 matches.push(val);
                             }
+                        } else {
+                            childNode.forEach(mNode => {
+                                const mVal = mNode.val();
+                                if (mVal && typeof mVal === 'object' && mVal.players) {
+                                    const matchId = mNode.key;
+                                    if (!seenIds.has(matchId)) {
+                                        seenIds.add(matchId);
+                                        mVal.id = matchId;
+                                        mVal.wordCount = mVal.wordCount || childNode.key || 10;
+                                        matches.push(mVal);
+                                    }
+                                }
+                            });
                         }
                     });
                 }
