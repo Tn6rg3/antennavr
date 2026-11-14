@@ -1362,6 +1362,11 @@ window.finishGame = async function() {
             if (window.currentMode === 'daily_challenge') {
                 let todayStr = window.getLocalDateString();
                 dbPath = `leaderboard/daily_challenge/${todayStr}/${window.myId}`;
+                db.ref(`users/${window.myId}/daily_challenge_attempt/${todayStr}`).update({
+                    completed: true,
+                    resumeData: null,
+                    ts: Date.now()
+                }).catch(() => {});
             } else if (window.currentMode === 'tri_daily') {
                 let todayStr = window.getLocalDateString();
                 const slotId = window.currentTriDailySlotId || (typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot().id : 'morning');
@@ -2427,6 +2432,19 @@ window.handleWordSubmission = function(userWord) {
     if (window.currentMode === 'tri_daily' && window.currentTriDailySlotId && db && window.myId) {
         const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
         db.ref(`users/${window.myId}/tri_daily_attempt/${todayStr}/${window.currentTriDailySlotId}/resumeData`).set({
+            wordIndex: wordIndex,
+            totalScore: totalScore,
+            currentWpm: currentWpm,
+            peakWpm: peakWpm,
+            matchDetailsArray: matchDetailsArray,
+            ts: Date.now()
+        }).catch(() => {});
+    }
+
+    // Salva lo stato di avanzamento in tempo reale per la Sfida Giornaliera Classica
+    if (window.currentMode === 'daily_challenge' && db && window.myId) {
+        const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+        db.ref(`users/${window.myId}/daily_challenge_attempt/${todayStr}/resumeData`).set({
             wordIndex: wordIndex,
             totalScore: totalScore,
             currentWpm: currentWpm,

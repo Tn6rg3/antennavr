@@ -3341,7 +3341,7 @@ window.reopenDailyChallenge = function() {
 
     Promise.all([
         db.ref(`users/${window.myId}/history`).limitToLast(50).once('value'),
-        db.ref(`users/${window.myId}/daily_attempt`).once('value')
+        db.ref(`users/${window.myId}/daily_challenge_attempt/${today}`).once('value')
     ]).then(([historySnap, attemptSnap]) => {
         const history = historySnap.val() || {};
         let playedAndScoredToday = false;
@@ -3353,24 +3353,20 @@ window.reopenDailyChallenge = function() {
             }
         });
 
-        const attemptVal = attemptSnap.exists() ? attemptSnap.val() : null;
+        const attemptObj = attemptSnap.exists() ? attemptSnap.val() : {};
+        const resumeData = attemptObj.resumeData || null;
 
-        // Se l'Admin ha sbloccato l'utente su Firebase (attemptVal è null e non ha giocate in history), puliamo la memoria locale del telefono!
-        if (!attemptVal && !playedAndScoredToday) {
-            localStorage.removeItem(STORAGE_DAILY_STATUS_KEY);
-            localStorage.removeItem("cwgame_daily_status");
-        }
-
-        const localStatus = localStorage.getItem(STORAGE_DAILY_STATUS_KEY);
-
-        if (playedAndScoredToday) {
+        if (playedAndScoredToday || attemptObj.completed) {
             alert("🏆 Hai già completato la Sfida Giornaliera di oggi!\nI record della Sfida Giornaliera si calcolano su una singola prova al giorno.");
             return;
         }
 
-        if (attemptVal === today || localStatus === today) {
-            alert("⚠️ Tentativo per la Sfida Giornaliera di oggi già utilizzato o interrotto!\nNon è consentito ricominciare da capo una sfida già avviata.");
-            return;
+        if (resumeData) {
+            const nextWordIndex = (Number(resumeData.wordIndex) || 0) + 2;
+            if (confirm(`⚠️ Hai una Sfida Giornaliera interrotta alla parola ${nextWordIndex - 1}/20!\n\nVuoi riprendere la sfida dalla parola ${nextWordIndex}/20?`)) {
+                window.resumeDailyChallengeSession(resumeData);
+                return;
+            }
         }
 
         if (typeof window.loadDailyYesterdayPodium === 'function') window.loadDailyYesterdayPodium();
@@ -3379,6 +3375,44 @@ window.reopenDailyChallenge = function() {
     }).catch(err => {
         console.error("Reopen Daily Challenge Error:", err);
     });
+};
+
+window.resumeDailyChallengeSession = function(resumeData) {
+    if (!resumeData) return;
+    window.resetGameState();
+
+    const nextWordIndex = (Number(resumeData.wordIndex) || 0) + 1; // Salta la parola interrotta e passa alla successiva
+    const totalWordsCount = 20;
+
+    if (nextWordIndex >= totalWordsCount) {
+        if (typeof window.finishGame === 'function') window.finishGame();
+        return;
+    }
+
+    window.currentMode = 'daily_challenge';
+    window.isSinglePlayer = true;
+    window.currentWpm = window.baseWpm = resumeData.currentWpm || 15;
+    window.peakWpm = Math.max(resumeData.peakWpm || 15, window.currentWpm);
+    window.totalScore = resumeData.totalScore || 0;
+    wordIndex = nextWordIndex;
+    window.wordIndex = nextWordIndex;
+    window.requestedWordCount = totalWordsCount;
+    matchDetailsArray = resumeData.matchDetailsArray || [];
+    window.matchDetailsArray = matchDetailsArray;
+    window.currentTone = parseInt(localStorage.getItem(STORAGE_PREF_TONE)) || 600;
+
+    roomCode = "SOLO_DAILY_" + window.myId;
+    gameWords = window.getDailyWords(totalWordsCount);
+
+    if (els.permanentGameInput) {
+        els.permanentGameInput.value = "";
+        els.permanentGameInput.disabled = false;
+        setTimeout(() => els.permanentGameInput.focus(), 500);
+    }
+
+    window.showScreen('gameArea');
+    gameRunning = true;
+    window.startGameSequence();
 };
 
 // --- SFIDA TRIPLA GIORNALIERA (MATTINA, POMERIGGIO, SERA) ---
