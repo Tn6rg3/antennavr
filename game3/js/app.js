@@ -1405,7 +1405,7 @@ window.initMandatoryAliasHandlers = function() {
         };
         window.initTotalMatchesCounterListener();
 
-        db.ref('appConfig/latestVersion').once('value', snap => {
+        db.ref('appConfig/latestVersion').on('value', snap => {
             const latestStr = snap.val() ? String(snap.val()).trim() : "";
             const currentStr = String(APP_VERSION).trim();
             if (document.getElementById('adminLatestVersionInput')) {
