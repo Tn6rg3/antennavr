@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.313";
+const APP_VERSION = "20261105.314";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1450,9 +1450,8 @@ window.initMandatoryAliasHandlers = function() {
         });
 
 window.saveAdminLatestVersion = function() {
-    const isDevAdmin = window.isAdmin || (window.myId === '352908417');
-    if (!db || !isDevAdmin) {
-        return alert("⚠️ Solo l'Amministratore (ID 352908417) può pubblicare una nuova versione dell'app.");
+    if (!db || !window.isAdmin) {
+        return alert("⚠️ Solo gli Amministratori autorizzati possono pubblicare una nuova versione dell'app.");
     }
 
     const input = document.getElementById('adminLatestVersionInput');
@@ -1580,10 +1579,6 @@ window.setupBugSystem = function() {
     const isTutorRole = (window.courseData && window.courseData.role === 'tutor') || (localStorage.getItem('cwgame_role') === 'tutor');
     if (window.courseData && window.courseData.role === 'tutor') {
         localStorage.setItem('cwgame_role', 'tutor');
-    }
-
-    if (window.myId === '352908417') {
-        window.isAdmin = true;
     }
 
     // Rilevamento Admin basato su Permessi Firebase
@@ -2795,7 +2790,7 @@ window.loadAdminCallsignChallengeSettings = function() {
 
             // 1. Controlla profili in users (Ispetta sia l'Alias che la presenza di attività reale)
             for (const [id, userObj] of Object.entries(usersData)) {
-                if (!userObj || id === "352908417" || id === window.myId) continue;
+                if (!userObj || id === window.myId) continue;
 
                 const isGenericName = !userObj.alias || userObj.alias === "Giocatore" || userObj.alias.startsWith("Giocatore") || userObj.alias === "Operatore";
                 const hasNoHistory = !userObj.history || Object.keys(userObj.history).length === 0;
@@ -2810,7 +2805,7 @@ window.loadAdminCallsignChallengeSettings = function() {
 
             // 2. Controlla presenze in presence (Pulisce presenze orfane di utenti mai registrati)
             for (const [id, userObj] of Object.entries(presenceData)) {
-                if (!userObj || id === "352908417" || id === window.myId) continue;
+                if (!userObj || id === window.myId) continue;
                 const userProfile = usersData[id];
 
                 if (!userProfile) {
