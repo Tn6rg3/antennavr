@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.314";
+const APP_VERSION = "20261105.315";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -1450,9 +1450,7 @@ window.initMandatoryAliasHandlers = function() {
         });
 
 window.saveAdminLatestVersion = function() {
-    if (!db || !window.isAdmin) {
-        return alert("⚠️ Solo gli Amministratori autorizzati possono pubblicare una nuova versione dell'app.");
-    }
+    if (!db) return alert("⚠️ Connessione al Database non disponibile.");
 
     const input = document.getElementById('adminLatestVersionInput');
     const newVer = input ? input.value.trim() : "";
@@ -1464,7 +1462,7 @@ window.saveAdminLatestVersion = function() {
         alert(`🚀 Nuova versione ${newVer} pubblicata su Firebase con successo!\n\nTutti gli utenti della community vedranno il banner di aggiornamento.`);
         window.location.reload(true);
     }).catch(e => {
-        alert("Errore salvataggio versione su Firebase: " + e.message);
+        alert("⚠️ Errore salvataggio versione su Firebase: " + (e.message || "Permesso negato"));
     });
 };
 
