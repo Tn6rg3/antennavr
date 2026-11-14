@@ -1831,12 +1831,15 @@
                     </div>
                 </div>
 
-                <div style="display:flex; gap:6px; margin-bottom:10px;">
-                    <button onclick="window.saveAdminCwgScheduleSettings()" class="btn-success" style="flex:2; padding:8px; font-weight:bold; background:#00bcd4; border:none; color:#000; cursor:pointer;">
+                <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap;">
+                    <button onclick="window.saveAdminCwgScheduleSettings()" class="btn-success" style="flex:2; min-width:140px; padding:8px; font-weight:bold; background:#00bcd4; border:none; color:#000; cursor:pointer;">
                         💾 SALVA PROGRAMMAZIONE
                     </button>
-                    <button onclick="window.clearCurrentCwgLeaderboard()" class="btn-danger" style="flex:1; padding:8px; font-weight:bold; font-size:0.75em; cursor:pointer;">
+                    <button onclick="window.clearCurrentCwgLeaderboard()" class="btn-danger" style="flex:1; min-width:110px; padding:8px; font-weight:bold; font-size:0.75em; cursor:pointer;">
                         🗑️ AZZERA CLASSIFICA
+                    </button>
+                    <button onclick="window.clearTodayCwgQsos()" class="btn-secondary" style="flex:1; min-width:110px; padding:8px; font-weight:bold; font-size:0.75em; cursor:pointer; background:#ff9800; color:#000; border:none;">
+                        🧹 PULISCI QSO OGGI
                     </button>
                 </div>
 
