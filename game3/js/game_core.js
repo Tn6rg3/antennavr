@@ -877,8 +877,12 @@ window.startCountdownSequence = function() {
                                     return;
                                 }
 
+                                window.isForfeitWin = true;
+                                window.totalScore = Math.max(Number(window.totalScore) || 0, 100);
+                                if (!window.peakWpm || window.peakWpm === 0) window.peakWpm = Number(window.currentWpm) || 20;
+
                                 gameRunning = false;
-                                const msg = currentLang === 'it' ? "L'avversario si è ritirato. Hai vinto a tavolino! 🏆" : "Opponent withdrew. You win by default! 🏆";
+                                const msg = currentLang === 'it' ? "🏆 L'avversario si è ritirato! Hai vinto a tavolino (+100 pt)!" : "🏆 Opponent withdrew! You win by default (+100 pt)!";
                                 if (window.tg && window.tg.showAlert) window.tg.showAlert(msg); else alert(msg);
                                 window.finishGame();
                             } else if (!players[myId]?.abandoned) {
