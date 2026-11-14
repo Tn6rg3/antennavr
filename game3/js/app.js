@@ -1457,11 +1457,14 @@ window.saveAdminLatestVersion = function() {
 
     if (!newVer) return alert("⚠️ Inserisci un numero di versione valido (es. 20261112.500).");
 
+    console.log("Admin: Publishing new version to Firebase:", newVer);
+
     db.ref('appConfig/latestVersion').set(String(newVer)).then(() => {
-        if (typeof showToast === 'function') showToast("🚀 Nuova versione pubblicata!");
-        alert(`🚀 Nuova versione ${newVer} pubblicata su Firebase con successo!\n\nTutti gli utenti della community vedranno il banner di aggiornamento.`);
-        window.location.reload(true);
+        if (typeof showToast === 'function') showToast("🚀 Nuova versione " + newVer + " pubblicata!");
+        alert(`🚀 Nuova versione ${newVer} pubblicata su Firebase con successo!\n\nTutti gli utenti con versione precedente vedranno il banner di aggiornamento.`);
+        if (input) input.value = newVer;
     }).catch(e => {
+        console.error("Admin Version Save Error:", e);
         alert("⚠️ Errore salvataggio versione su Firebase: " + (e.message || "Permesso negato"));
     });
 };
