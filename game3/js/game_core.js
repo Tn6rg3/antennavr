@@ -1336,11 +1336,7 @@ window.finishGame = async function() {
         myPlayerRef.onDisconnect().cancel();
     }
 
-    // --- INCREMENTO CONTATORE GIORNALIERO PARTITE GIOCATE ---
-    if (db && myId) {
-        const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
-        db.ref(`activity/daily/${todayStr}/${myId}/games`).set(firebase.database.ServerValue.increment(1)).catch(() => {});
-    }
+    // (L'incremento dell'attività giornaliera viene registrato una sola volta in updateActivity)
 
     if (window.totalScore > 0 && !window.roomCode.startsWith("TRN_")) {
         console.log("FinishGame: Scheduling Rating Check for mode", window.currentMode);
