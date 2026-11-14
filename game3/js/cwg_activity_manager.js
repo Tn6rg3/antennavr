@@ -1490,11 +1490,18 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
     }).catch(() => {});
 
     // 3. REGISTRAZIONE E NOTIFICA PER L'ALTRO OPERATORE
-    await db.ref(`activity_cwg/keys_exchange/${sharedQsoKey}/saved`).set({
-        by: myCall,
-        points: pointsAssigned,
-        ts: Date.now()
-    }).catch(() => {});
+    await Promise.all([
+        db.ref(`activity_cwg/keys_exchange/${sharedQsoKeyBase}/saved`).set({
+            by: myCall,
+            points: pointsAssigned,
+            ts: Date.now()
+        }),
+        db.ref(`activity_cwg/keys_exchange/${sharedQsoKeyWithDate}/saved`).set({
+            by: myCall,
+            points: pointsAssigned,
+            ts: Date.now()
+        })
+    ]).catch(() => {});
 };
 
     try {
