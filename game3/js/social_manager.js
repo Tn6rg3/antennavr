@@ -572,10 +572,12 @@ window.openInviteModal = function(targetId, targetName) {
 
             console.log("RPG: Sending Game Invite to:", targetId, "Mode:", mode);
 
+            const safeTgUsername = window.tgUsername || (typeof tgUsername !== 'undefined' ? tgUsername : '');
+
             db.ref(`invites/${targetId}`).set({
                 fromId: window.myId,
                 fromName: window.myName,
-                fromUsername: window.myPrivacy ? "" : tgUsername,
+                fromUsername: window.myPrivacy ? "" : safeTgUsername,
                 type: 'game',
                 mode: mode,
                 wpm: wpm,

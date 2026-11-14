@@ -1390,9 +1390,11 @@ window.finishGame = async function() {
                             }
                         });
 
+                        const safeTgUsername = window.tgUsername || (typeof tgUsername !== 'undefined' ? tgUsername : '');
+
                         db.ref(`leaderboard/tri_daily/${todayStr}/${window.myId}`).set({
                             name: window.myName,
-                            username: window.myPrivacy ? "" : tgUsername,
+                            username: window.myPrivacy ? "" : safeTgUsername,
                             totalScore: totalScoreSum,
                             completedSlots: completedSlotsCount,
                             peakWpm: bestPeakWpm || window.peakWpm,
@@ -1413,11 +1415,12 @@ window.finishGame = async function() {
                     const oldData = s.val();
                     const oldScore = oldData ? (Number(oldData.score) || 0) : 0;
                     const oldWpm = oldData ? (Number(oldData.peakWpm) || 0) : 0;
+                    const safeTgUsername = window.tgUsername || (typeof tgUsername !== 'undefined' ? tgUsername : '');
 
                     if (!oldData || window.totalScore > oldScore || (window.totalScore === oldScore && window.peakWpm > oldWpm)) {
                         lbRef.set({
                             name: window.myName,
-                            username: window.myPrivacy ? "" : tgUsername,
+                            username: window.myPrivacy ? "" : safeTgUsername,
                             score: window.totalScore,
                             peakWpm: window.peakWpm,
                             startWpm: window.baseWpm || 20,
