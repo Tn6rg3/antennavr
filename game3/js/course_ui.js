@@ -1119,15 +1119,17 @@ window.finishCourseSession = function() {
 window.actualStartCourseGame = function() {
     if (!window.courseData) return;
 
-    // Se siamo in un giorno di riposo o sessione extra e current_day_session non e ancora creato, creiamolo ora!
-    if (!window.courseData.current_day_session) {
+    const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+
+    // Se current_day_session e nullo, scaduto o di una data precedente, creiamo una nuova sessione valida!
+    if (!window.courseData.current_day_session || window.courseData.current_day_session.date !== todayStr || window.courseData.current_day_session.remaining_seconds <= 0) {
         const dur = Math.max(5, parseInt(window.courseData.settings?.minutes_z2) || 5);
         window.courseData.current_day_session = {
             type: 'Z2',
             total_seconds: dur * 60,
             remaining_seconds: dur * 60,
             completed: false,
-            date: new Date().toISOString().split('T')[0],
+            date: todayStr,
             isExtra: true
         };
         if (typeof window.saveCourseState === 'function') window.saveCourseState();

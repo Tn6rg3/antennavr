@@ -821,28 +821,44 @@ window.listenToCourseEnrollment = function() {
     }).catch(() => {});
 };
 
+window.checkAndResetCourseDailySession = function() {
+    if (!window.courseData) return;
+    const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+
+    // Se esiste una sessione memorizzata ma appartiene ad una data precedente, resettala!
+    if (window.courseData.current_day_session && window.courseData.current_day_session.date !== todayStr) {
+        console.log("Course: Resetting old course session from date", window.courseData.current_day_session.date);
+        window.courseData.current_day_session = null;
+        window.saveCourseState();
+    }
+};
+
 window.checkCourseStartupNotification = function() {
     if (!window.courseData || window.courseData.active_plan !== true) return;
     if (window.courseData.role === 'tutor') return;
+
+    window.checkAndResetCourseDailySession();
+
+    const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
     const todayIdx = (new Date().getDay() + 6) % 7;
     const dayData = window.courseData.weekly_schedule ? window.courseData.weekly_schedule[todayIdx] : null;
     let session = dayData ? dayData.sessions.find(s => !s.completed && s.type !== 'REST') : null;
+
     if (session) {
-        // Se c'è già una sessione attiva (magari extra o già avviata), non sovrascriviamo lo stato
         if (window.courseData.current_day_session && (window.courseData.current_day_session.isExtra || courseSessionTimer)) {
             window.showCourseSessionModal(session, !!window.courseData.current_day_session.isExtra);
             return;
         }
 
-        if (!window.courseData.current_day_session || window.courseData.current_day_session.type !== session.type) {
+        if (!window.courseData.current_day_session || window.courseData.current_day_session.type !== session.type || window.courseData.current_day_session.date !== todayStr) {
             let duration = 15;
-            if (session.type === 'Z2') duration = window.courseData.settings.minutes_z2;
-            else if (session.type === 'WORK') duration = window.courseData.settings.minutes_work;
-            else if (session.type === 'LONG') duration = window.courseData.settings.minutes_long;
+            if (session.type === 'Z2') duration = parseInt(window.courseData.settings?.minutes_z2) || 10;
+            else if (session.type === 'WORK') duration = parseInt(window.courseData.settings?.minutes_work) || 7;
+            else if (session.type === 'LONG') duration = parseInt(window.courseData.settings?.minutes_long) || 17;
             window.courseData.current_day_session = {
                 type: session.type, total_seconds: duration * 60,
                 remaining_seconds: duration * 60, completed: false,
-                date: new Date().toISOString().split('T')[0]
+                date: todayStr
             };
             window.saveCourseState();
         }
