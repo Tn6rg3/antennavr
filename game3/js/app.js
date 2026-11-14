@@ -2081,15 +2081,46 @@ window.clearCurrentCwgLeaderboard = async function() {
             standings: standings
         });
 
-        // 2. Azzeriamo la classifica corrente su Firebase
-        await db.ref(`leaderboard/cwg_activity_monthly/${currentMonthStr}`).remove();
+        // 2. Azzeriamo la classifica corrente ed i log dei QSO su Firebase per consentire la nuova edizione
+        await Promise.all([
+            db.ref(`leaderboard/cwg_activity_monthly/${currentMonthStr}`).remove(),
+            db.ref(`activity_cwg/qsos/${currentMonthStr}`).remove(),
+            db.ref(`activity_cwg/keys_exchange`).remove(),
+            db.ref(`activity_cwg/handshake`).remove(),
+            db.ref(`activity_cwg/cq_accepted`).remove()
+        ]);
 
         window.monthlyLeaderboardCache = {};
-        if (typeof showToast === 'function') showToast("✅ Classifica archiviata ed azzerata!");
-        alert(`✅ CLASSIFICA ARCHIVIATA CON SUCCESSO!\n\nTitolo Archiviato: ${title}\nPartecipanti preservati: ${count}\n\nLa classifica corrente su Firebase è stata azzerata per la nuova edizione.`);
+        if (typeof showToast === 'function') showToast("✅ Classifica e log QSO azzerati!");
+        alert(`✅ CLASSIFICA E LOG QSO AZZERATI CON SUCCESSO!\n\nTitolo Archiviato: ${title}\nPartecipanti preservati: ${count}\n\nI log QSO ed i punteggi sono stati azzerati per la nuova edizione.`);
         window.renderAdminCwgEditionsList();
     } catch(e) {
         alert("Errore azzeramento classifica: " + e.message);
+    }
+};
+
+window.clearTodayCwgQsos = async function() {
+    if (!db || !window.isAdmin) return;
+
+    const now = new Date();
+    const currentMonthStr = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, '0');
+    const todayStr = currentMonthStr + "-" + String(now.getDate()).padStart(2, '0');
+
+    if (!confirm(`⚠️ CONFERMA PULIZIA LOG QSO ODIERNI:\n\nVuoi cancellare i log dei QSO registrati oggi (${todayStr}) per consentire nuovi test o una nuova edizione?`)) {
+        return;
+    }
+
+    try {
+        await Promise.all([
+            db.ref(`activity_cwg/qsos/${currentMonthStr}/${todayStr}`).remove(),
+            db.ref(`activity_cwg/keys_exchange`).remove(),
+            db.ref(`activity_cwg/handshake`).remove(),
+            db.ref(`activity_cwg/cq_accepted`).remove()
+        ]);
+        alert("✅ Log dei QSO odierni cancellati con successo! Tutti gli utenti possono ora effettuare nuovi QSO.");
+        window.location.reload(true);
+    } catch(e) {
+        alert("Errore cancellazione log: " + e.message);
     }
 };
 
