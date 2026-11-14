@@ -756,11 +756,16 @@ window.checkCwgDoubleHandshakeMatch = async function() {
     const dayStr = monthStr + "-" + String(now.getDate()).padStart(2, '0');
 
     const callsArray = [myCall, partnerCall].sort();
-    const sharedQsoKey = callsArray.join("_") + "_" + band;
+    const sharedQsoKeyBase = callsArray.join("_") + "_" + band;
+    const sharedQsoKeyWithDate = sharedQsoKeyBase + "_" + dayStr;
 
     try {
-        const checkQsoSnap = await db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKey}`).once('value');
-        if (checkQsoSnap.exists()) {
+        const [snap1, snap2] = await Promise.all([
+            db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKeyBase}`).once('value'),
+            db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKeyWithDate}`).once('value')
+        ]);
+
+        if (snap1.exists() || snap2.exists()) {
             if (statusBox) {
                 statusBox.style.display = "block";
                 statusBox.style.background = "#ffffff";
@@ -768,6 +773,15 @@ window.checkCwgDoubleHandshakeMatch = async function() {
                 statusBox.textContent = "";
 
                 const span = document.createElement('span');
+                span.style.color = "#d32f2f";
+                span.style.fontWeight = "bold";
+                span.style.fontSize = "0.85em";
+                span.textContent = `⚠️ QSO GIÀ REGISTRATO OGGI! Hai già registrato un QSO sulla banda ${band.toUpperCase()} oggi con ${partnerCall}. Non è possibile effettuare un secondo QSO sulla stessa banda nello stesso giorno.`;
+                statusBox.appendChild(span);
+            }
+            return;
+        }
+    } catch(e) {}
                 span.style.color = "#d32f2f";
                 span.style.fontWeight = "bold";
                 span.style.fontSize = "0.85em";
@@ -939,11 +953,15 @@ window.startCwgQsoTimer = function() {
     const dayStr = monthStr + "-" + String(new Date().getDate()).padStart(2, '0');
 
     const callsArray = [myCall, partnerCall].sort();
-    const sharedQsoKey = callsArray.join("_") + "_" + band;
+    const sharedQsoKeyBase = callsArray.join("_") + "_" + band;
+    const sharedQsoKeyWithDate = sharedQsoKeyBase + "_" + dayStr;
 
     if (db) {
-        db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKey}`).once('value', snap => {
-            if (snap.exists()) {
+        Promise.all([
+            db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKeyBase}`).once('value'),
+            db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKeyWithDate}`).once('value')
+        ]).then(([snap1, snap2]) => {
+            if (snap1.exists() || snap2.exists()) {
                 alert(`⚠️ Risulta già registrato un QSO per la banda ${band.toUpperCase()} oggi tra ${myCall} e ${partnerCall}!\n\nNon è possibile effettuare un secondo QSO sulla stessa banda nello stesso giorno.`);
                 window.resetCwgForm();
                 return;
@@ -1404,15 +1422,26 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
     const dayStr = monthStr + "-" + String(now.getDate()).padStart(2, '0');
 
     const callsArray = [myCall, partnerCall].sort();
-    const sharedQsoKey = callsArray.join('_') + '_' + band + '_' + dayStr;
+    const sharedQsoKeyBase = callsArray.join('_') + '_' + band;
+    const sharedQsoKeyWithDate = sharedQsoKeyBase + '_' + dayStr;
 
-    await db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKey}`).set({
-        callA: callsArray[0],
-        callB: callsArray[1],
-        band: band,
-        ts: Date.now(),
-        validated: true
-    }).catch(() => {});
+    // Salviamo entrambi i formati di chiave per garanzia assoluta di blocco doppi QSO
+    await Promise.all([
+        db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKeyBase}`).set({
+            callA: callsArray[0],
+            callB: callsArray[1],
+            band: band,
+            ts: Date.now(),
+            validated: true
+        }),
+        db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKeyWithDate}`).set({
+            callA: callsArray[0],
+            callB: callsArray[1],
+            band: band,
+            ts: Date.now(),
+            validated: true
+        })
+    ]).catch(() => {});
 
     const isReciprocal = (pointsAssigned >= 2);
 
