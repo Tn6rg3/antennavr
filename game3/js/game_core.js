@@ -1841,7 +1841,8 @@ window.saveMatchSummary = function(playersData) {
             score: p.score || 0,
             wpm: p.wpm || 0,
             finished: !!p.finished,
-            abandoned: !!p.abandoned
+            abandoned: !!p.abandoned,
+            matchDetails: p.matchDetails || p.matchDetailsFull || []
         };
     });
 

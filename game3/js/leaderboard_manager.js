@@ -271,8 +271,22 @@ window.fetchAndRenderMyHistory = function() {
             `;
 
             row.onclick = () => {
-                if (m.details) window.showPlayerDetailsModal(myName, m.details);
-                else showToast(currentLang === 'it' ? "Dettagli non disponibili per questa build." : "Details not available for this build.");
+                if (m.details && Array.isArray(m.details) && m.details.length > 0) {
+                    window.showPlayerDetailsModal(window.myName, m.details);
+                } else if (m.histKey || m.id) {
+                    const fetchKey = m.histKey || m.id;
+                    db.ref(`users/${window.myId}/history_details/${fetchKey}`).once('value').then(s => {
+                        if (s.exists() && s.val()) {
+                            window.showPlayerDetailsModal(window.myName, s.val());
+                        } else {
+                            showToast(currentLang === 'it' ? "Dettagli non disponibili per questa partita." : "Details not available for this match.");
+                        }
+                    }).catch(() => {
+                        showToast(currentLang === 'it' ? "Dettagli non disponibili." : "Details not available.");
+                    });
+                } else {
+                    showToast(currentLang === 'it' ? "Dettagli non disponibili per questa partita." : "Details not available for this match.");
+                }
             };
 
             els.leaderboardContainer.appendChild(row);
@@ -1264,10 +1278,28 @@ window.renderHeadToHeadView = function(players, container, matchTimestamp = null
 
         if (p.id !== myId) hintDiv.style.opacity = "0.5";
         card.onclick = () => {
-            if (p.id !== myId) return showToast(currentLang === 'it' ? "Puoi vedere solo i tuoi dettagli." : "You can only view your own details.");
-            if (p.matchDetails && p.matchDetails.length > 0) window.showPlayerDetailsModal(p.name, p.matchDetails);
-            else if (p.id === myId && matchDetailsArray.length > 0) window.showPlayerDetailsModal(p.name, matchDetailsArray);
-            else showToast(currentLang === 'it' ? "Dettagli non disponibili" : "Details not available");
+            if (p.id !== myId) return showToast(currentLang === 'it' ? "Puoi vedere solo i tuoi dettagli personali." : "You can only view your own personal details.");
+            if (p.matchDetails && p.matchDetails.length > 0) {
+                window.showPlayerDetailsModal(p.name, p.matchDetails);
+            } else if (p.id === myId && window.matchDetailsArray && window.matchDetailsArray.length > 0) {
+                window.showPlayerDetailsModal(p.name, window.matchDetailsArray);
+            } else if (p.id === myId) {
+                db.ref(`users/${window.myId}/history_details`).limitToLast(1).once('value').then(s => {
+                    if (s.exists()) {
+                        let lastVal = null;
+                        s.forEach(c => { lastVal = c.val(); });
+                        if (lastVal && Array.isArray(lastVal)) {
+                            window.showPlayerDetailsModal(p.name, lastVal);
+                            return;
+                        }
+                    }
+                    showToast(currentLang === 'it' ? "Dettagli non disponibili per questo match." : "Details not available for this match.");
+                }).catch(() => {
+                    showToast(currentLang === 'it' ? "Dettagli non disponibili" : "Details not available");
+                });
+            } else {
+                showToast(currentLang === 'it' ? "Dettagli non disponibili" : "Details not available");
+            }
         };
         h2h.appendChild(card);
     });
