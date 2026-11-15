@@ -849,6 +849,10 @@ window.populateCourseSettingsInputs = function() {
     if (els.courseTabPauseDurationInput) els.courseTabPauseDurationInput.value = s.pause_duration || 10;
     if (els.courseTabMinZ2) els.courseTabMinZ2.value = s.minutes_z2;
     if (els.courseTabEliteInput) els.courseTabEliteInput.checked = window.courseData.elite_mode === true;
+    const notifToggle = document.getElementById('courseTabNotifToggle');
+    const notifTimeSel = document.getElementById('courseTabNotifTimeSelect');
+    if (notifToggle) notifToggle.checked = s.bot_notifications === true;
+    if (notifTimeSel && s.bot_notif_time) notifTimeSel.value = s.bot_notif_time;
 };
 
 window.renderCourseTabDashboard = function() {
@@ -1141,6 +1145,7 @@ window.actualStartCourseGame = function() {
     window.currentMode = 'course';
     window.isCourseMode = true;
     window.isSinglePlayer = true;
+    window.gameRunning = true;
     window.currentWpm = parseInt(window.courseData.settings?.start_wpm) || 15;
     window.roomCode = "COURSE_" + window.myId;
 
@@ -1148,17 +1153,19 @@ window.actualStartCourseGame = function() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
-    db.ref(`courseActiveEnrollments/${window.myId}`).update({ roomCode: roomCode });
-    db.ref(`courseActiveEnrollments/${window.myId}`).child('roomCode').onDisconnect().set(null);
+    // 1. Avvio ISTANTANEO diretto senza dipendere dalle promesse di rete
+    if (typeof window.startCourseSessionSequence === 'function') {
+        window.startCourseSessionSequence();
+    }
 
-    db.ref('rooms/' + roomCode).set({
-        status: 'countdown', type: 'single', mode: 'course', wpm: currentWpm, tone: 600,
-        createdAt: firebase.database.ServerValue.TIMESTAMP, hostId: window.myId
-    }).then(() => {
-        // PULIZIA AUTOMATICA: Se l'utente chiude l'app, la stanza temporanea del corso viene rimossa
-        db.ref('rooms/' + roomCode).onDisconnect().remove();
-        if (typeof window.joinRoomLogic === 'function') window.joinRoomLogic(false);
-    });
+    // 2. Registrazione stanza per i Tutor su Firebase in sottofondo
+    if (db && window.myId) {
+        db.ref(`courseActiveEnrollments/${window.myId}`).update({ roomCode: roomCode }).catch(() => {});
+        db.ref('rooms/' + roomCode).set({
+            status: 'playing', type: 'single', mode: 'course', wpm: currentWpm, tone: 600,
+            createdAt: firebase.database.ServerValue.TIMESTAMP, hostId: window.myId
+        }).catch(() => {});
+    }
 };
 
 /**
@@ -1196,9 +1203,13 @@ window.attachCourseUIListeners = function() {
                 window.courseData.progress.lesson_history = []; // Reset history for manually selected lesson
             }
 
+            const notifToggle = document.getElementById('courseTabNotifToggle');
+            const notifTimeSel = document.getElementById('courseTabNotifTimeSelect');
             window.courseData.elite_mode = els.courseTabEliteInput?.checked === true;
             window.courseData.settings = {
                 ...window.courseData.settings,
+                bot_notifications: notifToggle ? notifToggle.checked === true : false,
+                bot_notif_time: notifTimeSel ? notifTimeSel.value : "09:00",
                 days_per_week: els.courseTabDaysInput.value,
                 start_wpm: els.courseTabWpmInput.value,
                 farnsworth_wpm: els.courseTabFarnsworthInput.value,

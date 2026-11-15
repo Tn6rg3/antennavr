@@ -833,11 +833,40 @@ window.checkAndResetCourseDailySession = function() {
     }
 };
 
+window.sendCourseBotNotificationReminder = function() {
+    if (!window.courseData || !window.courseData.settings?.bot_notifications || !db || !window.myId) return;
+
+    const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+    if (window.courseData.progress?.last_bot_notif_date === todayStr) return;
+
+    const todayIdx = (new Date().getDay() + 6) % 7;
+    const schedule = Array.isArray(window.courseData.weekly_schedule) ? window.courseData.weekly_schedule : [];
+    const dayData = schedule[todayIdx] || null;
+    const hasTrainingToday = dayData && dayData.sessions.some(s => !s.completed && s.type !== 'REST');
+
+    if (hasTrainingToday) {
+        if (!window.courseData.progress) window.courseData.progress = {};
+        window.courseData.progress.last_bot_notif_date = todayStr;
+        window.saveCourseState();
+
+        const serverUrl = (typeof VALIDATION_SERVER_URL !== 'undefined' && VALIDATION_SERVER_URL)
+            ? VALIDATION_SERVER_URL
+            : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
+
+        const msgText = encodeURIComponent(`📻 CORSO MORSE KOCH:\n\nOggi è il tuo giorno di allenamento! Apri l'app per svolgere la tua sessione del giorno e mantenere i tuoi progressi! 🚀`);
+        fetch(`${serverUrl}?action=send_push_notification&userId=${window.myId}&message=${msgText}`).catch(() => {});
+        console.log("Course: Sent Telegram Bot notification reminder for training day!");
+    }
+};
+
 window.checkCourseStartupNotification = function() {
     if (!window.courseData || window.courseData.active_plan !== true) return;
     if (window.courseData.role === 'tutor') return;
 
     window.checkAndResetCourseDailySession();
+    if (typeof window.sendCourseBotNotificationReminder === 'function') {
+        window.sendCourseBotNotificationReminder();
+    }
 
     const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
     const todayIdx = (new Date().getDay() + 6) % 7;
