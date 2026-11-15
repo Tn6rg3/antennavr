@@ -323,11 +323,6 @@ window.fetchAndRenderMyHistory = function() {
     });
 };
 
-            els.leaderboardContainer.appendChild(row);
-        });
-    });
-};
-
 window.populateDynamicFilters = function(modePath, subTypeFilter = "") {
     if (!els.lbWordFilter) return;
     const currentValue = els.lbWordFilter.value;
