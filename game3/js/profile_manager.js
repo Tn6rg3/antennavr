@@ -152,7 +152,7 @@ window.renderActivityRankings = function(period, key) {
         }
 
         users.sort((a, b) => (b.games || 0) - (a.games || 0));
-        users = users.slice(0, 50);
+        // Mostriamo tutti gli utenti senza alcun limite numerico a 50
 
         if (users.length === 0) {
             els.activityRankList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna attività registrata.</li>';

@@ -701,7 +701,7 @@ window.fetchAndRenderCwgActivityMonthlyLeaderboard = async function() {
         }
     } catch(e) {}
 
-    db.ref(`leaderboard/cwg_activity_monthly/${currentMonthStr}`).orderByChild('totalPoints').limitToLast(100).once('value', snap => {
+    db.ref(`leaderboard/cwg_activity_monthly/${currentMonthStr}`).once('value', snap => {
         if (!snap.exists()) {
             container.innerHTML = `<div style="background:rgba(0,188,212,0.1); padding:10px; border-radius:8px; border:1px solid #00bcd4; margin-bottom:12px; text-align:center;"><b style="color:#00bcd4;">📻 ${displayTitle} (${currentMonthStr})</b></div><p style="text-align:center; color:var(--hint-color); padding:20px;">Nessun QSO registrato finora per questa edizione.</p>`;
             return;
