@@ -833,7 +833,7 @@ window.checkAndResetCourseDailySession = function() {
     }
 };
 
-window.sendCourseBotNotificationReminder = function() {
+window.sendCourseBotNotificationReminder = async function() {
     if (!window.courseData || !window.courseData.settings?.bot_notifications || !db || !window.myId) return;
 
     const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
@@ -849,7 +849,11 @@ window.sendCourseBotNotificationReminder = function() {
         window.courseData.progress.last_bot_notif_date = todayStr;
         window.saveCourseState();
 
-        const serverUrl = window.VALIDATION_SERVER_URL || "";
+        let serverUrl = window.VALIDATION_SERVER_URL;
+        if (!serverUrl && typeof window.getValidationServerUrlAsync === 'function') {
+            serverUrl = await window.getValidationServerUrlAsync();
+        }
+        if (!serverUrl) return;
 
         const msgText = encodeURIComponent(`📻 CORSO MORSE KOCH:\n\nOggi è il tuo giorno di allenamento! Apri l'app per svolgere la tua sessione del giorno e mantenere i tuoi progressi! 🚀`);
         Promise.all([
@@ -861,21 +865,36 @@ window.sendCourseBotNotificationReminder = function() {
     }
 };
 
-window.testCourseBotNotification = function() {
+window.testCourseBotNotification = async function() {
     if (!window.myId) return alert("⚠️ Identificativo utente non trovato.");
-    const serverUrl = window.VALIDATION_SERVER_URL || "";
+
+    let serverUrl = window.VALIDATION_SERVER_URL;
+    if (!serverUrl && typeof window.getValidationServerUrlAsync === 'function') {
+        serverUrl = await window.getValidationServerUrlAsync();
+    }
+    if (!serverUrl && db) {
+        try {
+            const snap = await db.ref('appConfig/validation_server_url').once('value');
+            if (snap.exists() && snap.val()) serverUrl = snap.val().trim();
+        } catch(e) {}
+    }
+
+    if (!serverUrl || !serverUrl.startsWith('http')) {
+        return alert("⚠️ L'URL dello Script per le notifiche (validation_server_url) non è ancora caricato da Firebase. Riprova tra un istante!");
+    }
 
     const msgText = encodeURIComponent("📻 TEST NOTIFICA CORSO MORSE: La notifica Bot funziona correttamente! 🚀");
     if (typeof showToast === 'function') showToast("Invio notifica di test al Bot Telegram...");
 
-    Promise.all([
-        fetch(`${serverUrl}?action=notify&targetId=${window.myId}&text=${msgText}`),
-        fetch(`${serverUrl}?action=send_push_notification&userId=${window.myId}&message=${msgText}`)
-    ]).then(() => {
-        alert("🤖 Notifica di Test Inviata al Bot Telegram!\n\nSe non ricevi il messaggio in chat Telegram, assicurati di aver avviato il Bot (@cwappgame_bot) cliccando su Avvia almeno una volta.");
-    }).catch(e => {
+    try {
+        await Promise.all([
+            fetch(`${serverUrl}?action=notify&targetId=${window.myId}&text=${msgText}`),
+            fetch(`${serverUrl}?action=send_push_notification&userId=${window.myId}&message=${msgText}`)
+        ]);
+        alert("🤖 Notifica di Test Inviata al Bot Telegram!\n\nSe non ricevi il messaggio in chat Telegram, assicurati di aver aperto ed avviato il Bot (@cwappgame_bot) cliccando su Avvia almeno una volta.");
+    } catch(e) {
         alert("Errore invio notifica: " + e.message);
-    });
+    }
 };
 
 window.checkCourseStartupNotification = function() {
