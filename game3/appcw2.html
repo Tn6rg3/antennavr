@@ -1311,6 +1311,21 @@
                                 <input type="checkbox" id="courseTabEliteInput" style="width: 18px; height: 18px;">
                                 <label for="courseTabEliteInput" style="font-size: 0.85em; font-weight: bold; color: #9c27b0;">Piano Elite (Doppia Sessione) ⚡</label>
                             </div>
+
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(0, 188, 212, 0.08); padding: 8px; border-radius: 6px; border: 1px solid #00bcd4; flex-wrap: wrap;">
+                                <label for="courseTabNotifToggle" style="font-size: 0.85em; font-weight: bold; color: #00bcd4; cursor: pointer; display: flex; align-items: center; gap: 8px; margin: 0;">
+                                    <input type="checkbox" id="courseTabNotifToggle" style="width: 18px; height: 18px; cursor: pointer;">
+                                    🔔 Notifiche Bot (Giorno Allenamento)
+                                </label>
+                                <select id="courseTabNotifTimeSelect" aria-label="Orario notifica bot" style="padding: 3px 6px; font-size: 0.8em; border-radius: 4px; background: #ffffff; color: #000000; font-weight: bold; border: 1px solid #00bcd4;">
+                                    <option value="08:00">Ora: 08:00 🌅</option>
+                                    <option value="09:00" selected>Ora: 09:00 ☕</option>
+                                    <option value="12:00">Ora: 12:00 ☀️</option>
+                                    <option value="18:00">Ora: 18:00 🌇</option>
+                                    <option value="20:00">Ora: 20:00 🌙</option>
+                                </select>
+                            </div>
+
                             <button id="btnTabSavePlan" class="btn-success">SALVA E AGGIORNA PIANO 💾</button>
                         </div>
                     </div>
