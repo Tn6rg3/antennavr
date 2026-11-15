@@ -236,7 +236,7 @@ window.fetchAndRenderMyHistory = function() {
         return;
     }
 
-    db.ref(`users/${targetUid}/history`).limitToLast(30).once('value').then(snap => {
+    db.ref(`users/${targetUid}/history`).once('value').then(snap => {
         let matches = [];
         if (snap.exists()) {
             snap.forEach(child => {
@@ -248,6 +248,7 @@ window.fetchAndRenderMyHistory = function() {
             });
         }
         matches.reverse(); // Più recenti in alto
+        matches = matches.slice(0, 30); // Prendi al massimo le 30 più recenti
 
         if (matches.length === 0) {
             container.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Non hai ancora giocato nessuna partita.':'You haven\'t played any matches yet.'}</p>`;
