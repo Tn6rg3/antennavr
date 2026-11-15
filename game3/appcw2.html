@@ -2830,7 +2830,7 @@
 
     <div id="incomingTeamInviteArea" style="display:none; text-align:center;">
         <button id="acceptTeamInviteBtn" class="btn-success">UNISCITI ALLA SQUADRA ✅</button>
-        <button id="declineTeamInviteBtn" class="btn-danger" style="margin-top:5px;">RIFIUTA ❌</button>
+        <button id="declineTeamInviteBtn" class="btn-danger" onclick="if(db && window.myId) db.ref('invites/' + window.myId).remove(); window.closeInviteModal();" style="margin-top:5px;">RIFIUTA ❌</button>
     </div>
 
     <div id="outgoingInviteArea" style="display:block; text-align:center;">
