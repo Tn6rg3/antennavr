@@ -825,6 +825,13 @@ window.listenToInvites = function() {
                     else showScreen('teamsScreen');
                 };
             }
+            if (els.declineTeamInviteBtn) {
+                els.declineTeamInviteBtn.onclick = () => {
+                    db.ref(`invites/${myId}`).remove().catch(() => {});
+                    window.closeInviteModal();
+                    if (typeof showToast === 'function') showToast("Invito rifiutato");
+                };
+            }
         } else {
             if (els.inviteModalTitle) els.inviteModalTitle.textContent = "🚀 SFIDA DA " + inv.fromName.toUpperCase();
             if (els.inviteModalText) {
