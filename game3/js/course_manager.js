@@ -849,14 +849,33 @@ window.sendCourseBotNotificationReminder = function() {
         window.courseData.progress.last_bot_notif_date = todayStr;
         window.saveCourseState();
 
-        const serverUrl = (typeof VALIDATION_SERVER_URL !== 'undefined' && VALIDATION_SERVER_URL)
-            ? VALIDATION_SERVER_URL
-            : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
+        const serverUrl = window.VALIDATION_SERVER_URL || "";
 
         const msgText = encodeURIComponent(`📻 CORSO MORSE KOCH:\n\nOggi è il tuo giorno di allenamento! Apri l'app per svolgere la tua sessione del giorno e mantenere i tuoi progressi! 🚀`);
-        fetch(`${serverUrl}?action=send_push_notification&userId=${window.myId}&message=${msgText}`).catch(() => {});
+        Promise.all([
+            fetch(`${serverUrl}?action=notify&targetId=${window.myId}&text=${msgText}`),
+            fetch(`${serverUrl}?action=send_push_notification&userId=${window.myId}&message=${msgText}`),
+            fetch(`${serverUrl}?action=notify_course&targetId=${window.myId}&text=${msgText}`)
+        ]).catch(() => {});
         console.log("Course: Sent Telegram Bot notification reminder for training day!");
     }
+};
+
+window.testCourseBotNotification = function() {
+    if (!window.myId) return alert("⚠️ Identificativo utente non trovato.");
+    const serverUrl = window.VALIDATION_SERVER_URL || "";
+
+    const msgText = encodeURIComponent("📻 TEST NOTIFICA CORSO MORSE: La notifica Bot funziona correttamente! 🚀");
+    if (typeof showToast === 'function') showToast("Invio notifica di test al Bot Telegram...");
+
+    Promise.all([
+        fetch(`${serverUrl}?action=notify&targetId=${window.myId}&text=${msgText}`),
+        fetch(`${serverUrl}?action=send_push_notification&userId=${window.myId}&message=${msgText}`)
+    ]).then(() => {
+        alert("🤖 Notifica di Test Inviata al Bot Telegram!\n\nSe non ricevi il messaggio in chat Telegram, assicurati di aver avviato il Bot (@cwappgame_bot) cliccando su Avvia almeno una volta.");
+    }).catch(e => {
+        alert("Errore invio notifica: " + e.message);
+    });
 };
 
 window.checkCourseStartupNotification = function() {

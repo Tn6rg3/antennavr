@@ -1356,9 +1356,7 @@ window.requestCwgTxKey = async function() {
     if (txText) txText.textContent = "Generazione...";
     if (txBox) txBox.style.display = "block";
 
-    const serverUrl = (typeof VALIDATION_SERVER_URL !== 'undefined' && VALIDATION_SERVER_URL)
-        ? VALIDATION_SERVER_URL
-        : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
+    const serverUrl = window.VALIDATION_SERVER_URL || "";
 
     try {
         const url = `${serverUrl}?action=generate_cwg_key&userId=${window.myId}&partnerCall=${encodeURIComponent(partnerCall)}&band=${encodeURIComponent(band)}&startTime=${encodeURIComponent(startTime)}`;
@@ -1418,9 +1416,7 @@ window.saveCwgQsoLog = async function() {
 
     if (typeof showToast === 'function') showToast("Salvataggio Log QSO in corso...");
 
-    const serverUrl = (typeof VALIDATION_SERVER_URL !== 'undefined' && VALIDATION_SERVER_URL)
-        ? VALIDATION_SERVER_URL
-        : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
+    const serverUrl = window.VALIDATION_SERVER_URL || "";
 
 window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band, pointsAssigned = 2) {
     if (!db || !myCall || !partnerCall) return;

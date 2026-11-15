@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.315";
+const APP_VERSION = "20261105.316";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -833,9 +833,7 @@ async function validateIdentity() {
 async function sendPushNotification(targetId, text) {
     if (!targetId) return;
 
-    const serverUrl = (VALIDATION_SERVER_URL && VALIDATION_SERVER_URL.startsWith('http'))
-        ? VALIDATION_SERVER_URL
-        : "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
+    const serverUrl = window.VALIDATION_SERVER_URL || "";
 
     // Usiamo il testo fornito o un messaggio generico di fallback
     const notificationText = (text && text.trim() !== "") ? text : "Hai nuovi messaggi su Sfida Telegrafia! 📻";
