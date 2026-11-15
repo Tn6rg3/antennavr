@@ -368,7 +368,30 @@ window.loadProfileInfo = async function() {
     listContainer.appendChild(frag);
 };
 
+window.initThresholdsStorage = function() {
+    const map = {
+        'bigramThresholdInput': 'cwgame_th_bigram',
+        'trigramThresholdInput': 'cwgame_th_trigram',
+        'quadgramThresholdInput': 'cwgame_th_quadgram',
+        'wordThresholdInput': 'cwgame_th_word'
+    };
+
+    Object.entries(map).forEach(([id, storeKey]) => {
+        const el = document.getElementById(id);
+        if (el) {
+            const savedVal = localStorage.getItem(storeKey);
+            if (savedVal !== null && !isNaN(Number(savedVal)) && Number(savedVal) > 0) {
+                el.value = savedVal;
+            }
+        }
+    });
+};
+
 window.loadAdvancedStats = function() {
+    if (typeof window.initThresholdsStorage === 'function') {
+        window.initThresholdsStorage();
+    }
+
     const wpmContainer = document.getElementById('wpmErrorChartContainer');
     const bigramContainer = document.getElementById('bigramErrorsContainer');
     const trigramContainer = document.getElementById('trigramErrorsContainer');
@@ -567,13 +590,24 @@ window.loadAdvancedStats = function() {
         window.renderNGramTable(stats.trigramErrors, trigramContainer, trigramTh);
         window.renderNGramTable(stats.quadgramErrors, quadgramContainer, quadgramTh);
 
-        // 3. Parole Critiche
+        // 3. Parole Critiche (Vere parole, escludendo caratteri singoli e gruppi di codice casuali)
         if (wordContainer) {
             wordContainer.innerHTML = '';
             const words = stats.wordErrors || {};
-            const criticalWords = Object.entries(words).filter(e => {
-                const count = e[1].count || (typeof e[1] === 'number' ? e[1] : 0);
-                return count >= wordTh;
+            const criticalWords = Object.entries(words).filter(([w, data]) => {
+                const count = data.count || (typeof data === 'number' ? data : 0);
+                if (count < wordTh) return false;
+
+                const str = (w || '').trim().toUpperCase();
+                if (str.length < 2) return false; // Escludi caratteri singoli (A, B, 1, ecc.)
+                if (str === "VVV=" || str.startsWith("VVV")) return false; // Escludi pro-sign VVV=
+
+                // Escludi gruppi sintetici da 5 caratteri senza vocali (tipici delle stringhe di codice casuali)
+                if (str.length === 5 && /^[A-Z0-9]{5}$/.test(str)) {
+                    const hasVowel = /[AEIOUY]/.test(str);
+                    if (!hasVowel) return false;
+                }
+                return true;
             }).sort((a,b) => (b[1].count || b[1]) - (a[1].count || a[1]));
 
             if (criticalWords.length === 0) {
@@ -638,13 +672,30 @@ window.renderNGramTable = function(dataNode, container, threshold) {
     container.appendChild(frag);
 };
 
-// --- LISTENERS SOGLIE ANALISI ---
-['bigramThresholdInput', 'trigramThresholdInput', 'quadgramThresholdInput', 'wordThresholdInput'].forEach(id => {
+// --- LISTENERS SOGLIE ANALISI (CON SALVATAGGIO IN LOCALSTORAGE) ---
+const thStorageMap = {
+    'bigramThresholdInput': 'cwgame_th_bigram',
+    'trigramThresholdInput': 'cwgame_th_trigram',
+    'quadgramThresholdInput': 'cwgame_th_quadgram',
+    'wordThresholdInput': 'cwgame_th_word'
+};
+
+Object.entries(thStorageMap).forEach(([id, storeKey]) => {
     const el = document.getElementById(id);
     if (el) {
-        el.addEventListener('change', () => window.loadAdvancedStats());
-        el.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.target.blur(); window.loadAdvancedStats(); } });
+        el.addEventListener('change', () => {
+            localStorage.setItem(storeKey, el.value);
+            window.loadAdvancedStats();
+        });
+        el.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.target.blur();
+                localStorage.setItem(storeKey, el.value);
+                window.loadAdvancedStats();
+            }
+        });
     }
+});
 });
 
 window.renderAccuracyTrend = function(trendData, historyMatches = []) {
