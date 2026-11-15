@@ -325,37 +325,77 @@ window.fetchAndRenderMyHistory = function() {
 };
 
 window.populateDynamicFilters = function(modePath, subTypeFilter = "") {
-    if (!els.lbWordFilter) return;
+    if (!els.lbWordFilter || !db) return;
     const currentValue = els.lbWordFilter.value;
     const isIt = (typeof currentLang === 'undefined' || currentLang === 'it');
 
+    let counts = new Set();
+
+    // 1. Se stiamo filtrando la cronologia delle Sfide / Multiplayer (recent_matches)
+    if (modePath.includes('recent_matches')) {
+        db.ref(modePath).once('value', snap => {
+            let options = [`<option value="all">${isIt ? 'Tutte le quantità' : 'All quantities'}</option>`];
+
+            if (snap.exists()) {
+                snap.forEach(c => {
+                    const key = c.key;
+                    if (key && !isNaN(Number(key)) && Number(key) > 0) {
+                        counts.add(String(key));
+                    } else if (c.hasChildren()) {
+                        c.forEach(mNode => {
+                            const val = mNode.val();
+                            if (val && val.wordCount) counts.add(String(val.wordCount));
+                        });
+                    }
+                });
+            }
+
+            let sortedCounts = Array.from(counts).sort((a,b) => parseInt(a) - parseInt(b));
+            if (sortedCounts.length === 0) {
+                sortedCounts = ['10', '13', '15', '20', '30', '50'];
+            }
+
+            sortedCounts.forEach(c => {
+                options.push(`<option value="${c}">${c} ${isIt ? 'Parole' : 'Words'}</option>`);
+            });
+
+            els.lbWordFilter.innerHTML = options.join('');
+            if (sortedCounts.includes(currentValue) || currentValue === 'all') {
+                els.lbWordFilter.value = currentValue;
+            }
+        }).catch(() => {});
+        return;
+    }
+
+    // 2. Per le Classifiche "Solo" (leaderboard/categories/MODE)
     const cleanMode = modePath.replace('recent_matches/', '').replace('_multi', '').replace('standard_plus', 'standard');
 
     db.ref(`leaderboard/categories/${cleanMode}`).once('value', snap => {
         let options = [`<option value="all">${isIt ? 'Tutte le quantità' : 'All quantities'}</option>`];
-        let counts = [];
 
         if (snap.exists()) {
             snap.forEach(c => {
-                if (c.key && !counts.includes(c.key)) counts.push(c.key);
+                if (c.key && !isNaN(Number(c.key)) && Number(c.key) > 0) {
+                    counts.add(String(c.key));
+                }
             });
         }
 
-        // Se non ci sono ancora categorie registrate per questa modalità, aggiungiamo i valori standard di default
-        if (counts.length === 0) {
-            counts = ['3', '5', '10', '15', '20', '25', '30', '40', '50', '100'];
+        let sortedCounts = Array.from(counts).sort((a,b) => parseInt(a) - parseInt(b));
+        if (sortedCounts.length === 0) {
+            sortedCounts = ['3', '5', '10', '13', '15', '20', '25', '30', '40', '50'];
         }
 
-        counts.sort((a,b) => parseInt(a) - parseInt(b)).forEach(c => {
+        sortedCounts.forEach(c => {
             options.push(`<option value="${c}">${c} ${isIt ? 'Parole' : 'Words'}</option>`);
         });
 
         els.lbWordFilter.innerHTML = options.join('');
-        if (counts.includes(currentValue) || currentValue === 'all') {
+        if (sortedCounts.includes(currentValue) || currentValue === 'all') {
             els.lbWordFilter.value = currentValue;
         }
     }).catch(() => {
-        const fallbackCounts = ['3', '5', '10', '15', '20', '25', '30', '40', '50', '100'];
+        const fallbackCounts = ['3', '5', '10', '13', '15', '20', '25', '30', '40', '50'];
         let options = [`<option value="all">${isIt ? 'Tutte le quantità' : 'All quantities'}</option>`];
         fallbackCounts.forEach(c => options.push(`<option value="${c}">${c} ${isIt ? 'Parole' : 'Words'}</option>`));
         els.lbWordFilter.innerHTML = options.join('');
