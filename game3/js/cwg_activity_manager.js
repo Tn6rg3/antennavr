@@ -1456,7 +1456,7 @@ window.saveCwgQsoLog = async function() {
 
     const serverUrl = window.VALIDATION_SERVER_URL || "";
 
-window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band, pointsAssigned = 2) {
+window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band, myPointsAssigned = 1, partnerPointsAssigned = 1) {
     if (!db || !myCall || !partnerCall) return;
 
     window.cwgQsoCompletedSuccessfully = true;
@@ -1488,46 +1488,46 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
         })
     ]).catch(() => {});
 
-    const isReciprocal = (pointsAssigned >= 2);
-
-    // 1. ASSEGNAZIONE PUNTI ALL'OPERATORE A (Chiave primaria: Nominativo)
+    // 1. ASSEGNAZIONE PUNTI ALL'OPERATORE A (Chiave primaria: Nominativo myCall)
+    const isMutualA = (myPointsAssigned >= 2);
     const lbRefA = db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${myCall}`);
     await lbRefA.transaction(curr => {
         if (!curr) {
             return {
                 name: myCall,
-                totalPoints: pointsAssigned,
+                totalPoints: myPointsAssigned,
                 validQsos: 1,
-                mutualQsos: isReciprocal ? 1 : 0,
+                mutualQsos: isMutualA ? 1 : 0,
                 lastUpdate: Date.now()
             };
         }
         return {
             name: myCall,
-            totalPoints: (Number(curr.totalPoints) || 0) + pointsAssigned,
+            totalPoints: (Number(curr.totalPoints) || 0) + myPointsAssigned,
             validQsos: (Number(curr.validQsos) || 0) + 1,
-            mutualQsos: (Number(curr.mutualQsos) || 0) + (isReciprocal ? 1 : 0),
+            mutualQsos: (Number(curr.mutualQsos) || 0) + (isMutualA ? 1 : 0),
             lastUpdate: Date.now()
         };
     }).catch(() => {});
 
-    // 2. ASSEGNAZIONE PUNTI ALL'OPERATORE B (Chiave primaria: Nominativo)
+    // 2. ASSEGNAZIONE PUNTI ALL'OPERATORE B (Chiave primaria: Nominativo partnerCall)
+    const isMutualB = (partnerPointsAssigned >= 2);
     const lbRefB = db.ref(`leaderboard/cwg_activity_monthly/${monthStr}/${partnerCall}`);
     await lbRefB.transaction(curr => {
         if (!curr) {
             return {
                 name: partnerCall,
-                totalPoints: pointsAssigned,
+                totalPoints: partnerPointsAssigned,
                 validQsos: 1,
-                mutualQsos: isReciprocal ? 1 : 0,
+                mutualQsos: isMutualB ? 1 : 0,
                 lastUpdate: Date.now()
             };
         }
         return {
             name: partnerCall,
-            totalPoints: (Number(curr.totalPoints) || 0) + pointsAssigned,
+            totalPoints: (Number(curr.totalPoints) || 0) + partnerPointsAssigned,
             validQsos: (Number(curr.validQsos) || 0) + 1,
-            mutualQsos: (Number(curr.mutualQsos) || 0) + (isReciprocal ? 1 : 0),
+            mutualQsos: (Number(curr.mutualQsos) || 0) + (isMutualB ? 1 : 0),
             lastUpdate: Date.now()
         };
     }).catch(() => {});
@@ -1541,21 +1541,23 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
     await Promise.all([
         db.ref(`activity_cwg/keys_exchange/${sharedQsoKeyBase}/saved`).set({
             by: myCall,
-            points: pointsAssigned,
+            points: myPointsAssigned,
+            partnerPoints: partnerPointsAssigned,
             ts: Date.now()
         }),
         db.ref(`activity_cwg/keys_exchange/${sharedQsoKeyWithDate}/saved`).set({
             by: myCall,
-            points: pointsAssigned,
+            points: myPointsAssigned,
+            partnerPoints: partnerPointsAssigned,
             ts: Date.now()
         })
     ]).catch(() => {});
 };
 
     try {
-        let pointsToAward = 1; // 1 Punto Base per lo scambio di chiavi avvenuto (anche se errate)
+        let myPointsToAward = 1;      // 1 Punto Base per QSO completato
+        let partnerPointsToAward = 1; // 1 Punto Base per QSO completato
 
-        // Verifichiamo se la chiave inserita (rxKey) corrisponde esattamente alla chiave TX generata per il partner: +1 Punto Bonus (Totale 2 Punti!)
         const year = new Date().getFullYear();
         const dateStr = year + "-" + String(new Date().getMonth() + 1).padStart(2, '0') + "-" + String(new Date().getDate()).padStart(2, '0');
         const callsArray = [myCall, partnerCall].sort();
@@ -1565,28 +1567,35 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
             const partnerExchangeSnap = await db.ref(`activity_cwg/keys_exchange/${sharedQsoKeyBase}/${partnerCall}`).once('value');
             if (partnerExchangeSnap.exists() && partnerExchangeSnap.val()) {
                 const partnerData = partnerExchangeSnap.val();
-                const partnerTxKey = partnerData.txKey ? partnerData.txKey.toUpperCase() : "";
+                const partnerTxKey = (partnerData.txKey || "").trim().toUpperCase();
+                const partnerRxKey = (partnerData.rxKey || "").trim().toUpperCase();
 
-                if (rxKey && partnerTxKey && rxKey === partnerTxKey) {
-                    pointsToAward = 2; // +1 Punto Bonus per Corrispondenza Esatta Chiavi!
-                }
+                // Verifichiamo la correttezza indipendente di ciascun codice inserito
+                const isMyKeyCorrect = (rxKey.length === 8 && partnerTxKey.length === 8 && rxKey === partnerTxKey);
+                const isPartnerKeyCorrect = (partnerRxKey.length === 8 && txKey.length === 8 && partnerRxKey === txKey);
+
+                if (isMyKeyCorrect) myPointsToAward += 1;          // +1 pt bonus per codice corretto inserito da me (Totale 2 pt)
+                if (isPartnerKeyCorrect) partnerPointsToAward += 1; // +1 pt bonus per codice corretto inserito dal partner (Totale 2 pt)
+            } else if (rxKey && rxKey.length === 8) {
+                // Fallback di verifica se il partner non ha ancora inviato il nodo completo
+                myPointsToAward = 2; // Valido con codice inserito
             }
         } catch(e) {}
 
-        const saveUrl = `${serverUrl}?action=save_cwg_qso&userId=${window.myId}&userName=${encodeURIComponent(myCall)}&partnerCall=${encodeURIComponent(partnerCall)}&band=${encodeURIComponent(band)}&startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime)}&rstTx=${encodeURIComponent(rstTx)}&rstRx=${encodeURIComponent(rstRx)}&rxKey=${encodeURIComponent(rxKey)}&txKey=${encodeURIComponent(txKey)}&points=${pointsToAward}`;
+        const saveUrl = `${serverUrl}?action=save_cwg_qso&userId=${window.myId}&userName=${encodeURIComponent(myCall)}&partnerCall=${encodeURIComponent(partnerCall)}&band=${encodeURIComponent(band)}&startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime)}&rstTx=${encodeURIComponent(rstTx)}&rstRx=${encodeURIComponent(rstRx)}&rxKey=${encodeURIComponent(rxKey)}&txKey=${encodeURIComponent(txKey)}&points=${myPointsToAward}`;
         await fetch(saveUrl).catch(() => null);
 
-        await window.recordCwgQsoDirectlyToFirebase(myCall, partnerCall, band, pointsToAward);
+        await window.recordCwgQsoDirectlyToFirebase(myCall, partnerCall, band, myPointsToAward, partnerPointsToAward);
         window.monthlyLeaderboardCache = {};
         window.maxWpmRecordsCache = {};
 
-        const ptText = pointsToAward === 2 ? "+2 pt (Scambio Chiavi Corretto ✅)" : "+1 pt (Collegamento Completato 👍)";
+        const ptText = myPointsToAward >= 2 ? `+${myPointsToAward} pt (Codice Corretto ✅)` : "+1 pt (QSO Completato 👍)";
         alert(`✅ LOG QSO REGISTRATO CON SUCCESSO!\n\nPunti Assegnati: ${ptText}`);
         window.resetCwgForm();
         if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
     } catch(e) {
         console.error("CWG Save Fallback:", e);
-        await window.recordCwgQsoDirectlyToFirebase(myCall, partnerCall, band, 1);
+        await window.recordCwgQsoDirectlyToFirebase(myCall, partnerCall, band, 1, 1);
         alert(`✅ LOG QSO Registrato! Punti Assegnati: +1 pt!`);
         window.resetCwgForm();
         if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
