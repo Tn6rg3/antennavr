@@ -330,58 +330,58 @@ window.populateDynamicFilters = function(modePath, subTypeFilter = "") {
     const isIt = (typeof currentLang === 'undefined' || currentLang === 'it');
 
     let counts = new Set();
-
-    // 1. Se stiamo filtrando la cronologia delle Sfide / Multiplayer (recent_matches)
-    if (modePath.includes('recent_matches')) {
-        db.ref(modePath).once('value', snap => {
-            let options = [`<option value="all">${isIt ? 'Tutte le quantità' : 'All quantities'}</option>`];
-
-            if (snap.exists()) {
-                snap.forEach(c => {
-                    const key = c.key;
-                    if (key && !isNaN(Number(key)) && Number(key) > 0) {
-                        counts.add(String(key));
-                    } else if (c.hasChildren()) {
-                        c.forEach(mNode => {
-                            const val = mNode.val();
-                            if (val && val.wordCount) counts.add(String(val.wordCount));
-                        });
-                    }
-                });
-            }
-
-            let sortedCounts = Array.from(counts).sort((a,b) => parseInt(a) - parseInt(b));
-            if (sortedCounts.length === 0) {
-                sortedCounts = ['10', '13', '15', '20', '30', '50'];
-            }
-
-            sortedCounts.forEach(c => {
-                options.push(`<option value="${c}">${c} ${isIt ? 'Parole' : 'Words'}</option>`);
-            });
-
-            els.lbWordFilter.innerHTML = options.join('');
-            if (sortedCounts.includes(currentValue) || currentValue === 'all') {
-                els.lbWordFilter.value = currentValue;
-            }
-        }).catch(() => {});
-        return;
-    }
-
-    // 2. Per le Classifiche "Solo" (leaderboard/categories/MODE)
     const cleanMode = modePath.replace('recent_matches/', '').replace('_multi', '').replace('standard_plus', 'standard');
 
-    db.ref(`leaderboard/categories/${cleanMode}`).once('value', snap => {
-        let options = [`<option value="all">${isIt ? 'Tutte le quantità' : 'All quantities'}</option>`];
-
-        if (snap.exists()) {
-            snap.forEach(c => {
-                if (c.key && !isNaN(Number(c.key)) && Number(c.key) > 0) {
-                    counts.add(String(c.key));
+    // Promesse di lettura simultanee per raccogliere QUALSIASI taglio di parole esistente da tutte le fonti
+    Promise.all([
+        db.ref(`leaderboard/recent_matches/${cleanMode}_multi`).once('value').catch(() => null),
+        db.ref(`leaderboard/categories/${cleanMode}`).once('value').catch(() => null),
+        db.ref(`leaderboard/${cleanMode}`).once('value').catch(() => null),
+        window.myId ? db.ref(`users/${window.myId}/history`).limitToLast(30).once('value').catch(() => null) : Promise.resolve(null)
+    ]).then(([multiSnap, catSnap, modeSnap, histSnap]) => {
+        // 1. Da recent_matches
+        if (multiSnap && multiSnap.exists()) {
+            multiSnap.forEach(c => {
+                const k = c.key;
+                if (k && !isNaN(Number(k)) && Number(k) > 0) counts.add(String(k));
+                else if (c.hasChildren()) {
+                    c.forEach(m => {
+                        const val = m.val();
+                        if (val && val.wordCount) counts.add(String(val.wordCount));
+                    });
                 }
             });
         }
 
+        // 2. Da categories
+        if (catSnap && catSnap.exists()) {
+            catSnap.forEach(c => {
+                if (c.key && !isNaN(Number(c.key)) && Number(c.key) > 0) counts.add(String(c.key));
+            });
+        }
+
+        // 3. Da leaderboard/MODE (es. single_10, single_13, multi_20)
+        if (modeSnap && modeSnap.exists()) {
+            modeSnap.forEach(c => {
+                const k = c.key;
+                if (k && (k.startsWith('single_') || k.startsWith('multi_'))) {
+                    const wcNum = k.split('_')[1];
+                    if (wcNum && !isNaN(Number(wcNum))) counts.add(String(wcNum));
+                }
+            });
+        }
+
+        // 4. Dallo storico utente
+        if (histSnap && histSnap.exists()) {
+            histSnap.forEach(c => {
+                const val = c.val();
+                if (val && val.wordCount && !isNaN(Number(val.wordCount))) counts.add(String(val.wordCount));
+            });
+        }
+
+        let options = [`<option value="all">${isIt ? 'Tutte le quantità' : 'All quantities'}</option>`];
         let sortedCounts = Array.from(counts).sort((a,b) => parseInt(a) - parseInt(b));
+
         if (sortedCounts.length === 0) {
             sortedCounts = ['3', '5', '10', '13', '15', '20', '25', '30', '40', '50'];
         }
