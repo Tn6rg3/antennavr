@@ -1405,6 +1405,51 @@ window.initMandatoryAliasHandlers = function() {
         };
         window.initTotalMatchesCounterListener();
 
+        // --- NORMALIZZAZIONE E VERIFICA REALE PARTITE OGGI (COMPRENDE TUTTE LE MODALITÀ) ---
+        window.normalizeTodayMatchesCount = function() {
+            if (!db) return;
+            const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+
+            db.ref(`activity/daily/${todayStr}`).once('value', snap => {
+                if (snap.exists()) {
+                    snap.forEach(async child => {
+                        const uid = child.key;
+                        try {
+                            let realTodayCount = 0;
+
+                            // 1. Storico partite standard, sfide e quiz
+                            const hSnap = await db.ref(`users/${uid}/history`).limitToLast(50).once('value');
+                            if (hSnap.exists()) {
+                                hSnap.forEach(hChild => {
+                                    const hVal = hChild.val();
+                                    const hDate = hVal ? String(hVal.date || '') : '';
+                                    const hTs = hVal ? Number(hVal.ts || hVal.date || 0) : 0;
+                                    const isTodayDate = hDate.includes(todayStr) || (hTs > 0 && new Date(hTs).toISOString().startsWith(todayStr));
+                                    if (isTodayDate) realTodayCount++;
+                                });
+                            }
+
+                            // 2. Sessioni completate della Sfida Tripla
+                            const triSnap = await db.ref(`users/${uid}/tri_daily_attempt/${todayStr}`).once('value');
+                            if (triSnap.exists()) {
+                                triSnap.forEach(tSlot => {
+                                    const tVal = tSlot.val();
+                                    if (tVal && (tVal.completed || tVal.played || tVal.score > 0)) {
+                                        realTodayCount++;
+                                    }
+                                });
+                            }
+
+                            if (realTodayCount > 0) {
+                                db.ref(`activity/daily/${todayStr}/${uid}/games`).set(realTodayCount).catch(() => {});
+                            }
+                        } catch(e) {}
+                    });
+                }
+            }).catch(() => {});
+        };
+        setTimeout(window.normalizeTodayMatchesCount, 2000);
+
         db.ref('appConfig/latestVersion').on('value', snap => {
             const latestStr = snap.val() ? String(snap.val()).trim() : "";
             const currentStr = String(APP_VERSION).trim();

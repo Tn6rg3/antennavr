@@ -1400,6 +1400,10 @@ window.finishGame = async function() {
 
                         const safeTgUsername = window.tgUsername || (typeof tgUsername !== 'undefined' ? tgUsername : '');
 
+                        if (typeof window.updateActivity === 'function') {
+                            window.updateActivity(true);
+                        }
+
                         db.ref(`leaderboard/tri_daily/${todayStr}/${window.myId}`).set({
                             name: window.myName,
                             username: window.myPrivacy ? "" : safeTgUsername,

@@ -318,6 +318,9 @@ window.advanceTowerFloor = function() {
         const updateData = { valvole: (window.towerState.valvole || 0) + 5 };
         if (window.towerState.floor % 10 === 1) { updateData.checkpoint = window.towerState.floor; showToast("🚩 CHECKPOINT!"); }
         window.db.ref(`users/${window.myId}/towerProgress`).update(updateData);
+        if (typeof window.updateActivity === 'function') {
+            window.updateActivity(true);
+        }
     }
     const overlay = document.getElementById('towerLevelOverlay');
     const num = document.getElementById('towerLevelNumber');

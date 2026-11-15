@@ -325,6 +325,10 @@ window.finishArcadeGame = function() {
             }
             return current;
         });
+
+        if (finalScore > 0 && typeof window.updateActivity === 'function') {
+            window.updateActivity(true);
+        }
     }
 
     setTimeout(() => {
