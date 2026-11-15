@@ -1519,10 +1519,27 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
 };
 
     try {
-        const isFullKeyExchange = (rxKey && rxKey.length === 8 && txKey && txKey.length === 8);
-        const pointsToAward = isFullKeyExchange ? 2 : 1;
+        let pointsToAward = 1; // 1 Punto Base per lo scambio di chiavi avvenuto (anche se errate)
 
-        const saveUrl = `${serverUrl}?action=save_cwg_qso&userId=${window.myId}&userName=${encodeURIComponent(myCall)}&partnerCall=${encodeURIComponent(partnerCall)}&band=${encodeURIComponent(band)}&startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime)}&rstTx=${encodeURIComponent(rstTx)}&rstRx=${encodeURIComponent(rstRx)}&rxKey=${encodeURIComponent(rxKey)}&txKey=${encodeURIComponent(txKey)}`;
+        // Verifichiamo se la chiave inserita (rxKey) corrisponde esattamente alla chiave TX generata per il partner: +1 Punto Bonus (Totale 2 Punti!)
+        const year = new Date().getFullYear();
+        const dateStr = year + "-" + String(new Date().getMonth() + 1).padStart(2, '0') + "-" + String(new Date().getDate()).padStart(2, '0');
+        const callsArray = [myCall, partnerCall].sort();
+        const sharedQsoKeyBase = callsArray.join('_') + '_' + band;
+
+        try {
+            const partnerExchangeSnap = await db.ref(`activity_cwg/keys_exchange/${sharedQsoKeyBase}/${partnerCall}`).once('value');
+            if (partnerExchangeSnap.exists() && partnerExchangeSnap.val()) {
+                const partnerData = partnerExchangeSnap.val();
+                const partnerTxKey = partnerData.txKey ? partnerData.txKey.toUpperCase() : "";
+
+                if (rxKey && partnerTxKey && rxKey === partnerTxKey) {
+                    pointsToAward = 2; // +1 Punto Bonus per Corrispondenza Esatta Chiavi!
+                }
+            }
+        } catch(e) {}
+
+        const saveUrl = `${serverUrl}?action=save_cwg_qso&userId=${window.myId}&userName=${encodeURIComponent(myCall)}&partnerCall=${encodeURIComponent(partnerCall)}&band=${encodeURIComponent(band)}&startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime)}&rstTx=${encodeURIComponent(rstTx)}&rstRx=${encodeURIComponent(rstRx)}&rxKey=${encodeURIComponent(rxKey)}&txKey=${encodeURIComponent(txKey)}&points=${pointsToAward}`;
         await fetch(saveUrl).catch(() => null);
 
         await window.recordCwgQsoDirectlyToFirebase(myCall, partnerCall, band, pointsToAward);
@@ -1535,9 +1552,8 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
         if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
     } catch(e) {
         console.error("CWG Save Fallback:", e);
-        const pointsToAward = (rxKey && rxKey.length === 8) ? 2 : 1;
-        await window.recordCwgQsoDirectlyToFirebase(myCall, partnerCall, band, pointsToAward);
-        alert(`✅ LOG QSO Registrato! Punti Assegnati: +${pointsToAward} pt!`);
+        await window.recordCwgQsoDirectlyToFirebase(myCall, partnerCall, band, 1);
+        alert(`✅ LOG QSO Registrato! Punti Assegnati: +1 pt!`);
         window.resetCwgForm();
         if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
     }
