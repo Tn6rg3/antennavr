@@ -225,49 +225,75 @@ window.fetchAndRenderLastMatchFromHistory = function() {
 };
 
 window.fetchAndRenderMyHistory = function() {
-    if (!els.leaderboardContainer) return;
-    els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Caricamento storico...':'Loading history...'}</p>`;
+    const container = els.leaderboardContainer || document.getElementById('leaderboardContainer');
+    if (!container) return;
 
-    db.ref(`users/${myId}/history`).limitToLast(20).once('value', snap => {
+    container.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Caricamento storico...':'Loading history...'}</p>`;
+
+    const targetUid = window.myId;
+    if (!db || !targetUid) {
+        container.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Connessione in corso...':'Connecting...'}</p>`;
+        return;
+    }
+
+    db.ref(`users/${targetUid}/history`).limitToLast(30).once('value').then(snap => {
         let matches = [];
-        snap.forEach(child => {
-            const m = child.val();
-            if (m) {
-                m.id = child.key;
-                // Adattiamo il formato per renderHeadToHeadView se necessario,
-                // oppure usiamo una visualizzazione specifica per il single player history.
-                matches.push(m);
-            }
-        });
+        if (snap.exists()) {
+            snap.forEach(child => {
+                const m = child.val();
+                if (m && typeof m === 'object') {
+                    m.id = child.key;
+                    matches.push(m);
+                }
+            });
+        }
         matches.reverse(); // Più recenti in alto
 
         if (matches.length === 0) {
-            els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Non hai ancora giocato nessuna partita.':'You haven\'t played any matches yet.'}</p>`;
+            container.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Non hai ancora giocato nessuna partita.':'You haven\'t played any matches yet.'}</p>`;
             return;
         }
 
-        els.leaderboardContainer.innerHTML = '';
+        container.innerHTML = '';
         matches.forEach(m => {
             const row = document.createElement('div');
             row.className = 'leaderboard-row';
             row.style.cssText = "margin-bottom:8px; padding:10px; background:rgba(255,255,255,0.03); border-radius:8px; border-left:4px solid var(--link-color); cursor:pointer;";
 
-            const dateStr = new Date(m.date).toLocaleDateString('it-IT', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
-            const modeName = window.GAME_MODES[m.mode]?.titleIt || m.mode;
+            let dateStr = "Oggi";
+            try {
+                const tsVal = Number(m.date || m.ts || 0);
+                if (tsVal > 0) {
+                    dateStr = new Date(tsVal).toLocaleDateString('it-IT', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+                } else if (typeof m.date === 'string' && m.date) {
+                    dateStr = m.date;
+                }
+            } catch(e) {}
+
+            let modeName = m.mode || 'standard';
+            if (window.GAME_MODES && window.GAME_MODES[m.mode]) {
+                modeName = window.GAME_MODES[m.mode].titleIt || m.mode;
+            } else if (m.mode === 'daily_challenge') {
+                modeName = 'Sfida Giornaliera';
+            } else if (m.mode === 'tri_daily') {
+                modeName = 'Sfida Tripla';
+            } else if (m.mode === 'weekly_callsign') {
+                modeName = 'Sfida Nominativi';
+            }
 
             row.innerHTML = `
                 <div style="flex-grow:1;">
-                    <div style="display:flex; justify-content:space-between;">
-                        <b>${modeName}</b>
-                        <small style="color:var(--hint-color);">${dateStr}</small>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <b style="color:var(--text-color); font-size:0.9em;">${modeName}</b>
+                        <small style="color:var(--hint-color); font-size:0.75em;">${dateStr}</small>
                     </div>
                     <div style="font-size:0.85em; margin-top:4px; display:flex; gap:10px; color:var(--hint-color);">
-                        <span>Punti: <b style="color:#4caf50;">${m.score}</b></span>
-                        <span>Velocità: <b style="color:var(--link-color);">${m.wpm} WPM</b></span>
-                        <span>${m.wordCount || 0} str.</span>
+                        <span>Punti: <b style="color:#4caf50;">${m.score || 0}</b></span>
+                        <span>Velocità: <b style="color:var(--link-color);">${m.wpm || m.peakWpm || 20} WPM</b></span>
+                        <span>${m.wordCount || 10} str.</span>
                     </div>
                 </div>
-                <div style="margin-left:10px; opacity:0.6;">🔍</div>
+                <div style="margin-left:10px; opacity:0.6; font-size:1.1em;">🔍</div>
             `;
 
             row.onclick = () => {
@@ -288,6 +314,14 @@ window.fetchAndRenderMyHistory = function() {
                     showToast(currentLang === 'it' ? "Dettagli non disponibili per questa partita." : "Details not available for this match.");
                 }
             };
+
+            container.appendChild(row);
+        });
+    }).catch(err => {
+        console.error("Fetch My History Error:", err);
+        container.innerHTML = `<p style="text-align:center; padding:20px; color:#f44336;">${currentLang==='it'?'Errore durante il caricamento dello storico.':'Error loading history.'}</p>`;
+    });
+};
 
             els.leaderboardContainer.appendChild(row);
         });
