@@ -268,18 +268,28 @@ window.loadProfileInfo = async function() {
     let localHistory = (typeof window.loadLocalMatchHistory === 'function') ? await window.loadLocalMatchHistory(50) : [];
     let serverHistory = [];
 
-    if (!localHistory || localHistory.length === 0) {
-        try {
-            const snap = await db.ref(`users/${userId}/history`).limitToLast(50).once('value');
-            if (snap.exists()) {
-                snap.forEach(child => {
-                    serverHistory.push({ key: child.key, ...child.val() });
-                });
-            }
-        } catch(e) {}
-    }
+    try {
+        const snap = await db.ref(`users/${userId}/history`).limitToLast(50).once('value');
+        if (snap.exists()) {
+            snap.forEach(child => {
+                serverHistory.push({ key: child.key, histKey: child.key, ...child.val() });
+            });
+        }
+    } catch(e) {}
 
-    const combinedList = [...localHistory, ...serverHistory];
+    // Uniamo e deduplichiamo la lista locale con quella di Firebase per chiavi/histKey
+    const seenKeys = new Set();
+    const combinedList = [];
+
+    [...serverHistory, ...localHistory].forEach(m => {
+        if (!m) return;
+        const dedupeKey = m.histKey || m.key || m.id || (m.ts ? `ts_${m.ts}_${m.mode}_${m.score}` : null);
+        if (dedupeKey) {
+            if (seenKeys.has(dedupeKey)) return;
+            seenKeys.add(dedupeKey);
+        }
+        combinedList.push(m);
+    });
 
     const getRecordTs = (m) => {
         if (!m) return 0;

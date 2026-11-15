@@ -1591,6 +1591,12 @@ window.finishGame = async function() {
             window.updateActivity(totalScore > 0);
         }
 
+        // Refresh automatico in background per profilo e storico partite
+        setTimeout(() => {
+            if (typeof window.loadProfileInfo === 'function') window.loadProfileInfo();
+            if (typeof window.fetchAndRenderMyHistory === 'function') window.fetchAndRenderMyHistory();
+        }, 500);
+
         // --- ASSEGNAZIONE XP FINALE (RPG) ---
         if (typeof window.addXP === 'function') {
             const xpGain = Math.floor(totalScore / 10) + 50; // XP base + bonus partita

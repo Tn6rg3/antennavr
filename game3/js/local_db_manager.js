@@ -119,8 +119,8 @@ window.loadLocalMatchHistory = function(limit = 1000) {
             const tx = window.localDb.transaction(['matchHistory'], 'readonly');
             const store = tx.objectStore('matchHistory');
             const index = store.index('ts');
-            // Ordinamento crescente dal più vecchio (prima partita) al più recente
-            const request = index.openCursor(null, 'next');
+            // Ordinamento decrescente dal più recente al più vecchio
+            const request = index.openCursor(null, 'prev');
 
             const results = [];
             request.onsuccess = function(e) {
