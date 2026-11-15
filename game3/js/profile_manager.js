@@ -696,7 +696,6 @@ Object.entries(thStorageMap).forEach(([id, storeKey]) => {
         });
     }
 });
-});
 
 window.renderAccuracyTrend = function(trendData, historyMatches = []) {
     const canvas = document.getElementById('accuracyTrendChart');
