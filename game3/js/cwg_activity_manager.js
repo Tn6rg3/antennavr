@@ -210,37 +210,50 @@ window.openCwgActivityScreenImpl = async function() {
         }
     }
 
-    // 2. RECUPERO AUTOMATICO DA FIREBASE HANDSHAKE SE L'UTENTE HA CHIUSO L'APP ED IL LOCALSTORAGE E' VUOTO
+    // 2. RECUPERO AUTOMATICO DA FIREBASE ACTIVE SESSIONS SE L'UTENTE HA CHIUSO L'APP ED IL LOCALSTORAGE E' VUOTO
     if (db && myActivityCall) {
         try {
-            const handshakeSnap = await db.ref('activity_cwg/handshake').once('value');
-            if (handshakeSnap.exists()) {
+            const activeSessionsSnap = await db.ref('activity_cwg/active_sessions').once('value');
+            if (activeSessionsSnap.exists()) {
                 let activePartnerCall = "";
                 let activeBand = "";
+                let activeStartTime = "";
+                let activeQsoStartTs = 0;
 
-                handshakeSnap.forEach(c => {
+                activeSessionsSnap.forEach(c => {
                     const val = c.val();
                     if (val && typeof val === 'object') {
-                        const isMeCallA = (val.myCall === myActivityCall);
-                        const isMeCallB = (val.partnerCall === myActivityCall);
-                        const tsDiff = Date.now() - (val.ts || 0);
+                        const isMeA = (val.callA === myActivityCall);
+                        const isMeB = (val.callB === myActivityCall);
+                        const calcElapsed = Math.floor((Date.now() - (val.qsoStartTs || Date.now())) / 1000);
 
-                        if ((isMeCallA || isMeCallB) && tsDiff < 360000) {
-                            activePartnerCall = isMeCallA ? val.partnerCall : val.myCall;
+                        if ((isMeA || isMeB) && calcElapsed < 360) {
+                            activePartnerCall = isMeA ? val.callB : val.callA;
                             activeBand = val.band || '40m';
+                            activeStartTime = val.startTime || "";
+                            activeQsoStartTs = val.qsoStartTs;
                         }
                     }
                 });
 
-                if (activePartnerCall && activePartnerCall.length >= 2) {
-                    console.log(`CWG: Recovered active handshake from Firebase! Partner: ${activePartnerCall}`);
+                if (activePartnerCall && activePartnerCall.length >= 2 && activeQsoStartTs > 0) {
+                    const elapsed = Math.floor((Date.now() - activeQsoStartTs) / 1000);
+                    if (myCallInput) myCallInput.value = myActivityCall;
                     const partnerInput = document.getElementById('cwgLogPartnerCall');
                     const bandSelect = document.getElementById('cwgLogBandSelect');
+                    const startTimeInput = document.getElementById('cwgLogStartTime');
 
                     if (partnerInput) partnerInput.value = activePartnerCall;
                     if (bandSelect && activeBand) bandSelect.value = activeBand.toLowerCase();
+                    if (startTimeInput && activeStartTime) startTimeInput.value = activeStartTime;
 
                     window.checkCwgDoubleHandshakeMatch();
+
+                    if (elapsed < 240) {
+                        window.runCwgQsoTimerCountdown(elapsed, true);
+                    } else {
+                        window.startCwgKeysExchangePhase();
+                    }
                     return;
                 }
             }
@@ -296,6 +309,17 @@ window.resetCwgForm = function() {
     if (window.cwgMyPresenceKey && db) {
         try { db.ref(`activity_cwg/handshake/${window.cwgMyPresenceKey}`).remove(); } catch(e) {}
         window.cwgMyPresenceKey = null;
+    }
+
+    if (db) {
+        const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || "");
+        const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
+        const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
+        if (myCall && partnerCall) {
+            const callsArray = [myCall, partnerCall].sort();
+            const sharedQsoKeyBase = callsArray.join('_') + '_' + band;
+            db.ref(`activity_cwg/active_sessions/${sharedQsoKeyBase}`).remove().catch(() => {});
+        }
     }
 
     window.cleanCwgPrivateChat();
@@ -1095,6 +1119,20 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
         qsoStartTs: qsoStartTs,
         isInitiator: isInitiator
     }));
+
+    if (db && myCall && partnerCall) {
+        const callsArray = [myCall, partnerCall].sort();
+        const sharedQsoKeyBase = callsArray.join('_') + '_' + band;
+        db.ref(`activity_cwg/active_sessions/${sharedQsoKeyBase}`).set({
+            callA: callsArray[0],
+            callB: callsArray[1],
+            band: band,
+            startTime: startTimeInput ? startTimeInput.value : `${hh}:${mm}`,
+            qsoStartTs: qsoStartTs,
+            ts: Date.now()
+        }).catch(() => {});
+        db.ref(`activity_cwg/active_sessions/${sharedQsoKeyBase}`).onDisconnect().remove();
+    }
 
     if (window.cwgQsoTimerInterval) clearInterval(window.cwgQsoTimerInterval);
 
