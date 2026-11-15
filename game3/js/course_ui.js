@@ -1393,25 +1393,42 @@ window.initTutorStudentNotification = function() {
     if (!isTutor) return;
 
     if (window.listeners && window.listeners.tutorStudentNotifRef) {
-        window.listeners.tutorStudentNotifRef.off('child_added', window.listeners.tutorStudentNotifCallback);
+        try { window.listeners.tutorStudentNotifRef.off('child_added', window.listeners.tutorStudentNotifCallback); } catch(e) {}
     } else if (!window.listeners) {
         window.listeners = {};
     }
 
     const enrollRef = db.ref('courseActiveEnrollments');
-    let initEnroll = true;
+    const notifiedKey = `cwgame_notified_students_${window.myId}`;
+    let notifiedSet = new Set(JSON.parse(localStorage.getItem(notifiedKey) || "[]"));
 
     const enrollCallback = async (snap) => {
-        if (initEnroll) { initEnroll = false; return; }
         const uid = snap.key;
         if (!uid || uid === window.myId) return;
+
+        // Se lo studente e gia stato notificato in passato a questo Tutor, ignoriamo
+        if (notifiedSet.has(uid)) return;
+
+        const val = snap.val() || {};
+        const enrollTs = Number(val.ts || 0);
+        const now = Date.now();
+
+        // Notifichiamo SOLO SE l'iscrizione e avvenuta negli ultimi 60 secondi
+        if (now - enrollTs > 60000) {
+            notifiedSet.add(uid);
+            localStorage.setItem(notifiedKey, JSON.stringify(Array.from(notifiedSet)));
+            return;
+        }
 
         try {
             const userSnap = await db.ref(`users/${uid}/course`).once('value');
             const cData = userSnap.val() || {};
 
             if (cData.tutor_id === window.myId) {
-                const studentName = snap.val()?.name || cData.name || "Un corsista";
+                notifiedSet.add(uid);
+                localStorage.setItem(notifiedKey, JSON.stringify(Array.from(notifiedSet)));
+
+                const studentName = val.name || cData.name || "Un corsista";
                 if (typeof showToast === 'function') {
                     showToast(`🎓 NUOVO ISCRITTO IN AULA: ${studentName}!`);
                 }
@@ -1428,7 +1445,7 @@ window.initTutorStudentNotification = function() {
         }
     };
 
-    enrollRef.limitToLast(1).on('child_added', enrollCallback);
+    enrollRef.limitToLast(5).on('child_added', enrollCallback);
     window.listeners.tutorStudentNotifRef = enrollRef;
     window.listeners.tutorStudentNotifCallback = enrollCallback;
 };
