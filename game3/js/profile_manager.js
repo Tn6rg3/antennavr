@@ -405,7 +405,7 @@ window.loadAdvancedStats = function() {
     Promise.all([
         fetchStatsPromise,
         localHistPromise,
-        db.ref(`users/${userId}/history`).limitToLast(50).once('value').catch(() => null)
+        db.ref(`users/${userId}/history`).limitToLast(1000).once('value').catch(() => null)
     ]).then(([stats, localHist, histSnap]) => {
         let historyData = localHist || [];
 
@@ -741,7 +741,9 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
                 } else if (typeof m.accuracy === 'number') {
                     acc = m.accuracy;
                 } else if (typeof m.score === 'number' && m.score > 0) {
-                    acc = 85;
+                    const wordCountVal = Number(m.wordCount) || (m.mode === 'daily_challenge' ? 20 : 10);
+                    const maxScore = wordCountVal * 10;
+                    acc = Math.min(100, Math.max(10, Math.round((m.score / maxScore) * 100)));
                 } else {
                     acc = 0;
                 }
@@ -791,8 +793,10 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
                         acc = Math.round((correctCount / detailsArr.length) * 100);
                     } else if (typeof m.accuracy === 'number') {
                         acc = m.accuracy;
-                    } else if (typeof m.score === 'number' && m.score >= 0) {
-                        acc = 80;
+                    } else if (typeof m.score === 'number' && m.score > 0) {
+                        const wordCountVal = Number(m.wordCount) || (m.mode === 'daily_challenge' ? 20 : 10);
+                        const maxScore = wordCountVal * 10;
+                        acc = Math.min(100, Math.max(10, Math.round((m.score / maxScore) * 100)));
                     }
 
                     const wpm = m.wpm || (detailsArr[0] ? detailsArr[0].wpm : 20);
