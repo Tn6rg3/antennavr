@@ -1547,7 +1547,7 @@ window.finishGame = async function() {
         });
     }
 
-    if (matchDetailsArray.length > 0) {
+    if (totalScore > 0 || window.isForfeitWin || (matchDetailsArray && matchDetailsArray.length > 0)) {
         const newHistRef = db.ref(`users/${myId}/history`).push();
         const histKey = newHistRef.key;
 
@@ -1575,10 +1575,11 @@ window.finishGame = async function() {
             isAutoAdvance: !!window.isAutoAdvance,
             wordCount: requestedWordCount,
             histKey: histKey
-        });
+        }).catch(err => console.error("GameCore: History Save Error:", err));
 
-        // Salvataggio dettagli parole nel nodo dedicato history_details (scaricato solo al click su "Vedi")
-        db.ref(`users/${myId}/history_details/${histKey}`).set(matchDetailsArray).catch(() => {});
+        if (matchDetailsArray && matchDetailsArray.length > 0) {
+            db.ref(`users/${myId}/history_details/${histKey}`).set(matchDetailsArray).catch(() => {});
+        }
 
         // --- TRACCIAMENTO ACCURATEZZA GLOBALE PER GRAFICO (Solo Parole Comuni, Nominativi e Sfida Giornaliera) ---
         const isAllowedStatMode = ['standard', 'callsign', 'daily_challenge'].includes(window.currentMode);
