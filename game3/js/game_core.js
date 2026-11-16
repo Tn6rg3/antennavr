@@ -832,6 +832,17 @@ window.startCountdownSequence = function() {
     if (listeners.room) listeners.room.off();
 
     isCourseMode = (window.currentMode === 'course');
+    // Ascolto dinamico degli Spettatori in stanza (Attiva il broadcast in diretta se qualcuno sta osservando)
+    if (roomCode && db) {
+        if (listeners.spectators) try { db.ref(`rooms/${roomCode}/spectators`).off('value', listeners.spectators); } catch(e){}
+        listeners.spectators = db.ref(`rooms/${roomCode}/spectators`).on('value', specSnap => {
+            window.activeSpectatorCount = (specSnap.exists() && specSnap.val()) ? Object.keys(specSnap.val()).length : 0;
+            if (window.activeSpectatorCount > 0) {
+                console.log(`Spectators: ${window.activeSpectatorCount} spectator(s) observing room ${roomCode}`);
+            }
+        });
+    }
+
     if (!window.isSinglePlayer) {
         // Recuperiamo il conteggio iniziale dei giocatori che iniziano la sfida
         db.ref(`rooms/${roomCode}/players`).once('value', snap => {
@@ -1268,7 +1279,8 @@ window.playNextWord = function() {
     }
     lastWordStartTime = Date.now();
 
-    if (roomCode && !window.isSinglePlayer && db) {
+    const isSpectatorRequired = !window.isSinglePlayer || (window.activeSpectatorCount > 0) || (window.isSpectatorBroadcastActive === true);
+    if (roomCode && db && isSpectatorRequired) {
         db.ref(`rooms/${roomCode}/liveAudio`).set({
             word: currentWord, wpm: activeWpm, ts: Date.now(), wordId: wordIndex + (window.isPerfectionRetry ? 1000 : 0)
         }).catch(() => {});
@@ -2422,8 +2434,9 @@ window.handleWordSubmission = function(userWord) {
     };
     matchDetailsArray.push(lastEntry);
 
-    // FEED IN TEMPO REALE PER GLI SPETTATORI / OSSERVATORI (Solo se in Multiplayer)
-    if (roomCode && !window.isSinglePlayer && db) {
+    // FEED IN TEMPO REALE PER GLI SPETTATORI / OSSERVATORI
+    const isSpectatorFeedRequired = !window.isSinglePlayer || (window.activeSpectatorCount > 0) || (window.isSpectatorBroadcastActive === true);
+    if (roomCode && db && isSpectatorFeedRequired) {
         db.ref(`rooms/${roomCode}/players/${window.myId}`).update({
             score: totalScore,
             wpm: currentWpm,
