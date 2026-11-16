@@ -1085,6 +1085,7 @@ window.initMandatoryAliasHandlers = function() {
 };
 
         // --- CARICAMENTO PROFILO UTENTE (OTTIMIZZATO RIGIDAMENTE BANDWIDTH: <1KB invece di 906KB) ---
+        const userRef = db.ref(`users/${window.myId}`);
         const [aliasSnap, privSnap, privLbSnap, actCallSnap] = await Promise.all([
             db.ref(`users/${window.myId}/alias`).once('value').catch(() => null),
             db.ref(`users/${window.myId}/privacy`).once('value').catch(() => null),
@@ -1206,7 +1207,7 @@ window.initMandatoryAliasHandlers = function() {
                 await userRef.update(updates).catch(err => console.warn("Update settings note:", err));
                 console.log("Privacy: Applied default settings (Privacy ON, Alias set).");
             }
-            if ((!snap.exists() || !data.welcomed) && !window.isUserBanned) {
+            if ((!existsOnDb || !data.welcomed) && !window.isUserBanned) {
                 await window.ensureUidMapping();
                 await userRef.update({ welcomed: true, createdAt: firebase.database.ServerValue.TIMESTAMP }).catch(err => console.warn("Welcome update note:", err));
                 window.isNewUserWaitingWelcome = true;
