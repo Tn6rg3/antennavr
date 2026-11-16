@@ -1453,7 +1453,7 @@ window.fetchAndRenderActiveTournamentLeaderboard = function() {
     if (!els.leaderboardContainer) return;
     els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">Ricerca torneo in corso...</p>`;
 
-    db.ref('rooms').orderByChild('type').equalTo('tournament').limitToLast(5).once('value', snap => {
+    db.ref('public_lobby_rooms').orderByChild('type').equalTo('tournament').limitToLast(5).once('value', snap => {
         let activeTrn = null;
         snap.forEach(child => {
             const data = child.val();
@@ -1467,7 +1467,10 @@ window.fetchAndRenderActiveTournamentLeaderboard = function() {
         } else {
             els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">Nessun torneo attivo al momento.</p>`;
         }
+    }).catch(() => {
+        els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">Nessun torneo attivo al momento.</p>`;
     });
+};
 };
 
 window.fetchAndRenderGameRatings = function() {

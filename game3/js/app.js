@@ -1255,19 +1255,17 @@ window.initMandatoryAliasHandlers = function() {
             });
         } catch(e) { console.warn("Cleanup error:", e); }
 
-        // --- PULIZIA SESSIONI PRECEDENTI (SOLO SE VECCHIE) ---
-        db.ref('rooms').orderByChild('hostId').equalTo(window.myId).once('value', s => {
+        // --- PULIZIA SESSIONI PRECEDENTI (OTTIMIZZATO BANDWIDTH SU public_lobby_rooms) ---
+        db.ref('public_lobby_rooms').orderByChild('hostId').equalTo(window.myId).once('value', s => {
             const now = Date.now() + serverTimeOffset;
             s.forEach(roomSnap => {
                 const room = roomSnap.val();
-                // Eliminiamo solo se la stanza è in waiting da più di 1 minuto
-                // Questo permette di cambiare dispositivo senza killare la stanza appena creata
-                if (room.status === 'waiting' && (!room.createdAt || (now - room.createdAt) > 60000)) {
-                    roomSnap.ref.remove();
-                    db.ref(`public_lobby_rooms/${roomSnap.key}`).remove();
+                if (room && room.status === 'waiting' && (!room.createdAt || (now - room.createdAt) > 60000)) {
+                    db.ref(`rooms/${roomSnap.key}`).remove().catch(() => {});
+                    roomSnap.ref.remove().catch(() => {});
                 }
             });
-        });
+        }).catch(() => {});
 
         // --- SBLOCCO UI CRITICO ---
         if (els.loadingText) els.loadingText.style.display = 'none';
