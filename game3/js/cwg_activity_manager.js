@@ -904,11 +904,24 @@ window.checkCwgDoubleHandshakeMatch = async function() {
         }
     });
 
-    partnerPresenceRef.on('value', snap => {
+    partnerPresenceRef.on('value', async snap => {
         // Se il QSO e stato concluso e salvato con successo, ignoriamo gli avvisi di annullamento!
         if (window.cwgQsoCompletedSuccessfully) return;
 
-        if (!snap.exists()) {
+        const callsArray = [myCall, partnerCall].sort();
+        const sharedQsoKeyBase = callsArray.join('_') + '_' + band;
+
+        let activeSessionExists = false;
+        try {
+            const activeSessionSnap = await db.ref(`activity_cwg/active_sessions/${sharedQsoKeyBase}`).once('value');
+            if (activeSessionSnap.exists()) {
+                const aVal = activeSessionSnap.val() || {};
+                const calcElapsed = Math.floor((Date.now() - (aVal.qsoStartTs || Date.now())) / 1000);
+                if (calcElapsed < 360) activeSessionExists = true;
+            }
+        } catch(e) {}
+
+        if (!snap.exists() && !activeSessionExists) {
             if (window.cwgQsoTimerInterval || window.cwgQsoActiveInGame) {
                 alert(`⚠️ Il corrispondente ${partnerCall} ha chiuso il collegamento.`);
                 window.resetCwgForm();
