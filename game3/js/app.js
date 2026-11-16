@@ -609,15 +609,17 @@ async function startApp() {
     }
 
     // INIZIALIZZAZIONE PREVENTIVA FIREBASE SE NON ANCORA PRONTO
+
+
     const firebaseConfig = {
-  apiKey: "AIzaSyDfbWSo7qs5ZH0jx2bRny4SGhRoKb2uDqU",
-  authDomain: "telegrafiabot2.firebaseapp.com",
-  databaseURL: "https://telegrafiabot2-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "telegrafiabot2",
-  storageBucket: "telegrafiabot2.firebasestorage.app",
-  messagingSenderId: "574151516430",
-  appId: "1:574151516430:web:287262b799f0a6ad1b375f"
-};
+        apiKey: "AIzaSyDfbWSo7qs5ZH0jx2bRny4SGhRoKb2uDqU",
+        authDomain: "telegrafiabot2.firebaseapp.com",
+        databaseURL: "https://telegrafiabot2-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "telegrafiabot2",
+        storageBucket: "telegrafiabot2.firebasestorage.app",
+        messagingSenderId: "574151516430",
+        appId: "1:574151516430:web:287262b799f0a6ad1b375f"
+    };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     if (!window.db) window.db = firebase.database();
     if (!window.auth) window.auth = firebase.auth();
@@ -1082,14 +1084,24 @@ window.initMandatoryAliasHandlers = function() {
     }
 };
 
-        // --- CARICAMENTO PROFILO UTENTE ---
-        const userRef = db.ref(`users/${window.myId}`);
-        const snap = await userRef.once('value');
-        const data = snap.val() || {};
+        // --- CARICAMENTO PROFILO UTENTE (OTTIMIZZATO RIGIDAMENTE BANDWIDTH: <1KB invece di 906KB) ---
+        const [aliasSnap, privSnap, privLbSnap, actCallSnap] = await Promise.all([
+            db.ref(`users/${window.myId}/alias`).once('value').catch(() => null),
+            db.ref(`users/${window.myId}/privacy`).once('value').catch(() => null),
+            db.ref(`users/${window.myId}/privacyLeaderboard`).once('value').catch(() => null),
+            db.ref(`users/${window.myId}/activity_call`).once('value').catch(() => null)
+        ]);
+
+        const data = {
+            alias: aliasSnap && aliasSnap.exists() ? aliasSnap.val() : null,
+            privacy: privSnap && privSnap.exists() ? privSnap.val() : null,
+            privacyLeaderboard: privLbSnap && privLbSnap.exists() ? privLbSnap.val() : null,
+            activity_call: actCallSnap && actCallSnap.exists() ? actCallSnap.val() : null
+        };
+        const existsOnDb = aliasSnap && aliasSnap.exists();
 
         // --- PROTEZIONE ANTI-SPAM (USERNAME GATE) ---
-        // Se l'utente non ha username E non esiste ancora nel database, lo blocchiamo
-        if (!tgUsername && !snap.exists()) {
+        if (!tgUsername && !existsOnDb) {
             if (els.loadingScreen) els.loadingScreen.classList.remove('active-screen');
             if (els.noUsernameScreen) els.noUsernameScreen.classList.add('active-screen');
             return; // Interrompiamo l'avvio
