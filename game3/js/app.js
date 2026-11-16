@@ -1086,18 +1086,20 @@ window.initMandatoryAliasHandlers = function() {
 
         // --- CARICAMENTO PROFILO UTENTE (OTTIMIZZATO RIGIDAMENTE BANDWIDTH: <1KB invece di 906KB) ---
         const userRef = db.ref(`users/${window.myId}`);
-        const [aliasSnap, privSnap, privLbSnap, actCallSnap] = await Promise.all([
+        const [aliasSnap, privSnap, privLbSnap, actCallSnap, welcomeSnap] = await Promise.all([
             db.ref(`users/${window.myId}/alias`).once('value').catch(() => null),
             db.ref(`users/${window.myId}/privacy`).once('value').catch(() => null),
             db.ref(`users/${window.myId}/privacyLeaderboard`).once('value').catch(() => null),
-            db.ref(`users/${window.myId}/activity_call`).once('value').catch(() => null)
+            db.ref(`users/${window.myId}/activity_call`).once('value').catch(() => null),
+            db.ref(`users/${window.myId}/welcomed`).once('value').catch(() => null)
         ]);
 
         const data = {
             alias: aliasSnap && aliasSnap.exists() ? aliasSnap.val() : null,
             privacy: privSnap && privSnap.exists() ? privSnap.val() : null,
             privacyLeaderboard: privLbSnap && privLbSnap.exists() ? privLbSnap.val() : null,
-            activity_call: actCallSnap && actCallSnap.exists() ? actCallSnap.val() : null
+            activity_call: actCallSnap && actCallSnap.exists() ? actCallSnap.val() : null,
+            welcomed: welcomeSnap && welcomeSnap.exists() ? welcomeSnap.val() === true : false
         };
         const existsOnDb = aliasSnap && aliasSnap.exists();
 
@@ -1207,7 +1209,10 @@ window.initMandatoryAliasHandlers = function() {
                 await userRef.update(updates).catch(err => console.warn("Update settings note:", err));
                 console.log("Privacy: Applied default settings (Privacy ON, Alias set).");
             }
-            if ((!existsOnDb || !data.welcomed) && !window.isUserBanned) {
+            const hasLocalWelcome = localStorage.getItem(`cwgame_welcomed_${window.myId}`) === "true";
+
+            if ((!existsOnDb || (!data.welcomed && !hasLocalWelcome)) && !window.isUserBanned) {
+                localStorage.setItem(`cwgame_welcomed_${window.myId}`, "true");
                 await window.ensureUidMapping();
                 await userRef.update({ welcomed: true, createdAt: firebase.database.ServerValue.TIMESTAMP }).catch(err => console.warn("Welcome update note:", err));
                 window.isNewUserWaitingWelcome = true;
