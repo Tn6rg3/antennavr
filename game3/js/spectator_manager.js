@@ -3,6 +3,22 @@
 window.spectatorAppendedRows = new Set();
 
 window.watchSpecificRoom = function(code, targetName) {
+    if (!db || !code) return;
+
+    db.ref(`rooms/${code}`).once('value', rSnap => {
+        if (!rSnap.exists()) {
+            return alert("⚠️ La partita o la stanza selezionata non è più attiva.");
+        }
+        const rData = rSnap.val() || {};
+        if (rData.type === 'single' && rData.allowSpectators === false) {
+            return alert(`⚠️ ${targetName} non ha abilitato la trasmissione Spettatori nelle sue Impostazioni Avanzate.`);
+        }
+
+        window.actualWatchSpecificRoom(code, targetName);
+    });
+};
+
+window.actualWatchSpecificRoom = function(code, targetName) {
     if (typeof window.currentSpectatorCleanup === 'function') {
         window.currentSpectatorCleanup();
     }
