@@ -428,7 +428,7 @@ window.loadAdvancedStats = function() {
     Promise.all([
         fetchStatsPromise,
         localHistPromise,
-        db.ref(`users/${userId}/history`).limitToLast(100).once('value').catch(() => null)
+        db.ref(`users/${userId}/history`).limitToLast(20).once('value').catch(() => null)
     ]).then(([stats, localHist, histSnap]) => {
         let historyData = localHist || [];
 

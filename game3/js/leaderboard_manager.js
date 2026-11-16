@@ -236,7 +236,7 @@ window.fetchAndRenderMyHistory = function() {
         return;
     }
 
-    db.ref(`users/${targetUid}/history`).once('value').then(snap => {
+    db.ref(`users/${targetUid}/history`).limitToLast(15).once('value').then(snap => {
         let matches = [];
         if (snap.exists()) {
             snap.forEach(child => {

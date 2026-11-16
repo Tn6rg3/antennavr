@@ -229,7 +229,7 @@ window.syncFromFirebaseHistoryBackup = async function() {
     if (!db || !window.myId) return false;
 
     try {
-        const snap = await db.ref(`users/${window.myId}/history`).limitToLast(50).once('value');
+        const snap = await db.ref(`users/${window.myId}/history`).limitToLast(15).once('value');
         if (!snap.exists()) return false;
 
         const fbMatches = [];

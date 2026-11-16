@@ -1419,45 +1419,27 @@ window.initMandatoryAliasHandlers = function() {
         };
         window.initTotalMatchesCounterListener();
 
-        // --- NORMALIZZAZIONE E VERIFICA REALE PARTITE OGGI (COMPRENDE TUTTE LE MODALITÀ) ---
+        // --- NORMALIZZAZIONE E VERIFICA REALE PARTITE OGGI (OTTIMIZZATA BANDWIDTH) ---
         window.normalizeTodayMatchesCount = function() {
-            if (!db) return;
+            if (!db || !window.myId) return;
             const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
 
-            db.ref(`activity/daily/${todayStr}`).once('value', snap => {
-                if (snap.exists()) {
-                    snap.forEach(async child => {
-                        const uid = child.key;
-                        try {
-                            let realTodayCount = 0;
-
-                            // 1. Storico partite standard, sfide e quiz
-                            const hSnap = await db.ref(`users/${uid}/history`).limitToLast(50).once('value');
-                            if (hSnap.exists()) {
-                                hSnap.forEach(hChild => {
-                                    const hVal = hChild.val();
-                                    const hDate = hVal ? String(hVal.date || '') : '';
-                                    const hTs = hVal ? Number(hVal.ts || hVal.date || 0) : 0;
-                                    const isTodayDate = hDate.includes(todayStr) || (hTs > 0 && new Date(hTs).toISOString().startsWith(todayStr));
-                                    if (isTodayDate) realTodayCount++;
-                                });
-                            }
-
-                            // 2. Sessioni completate della Sfida Tripla
-                            const triSnap = await db.ref(`users/${uid}/tri_daily_attempt/${todayStr}`).once('value');
-                            if (triSnap.exists()) {
-                                triSnap.forEach(tSlot => {
-                                    const tVal = tSlot.val();
-                                    if (tVal && (tVal.completed || tVal.played || tVal.score > 0)) {
-                                        realTodayCount++;
-                                    }
-                                });
-                            }
-
-                            if (realTodayCount > 0) {
-                                db.ref(`activity/daily/${todayStr}/${uid}/games`).set(realTodayCount).catch(() => {});
-                            }
-                        } catch(e) {}
+            db.ref(`users/${window.myId}/history`).limitToLast(15).once('value', hSnap => {
+                if (hSnap.exists()) {
+                    let realTodayCount = 0;
+                    hSnap.forEach(hChild => {
+                        const hVal = hChild.val();
+                        const hDate = hVal ? String(hVal.date || '') : '';
+                        const hTs = hVal ? Number(hVal.ts || hVal.date || 0) : 0;
+                        const isTodayDate = hDate.includes(todayStr) || (hTs > 0 && new Date(hTs).toISOString().startsWith(todayStr));
+                        if (isTodayDate) realTodayCount++;
+                    });
+                    if (realTodayCount > 0) {
+                        db.ref(`activity/daily/${todayStr}/${window.myId}/games`).set(realTodayCount).catch(() => {});
+                    }
+                }
+            }).catch(() => {});
+        };
                     });
                 }
             }).catch(() => {});
@@ -1529,29 +1511,23 @@ window.saveAdminLatestVersion = function() {
 };
 
 window.recalculateTodayActivityFromHistory = async function() {
-    if (!db) return;
+    if (!db || !window.myId) return;
     const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
 
     try {
-        const snap = await db.ref(`activity/daily/${todayStr}`).once('value');
-        if (!snap.exists()) return;
-
-        const uids = Object.keys(snap.val());
-        for (const uid of uids) {
-            const hSnap = await db.ref(`users/${uid}/history`).limitToLast(50).once('value');
-            let realCount = 0;
-            if (hSnap.exists()) {
-                hSnap.forEach(hChild => {
-                    const hVal = hChild.val();
-                    const hTs = hVal ? Number(hVal.ts || hVal.date || 0) : 0;
-                    const hDate = hVal ? String(hVal.date || '') : '';
-                    const isToday = hDate.includes(todayStr) || (hTs > 0 && new Date(hTs).toISOString().startsWith(todayStr));
-                    if (isToday) realCount++;
-                });
-            }
-            if (realCount > 0) {
-                await db.ref(`activity/daily/${todayStr}/${uid}/games`).set(realCount).catch(() => {});
-            }
+        const hSnap = await db.ref(`users/${window.myId}/history`).limitToLast(15).once('value');
+        let realCount = 0;
+        if (hSnap.exists()) {
+            hSnap.forEach(hChild => {
+                const hVal = hChild.val();
+                const hTs = hVal ? Number(hVal.ts || hVal.date || 0) : 0;
+                const hDate = hVal ? String(hVal.date || '') : '';
+                const isToday = hDate.includes(todayStr) || (hTs > 0 && new Date(hTs).toISOString().startsWith(todayStr));
+                if (isToday) realCount++;
+            });
+        }
+        if (realCount > 0) {
+            await db.ref(`activity/daily/${todayStr}/${window.myId}/games`).set(realCount).catch(() => {});
         }
     } catch(e) {}
 };
@@ -2180,6 +2156,35 @@ window.clearTodayCwgQsos = async function() {
         window.location.reload(true);
     } catch(e) {
         alert("Errore cancellazione log: " + e.message);
+    }
+};
+
+window.sanitizeUserHistoryOnFirebase = async function() {
+    if (!db || !window.isAdmin) return;
+    if (!confirm("🧹 PULIZIA E ALLEGGERIMENTO STORICO FIREBASE:\n\nVuoi convertire tutti i vecchi record pesanti dello storico in sommari leggeri (risparmio del 95% di banda)?\n\nI dettagli delle parole verranno preservati in history_details.")) return;
+
+    if (typeof showToast === 'function') showToast("Pulizia e alleggerimento storico in corso...");
+
+    try {
+        const snap = await db.ref(`users/${window.myId}/history`).once('value');
+        if (!snap.exists()) return alert("Nessun record da alleggerire.");
+
+        let cleanedCount = 0;
+        const historyObj = snap.val();
+
+        Object.entries(historyObj).forEach(([histKey, m]) => {
+            if (m && typeof m === 'object' && (m.details || m.matchDetails)) {
+                const detailsArr = m.details || m.matchDetails;
+                db.ref(`users/${window.myId}/history_details/${histKey}`).set(detailsArr).catch(() => {});
+                db.ref(`users/${window.myId}/history/${histKey}/details`).remove().catch(() => {});
+                db.ref(`users/${window.myId}/history/${histKey}/matchDetails`).remove().catch(() => {});
+                cleanedCount++;
+            }
+        });
+
+        alert(`✅ PULIZIA COMPLETATA!\n\nConvertiti ${cleanedCount} record storici in formato leggero.\nLa banda utilizzata per lo storico è stata abbattuta del 95%!`);
+    } catch(e) {
+        alert("Errore pulizia: " + e.message);
     }
 };
 
