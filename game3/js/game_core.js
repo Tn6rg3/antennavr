@@ -1268,10 +1268,10 @@ window.playNextWord = function() {
     }
     lastWordStartTime = Date.now();
 
-    if (roomCode) {
+    if (roomCode && !window.isSinglePlayer && db) {
         db.ref(`rooms/${roomCode}/liveAudio`).set({
             word: currentWord, wpm: activeWpm, ts: Date.now(), wordId: wordIndex + (window.isPerfectionRetry ? 1000 : 0)
-        });
+        }).catch(() => {});
     }
 
     if (domCache.permanentGameInput) {
@@ -2422,8 +2422,8 @@ window.handleWordSubmission = function(userWord) {
     };
     matchDetailsArray.push(lastEntry);
 
-    // FEED IN TEMPO REALE PER GLI SPETTATORI / OSSERVATORI
-    if (roomCode && db) {
+    // FEED IN TEMPO REALE PER GLI SPETTATORI / OSSERVATORI (Solo se in Multiplayer)
+    if (roomCode && !window.isSinglePlayer && db) {
         db.ref(`rooms/${roomCode}/players/${window.myId}`).update({
             score: totalScore,
             wpm: currentWpm,
