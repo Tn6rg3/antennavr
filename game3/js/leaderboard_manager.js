@@ -1471,7 +1471,6 @@ window.fetchAndRenderActiveTournamentLeaderboard = function() {
         els.leaderboardContainer.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">Nessun torneo attivo al momento.</p>`;
     });
 };
-};
 
 window.fetchAndRenderGameRatings = function() {
     if (!els.leaderboardContainer) return;
