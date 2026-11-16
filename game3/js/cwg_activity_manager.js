@@ -253,6 +253,18 @@ window.openCwgActivityScreenImpl = async function() {
                     if (bandSelect && activeBand) bandSelect.value = activeBand.toLowerCase();
                     if (startTimeInput && activeStartTime) startTimeInput.value = activeStartTime;
 
+                    // Salviamo anche in localStorage & sessionStorage per garantire la persistenza completa
+                    sessionStorage.setItem('cwgame_active_partner_call', activePartnerCall);
+                    sessionStorage.setItem('cwgame_active_band', activeBand.toLowerCase());
+                    localStorage.setItem('cwgame_active_qso_session', JSON.stringify({
+                        myCall: myActivityCall,
+                        partnerCall: activePartnerCall,
+                        band: activeBand.toLowerCase(),
+                        startTime: activeStartTime,
+                        qsoStartTs: activeQsoStartTs,
+                        isInitiator: true
+                    }));
+
                     window.checkCwgDoubleHandshakeMatch();
 
                     if (elapsed < 240) {
@@ -315,17 +327,6 @@ window.resetCwgForm = function() {
     if (window.cwgMyPresenceKey && db) {
         try { db.ref(`activity_cwg/handshake/${window.cwgMyPresenceKey}`).remove(); } catch(e) {}
         window.cwgMyPresenceKey = null;
-    }
-
-    if (db) {
-        const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || "");
-        const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
-        const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
-        if (myCall && partnerCall) {
-            const callsArray = [myCall, partnerCall].sort();
-            const sharedQsoKeyBase = callsArray.join('_') + '_' + band;
-            db.ref(`activity_cwg/active_sessions/${sharedQsoKeyBase}`).remove().catch(() => {});
-        }
     }
 
     window.cleanCwgPrivateChat();
