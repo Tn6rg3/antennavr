@@ -376,7 +376,25 @@ window.resetCwgForm = function() {
 };
 
 window.cancelCwgQso = function() {
-    if (confirm("Sei sicuro di voler annullare questo QSO? I dati ed il timer verranno azzerati.")) {
+    if (confirm("Sei sicuro di voler annullare questo QSO? Il collegamento verrà terminato per entrambi gli utenti.")) {
+        const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || "");
+        const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
+        const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
+
+        if (db && myCall && partnerCall) {
+            const callsArray = [myCall, partnerCall].sort();
+            const sharedQsoKeyBase = callsArray.join('_') + '_' + band;
+
+            Promise.all([
+                db.ref(`activity_cwg/keys_exchange/${sharedQsoKeyBase}/cancelled`).set({
+                    by: myCall,
+                    ts: Date.now()
+                }),
+                db.ref(`activity_cwg/active_sessions/${sharedQsoKeyBase}`).remove(),
+                db.ref(`activity_cwg/handshake/${myCall}_${partnerCall}_${band}`).remove()
+            ]).catch(() => {});
+        }
+
         window.resetCwgForm();
         if (typeof showToast === 'function') showToast("QSO annullato.");
     }
@@ -1119,9 +1137,11 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
 
     // Ripristino automatico e garantito dei campi di input se vuoti al momento dell'avvio o del rientro
     const activeSessionRaw = localStorage.getItem('cwgame_active_qso_session');
-    if (activeSessionRaw && (!myCall || !partnerCall)) {
+    let savedQsoMins = 0;
+    if (activeSessionRaw) {
         try {
             const session = JSON.parse(activeSessionRaw);
+            if (session.qsoMinutes) savedQsoMins = Number(session.qsoMinutes);
             if (session.myCall) myCall = session.myCall;
             if (session.partnerCall) partnerCall = session.partnerCall;
             if (session.band) band = session.band;
@@ -1166,12 +1186,15 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
     const qsoStartTs = Date.now() - (Number(initialElapsedSeconds) * 1000);
     window.cwgQsoStartTimestamp = qsoStartTs;
 
+    const targetQsoMinutes = savedQsoMins || window.getCwgQsoDurationMinutes();
+
     localStorage.setItem('cwgame_active_qso_session', JSON.stringify({
         myCall: myCall,
         partnerCall: partnerCall,
         band: band,
         startTime: startTimeInput ? startTimeInput.value : `${hh}:${mm}`,
         qsoStartTs: qsoStartTs,
+        qsoMinutes: targetQsoMinutes,
         isInitiator: isInitiator
     }));
 
@@ -1184,6 +1207,7 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
             band: band,
             startTime: startTimeInput ? startTimeInput.value : `${hh}:${mm}`,
             qsoStartTs: qsoStartTs,
+            qsoMinutes: targetQsoMinutes,
             ts: Date.now()
         }).catch(() => {});
         db.ref(`activity_cwg/active_sessions/${sharedQsoKeyBase}`).onDisconnect().remove();
