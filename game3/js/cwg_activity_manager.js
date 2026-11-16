@@ -219,12 +219,15 @@ window.openCwgActivityScreenImpl = async function() {
                 let activeBand = "";
                 let activeStartTime = "";
                 let activeQsoStartTs = 0;
+                const myClean = (myActivityCall || "").trim().toUpperCase();
 
                 activeSessionsSnap.forEach(c => {
                     const val = c.val();
                     if (val && typeof val === 'object') {
-                        const isMeA = (val.callA === myActivityCall);
-                        const isMeB = (val.callB === myActivityCall);
+                        const callAClean = (val.callA || "").trim().toUpperCase();
+                        const callBClean = (val.callB || "").trim().toUpperCase();
+                        const isMeA = (callAClean === myClean);
+                        const isMeB = (callBClean === myClean);
                         const calcElapsed = Math.floor((Date.now() - (val.qsoStartTs || Date.now())) / 1000);
 
                         if ((isMeA || isMeB) && calcElapsed < 360) {
@@ -528,37 +531,49 @@ window.listenToCwgLiveQsosTable = function() {
     const tableBody = document.getElementById('cwgLiveQsosTableBody');
     if (!tableBody) return;
 
-    if (window.cwgLiveQsosRef) {
-        try { window.cwgLiveQsosRef.off(); } catch(e) {}
-    }
-
-    window.cwgLiveQsosRef = db.ref('activity_cwg/handshake').limitToLast(15);
-    window.cwgLiveQsosRef.on('value', snap => {
+    const renderLiveTable = async () => {
         if (!tableBody) return;
         tableBody.innerHTML = '';
-
-        if (!snap.exists()) {
-            tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--hint-color); padding:10px;">Nessun QSO attualmente in corso.</td></tr>';
-            return;
-        }
 
         const now = Date.now();
         const activePairs = {};
 
-        snap.forEach(child => {
-            const data = child.val();
-            if (data && data.myCall && data.partnerCall && (now - (data.ts || 0) < 360000)) {
-                const sortedKey = [data.myCall, data.partnerCall].sort().join('_') + '_' + (data.band || '40m');
-                if (!activePairs[sortedKey]) {
-                    activePairs[sortedKey] = {
-                        callA: data.myCall,
-                        callB: data.partnerCall,
-                        band: (data.band || '40m').toUpperCase(),
-                        ts: data.ts
-                    };
-                }
+        try {
+            const [hSnap, sSnap] = await Promise.all([
+                db.ref('activity_cwg/handshake').once('value').catch(() => null),
+                db.ref('activity_cwg/active_sessions').once('value').catch(() => null)
+            ]);
+
+            if (hSnap && hSnap.exists()) {
+                hSnap.forEach(child => {
+                    const data = child.val();
+                    if (data && data.myCall && data.partnerCall && (now - (data.ts || 0) < 360000)) {
+                        const sortedKey = [data.myCall, data.partnerCall].sort().join('_') + '_' + (data.band || '40m');
+                        activePairs[sortedKey] = {
+                            callA: data.myCall,
+                            callB: data.partnerCall,
+                            band: (data.band || '40m').toUpperCase(),
+                            ts: data.ts
+                        };
+                    }
+                });
             }
-        });
+
+            if (sSnap && sSnap.exists()) {
+                sSnap.forEach(child => {
+                    const data = child.val();
+                    if (data && data.callA && data.callB && (now - (data.qsoStartTs || data.ts || 0) < 360000)) {
+                        const sortedKey = [data.callA, data.callB].sort().join('_') + '_' + (data.band || '40m');
+                        activePairs[sortedKey] = {
+                            callA: data.callA,
+                            callB: data.callB,
+                            band: (data.band || '40m').toUpperCase(),
+                            ts: data.qsoStartTs || data.ts
+                        };
+                    }
+                });
+            }
+        } catch(e) {}
 
         const list = Object.values(activePairs);
         if (list.length === 0) {
@@ -592,7 +607,11 @@ window.listenToCwgLiveQsosTable = function() {
             tr.appendChild(tdStatus);
             tableBody.appendChild(tr);
         });
-    });
+    };
+
+    db.ref('activity_cwg/active_sessions').on('value', () => renderLiveTable());
+    db.ref('activity_cwg/handshake').on('value', () => renderLiveTable());
+    renderLiveTable();
 };
 
     const cleanSpotCall = window.cleanCallsignString(spotCall);
@@ -1335,22 +1354,18 @@ window.publishCwgExchangeKeyStatus = function(rxKey, isConfirmed = false) {
 
         const partnerConfirmed = (pData.confirmed === true && pData.rxKey && pData.rxKey.length === 8);
 
-        if (isConfirmed && partnerConfirmed) {
+        if (isConfirmed || (rxKey && rxKey.length === 8)) {
             if (saveBtn) {
                 saveBtn.disabled = false;
-                saveBtn.style.background = "#00ff66";
-                saveBtn.style.color = "#000000";
-                saveBtn.textContent = "💾 TERMINA E CONVALIDA QSO (+2 PT)";
+                saveBtn.style.background = "#4caf50";
+                saveBtn.style.color = "#ffffff";
+                saveBtn.textContent = partnerConfirmed ? "💾 TERMINA E SALVA QSO (+2 PT ✅)" : "💾 SALVA LOG QSO";
             }
             if (stepHelp) {
-                stepHelp.textContent = `🟢 ENTRAMBI GLI OPERATORI HANNO CONFERMATO LE CHIAVI! Clicca su "TERMINA E CONVALIDA QSO" per registrare +2 Punti ciascuno!`;
-                stepHelp.style.color = "#00ff66";
-            }
-        } else if (isConfirmed) {
-            if (saveBtn) saveBtn.disabled = true;
-            if (stepHelp) {
-                stepHelp.textContent = `⏳ CHIAVE CONFERMATA. In attesa che anche ${partnerCall} inserisca e confermi la sua chiave...`;
-                stepHelp.style.color = "#ff9800";
+                stepHelp.textContent = partnerConfirmed
+                    ? `🟢 ENTRAMBI GLI OPERATORI HANNO CONFERMATO LE CHIAVI! Clicca su "SALVA LOG QSO" per registrare i punti!`
+                    : `🟢 CHIAVE CONFERMATA. Puoi salvare il Log QSO in qualsiasi momento!`;
+                stepHelp.style.color = partnerConfirmed ? "#00ff66" : "#ff9800";
             }
         } else {
             if (saveBtn) saveBtn.disabled = true;
@@ -1370,10 +1385,11 @@ window.publishCwgExchangeKeyStatus = function(rxKey, isConfirmed = false) {
             const savedTs = Number(data.ts || 0);
             const currentQsoStartTs = Number(window.cwgQsoStartTimestamp || 0);
 
-            // Verifichiamo che il salvataggio appartenga esattamente alla sessione di questo QSO specifico!
-            if (data.by !== myCall && savedTs >= currentQsoStartTs && currentQsoStartTs > 0) {
+            if (data.by !== myCall && savedTs >= (currentQsoStartTs - 60000)) {
                 window.cwgQsoCompletedSuccessfully = true;
-                alert(`✅ QSO CONCLUSO E CONVALIDATO DALL'ALTRO OPERATORE (${data.by})!\n\nPunti Assegnati: +${data.points || 2} pt a ciascun telegrafista!`);
+                const awardedPts = Number(data.partnerPoints || data.points || 1);
+                showToast(`✅ QSO SALVATO DA ${data.by}! Punti: +${awardedPts} pt`);
+                alert(`✅ QSO CONCLUSO E CONVALIDATO DALL'ALTRO OPERATORE (${data.by})!\n\nPunti Assegnati a te: +${awardedPts} pt!`);
                 window.resetCwgForm();
                 if (typeof window.showScreen === 'function') window.showScreen('setupScreen');
             }

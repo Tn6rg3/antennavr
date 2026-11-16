@@ -344,8 +344,8 @@ window.handleNewChatMessage = function(refKey, msg, msgKey) {
         }
     }
 
-    // 2. Audio CW (Sempre se ON, tranne in partita)
-    if (isCwActive) {
+    // 2. Audio CW (Sempre se ON, tranne in partita e tranne per gli Spot CQ dell'Activity CWG)
+    if (isCwActive && !msg.isCqSpot) {
         if (msgKey !== window.lastPlayedCwMsgKey) {
             window.lastPlayedCwMsgKey = msgKey;
             if (typeof window.enqueueChatCwAudio === 'function') {
