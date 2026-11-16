@@ -1218,7 +1218,6 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
     const timerDisp = document.getElementById('cwgQsoTimerDisplay');
     const fillBar = document.getElementById('cwgTimerProgressFill');
 
-    const targetQsoMinutes = window.getCwgQsoDurationMinutes();
     const targetQsoSeconds = targetQsoMinutes * 60;
 
     const updateTimerUI = () => {
