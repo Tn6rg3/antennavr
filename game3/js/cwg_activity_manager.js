@@ -197,6 +197,9 @@ window.openCwgActivityScreenImpl = async function() {
                 if (bandSelect && session.band) bandSelect.value = session.band;
                 if (startTimeInput && session.startTime) startTimeInput.value = session.startTime;
 
+                // RIPRISTINIAMO SUBITO LA PRESENZA SUL FIREBASE DEL DISPOSITIVO CHE E' RIENTRATO
+                window.checkCwgDoubleHandshakeMatch();
+
                 if (elapsed < 240) {
                     window.runCwgQsoTimerCountdown(elapsed, session.isInitiator);
                 } else {
