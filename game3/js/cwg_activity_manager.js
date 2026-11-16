@@ -1113,9 +1113,28 @@ window.runCwgQsoTimerCountdown = function(initialElapsedSeconds = 0, isInitiator
     window.isCwgInitiator = isInitiator;
     window.cwgQsoCompletedSuccessfully = false;
 
-    const myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || "");
-    const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
-    const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
+    let myCall = window.cleanCallsignString(document.getElementById('cwgLogMyCall')?.value || "");
+    let partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
+    let band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
+
+    // Ripristino automatico e garantito dei campi di input se vuoti al momento dell'avvio o del rientro
+    const activeSessionRaw = localStorage.getItem('cwgame_active_qso_session');
+    if (activeSessionRaw && (!myCall || !partnerCall)) {
+        try {
+            const session = JSON.parse(activeSessionRaw);
+            if (session.myCall) myCall = session.myCall;
+            if (session.partnerCall) partnerCall = session.partnerCall;
+            if (session.band) band = session.band;
+
+            const myCallInput = document.getElementById('cwgLogMyCall');
+            const partnerInput = document.getElementById('cwgLogPartnerCall');
+            const bandSelect = document.getElementById('cwgLogBandSelect');
+
+            if (myCallInput && session.myCall) myCallInput.value = session.myCall;
+            if (partnerInput && session.partnerCall) partnerInput.value = session.partnerCall;
+            if (bandSelect && session.band) bandSelect.value = session.band;
+        } catch(e) {}
+    }
 
     // Pulizia preventiva vecchi nodi di salvataggio di test su questa banda per la sessione corrente
     if (db && myCall && partnerCall) {
