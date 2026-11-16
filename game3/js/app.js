@@ -1440,10 +1440,6 @@ window.initMandatoryAliasHandlers = function() {
                 }
             }).catch(() => {});
         };
-                    });
-                }
-            }).catch(() => {});
-        };
         setTimeout(window.normalizeTodayMatchesCount, 2000);
 
         db.ref('appConfig/latestVersion').on('value', snap => {
