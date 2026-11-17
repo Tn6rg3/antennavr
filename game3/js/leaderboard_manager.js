@@ -544,9 +544,9 @@ window.fetchAndRenderTriDailyLeaderboard = function() {
             if (commentText) {
                 html += `
                     <tr id="${boxId}" style="display:none; background:rgba(0,188,212,0.12); border-bottom:2px solid #00bcd4;">
-                        <td colspan="5" style="padding:10px 14px; text-align:left; width:100%; box-sizing:border-box;">
+                        <td colspan="5" style="padding:8px 14px; text-align:left; width:100%; box-sizing:border-box;">
                             <div style="display:flex; justify-content:space-between; align-items:center; width:100%; max-width:100%; box-sizing:border-box; gap:10px;">
-                                <div style="font-style:italic; font-weight:normal; font-size:0.9em; line-height:1.5; color:var(--text-color); flex:1; word-break:break-word;">
+                                <div style="font-style:italic; font-weight:normal; font-size:0.88em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text-color); flex:1;">
                                     💭 <b>Commento:</b> "${commentText}"
                                 </div>
                                 <div style="flex-shrink:0;">${trashBtn}</div>
@@ -1249,7 +1249,7 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
 
             commentBox.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; width:100%; max-width:100%; box-sizing:border-box; gap:10px;">
-                    <div style="font-style:italic; font-weight:normal; line-height:1.5; color:var(--text-color); flex:1; word-break:break-word;">💭 <b>Commento:</b> "${commentText}"</div>
+                    <div style="font-style:italic; font-weight:normal; font-size:0.88em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text-color); flex:1;">💭 <b>Commento:</b> "${commentText}"</div>
                     <div style="flex-shrink:0;">${trashHtml}</div>
                 </div>
             `;

@@ -2197,6 +2197,10 @@ window.submitPostMatchComment = function() {
         return;
     }
 
+    if (commentText.length > 60) {
+        return alert("⚠️ Il commento è troppo lungo per stare su una singola riga!\n\nRiducilo a massimo 60 caratteri.");
+    }
+
     const mode = window.currentMode;
     const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
     let targetRef = null;
