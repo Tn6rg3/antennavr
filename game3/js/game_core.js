@@ -939,24 +939,27 @@ window.startCountdownSequence = function() {
     if (domCache.wpmDisplay) domCache.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
     if (domCache.scoreDisplay) domCache.scoreDisplay.textContent = `Punti: 0`;
 
-    // --- GESTIONE CONTATORE SPETTATORI (REAL-TIME PER QUALSIASI STANZA) ---
-    if (roomCode && db) {
-        if (els.spectatorsCountDisplay) {
-            els.spectatorsCountDisplay.style.display = 'inline-block';
-            els.spectatorsCountDisplay.textContent = '👁️ 0';
-        }
+    // --- GESTIONE CONTATORE SPETTATORI (VISIBILE SOLO SE ABILITATO NELLE IMPOSTAZIONI O SE CI SONO SPETTATORI) ---
+    const isSpectatorAllowedInMatch = !window.isSinglePlayer || (window.isAllowSpectators === true);
 
+    if (roomCode && db && isSpectatorAllowedInMatch) {
         if (listeners.spectators) try { db.ref(`rooms/${roomCode}/spectators`).off('value', listeners.spectators); } catch(e){}
 
         listeners.spectators = db.ref(`rooms/${roomCode}/spectators`).on('value', snap => {
-            const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+            const count = (snap.exists() && snap.val()) ? Object.keys(snap.val()).length : 0;
             window.activeSpectatorCount = count;
+
             if (els.spectatorsCountDisplay) {
-                els.spectatorsCountDisplay.textContent = `👁️ ${count}`;
-                els.spectatorsCountDisplay.style.transform = 'scale(1.2)';
-                setTimeout(() => { if(els.spectatorsCountDisplay) els.spectatorsCountDisplay.style.transform = 'scale(1)'; }, 200);
+                if (count > 0 || (window.isSinglePlayer && window.isAllowSpectators)) {
+                    els.spectatorsCountDisplay.style.display = 'inline-block';
+                    els.spectatorsCountDisplay.textContent = `👁️ ${count}`;
+                } else {
+                    els.spectatorsCountDisplay.style.display = 'none';
+                }
             }
         });
+    } else if (els.spectatorsCountDisplay) {
+        els.spectatorsCountDisplay.style.display = 'none';
     }
 
     // OGNI PARTITA PARTE SEMPRE DA ZERO SENZA ALCUN RECUPERO!
