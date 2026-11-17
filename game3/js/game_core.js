@@ -2574,8 +2574,17 @@ window.handleWordSubmission = function(userWord) {
         usedReplay = false;
         if (nextWordTimeout) clearTimeout(nextWordTimeout);
 
-        // --- FIX ASCOLTO: Ritardo più lungo per permettere alla voce di finire ---
-        const nextWordDelay = window.isSpeakMode ? 3000 : 1000;
+        // --- GESTIONE RITARDO TRASMISSIONE PROSSIMO CARATTERE / PAROLA ---
+        let nextWordDelay = window.isSpeakMode ? 3000 : 1000;
+        if (window.currentMode === 'chars') {
+            const groupLength = parseInt(document.getElementById('charsGroupLengthInput')?.value) || 1;
+            if (groupLength === 1) {
+                const charsAutoDelaySec = parseFloat(localStorage.getItem('cwgame_pref_chars_auto_delay') || document.getElementById('charsAutoDelaySelect')?.value || "0");
+                nextWordDelay = Math.round(charsAutoDelaySec * 1000);
+            } else {
+                nextWordDelay = 250;
+            }
+        }
 
         nextWordTimeout = setTimeout(() => {
             if (gameRunning) {
