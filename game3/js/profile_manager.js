@@ -428,11 +428,20 @@ window.loadAdvancedStats = function() {
     Promise.all([
         fetchStatsPromise,
         localHistPromise,
-        db.ref(`users/${userId}/history`).limitToLast(50).once('value').catch(() => null)
-    ]).then(([stats, localHist, histSnap]) => {
+        db.ref(`users/${userId}/history`).limitToLast(50).once('value').catch(() => null),
+        db.ref(`users/${userId}/history_details`).limitToLast(30).once('value').catch(() => null)
+    ]).then(([stats, localHist, histSnap, detailsSnap]) => {
         let historyData = localHist || [];
 
-        // Uniamo sempre le partite da Firebase se non ancora presenti nello storico locale (es. cambio PC / Smartphone)
+        // Mappa dei dettagli per arricchire lo storico quando ci si collega da un nuovo dispositivo (es. Smartphone)
+        const detailsMap = {};
+        if (detailsSnap && detailsSnap.exists()) {
+            detailsSnap.forEach(dChild => {
+                detailsMap[dChild.key] = dChild.val();
+            });
+        }
+
+        // Uniamo le partite da Firebase arricchendole con i dettagli parole
         if (histSnap && histSnap.exists()) {
             histSnap.forEach(child => {
                 const val = child.val();
@@ -440,14 +449,20 @@ window.loadAdvancedStats = function() {
                     const matchKey = child.key;
                     const matchTs = val.ts || (val.date ? new Date(val.date).getTime() : 0);
 
-                    const alreadyExists = historyData.some(m => {
+                    const existingMatch = historyData.find(m => {
                         const mKey = m.key || m.id || m.histKey;
                         const mTs = m.ts || (m.date ? new Date(m.date).getTime() : 0);
                         return (mKey && String(mKey) === String(matchKey)) || (mTs && Math.abs(mTs - matchTs) < 5000);
                     });
 
-                    if (!alreadyExists) {
-                        historyData.push({ key: matchKey, ...val });
+                    const wordDetails = detailsMap[matchKey] || val.details || val.matchDetails || [];
+
+                    if (existingMatch) {
+                        if ((!existingMatch.details || existingMatch.details.length === 0) && wordDetails.length > 0) {
+                            existingMatch.details = wordDetails;
+                        }
+                    } else {
+                        historyData.push({ key: matchKey, histKey: matchKey, details: wordDetails, ...val });
                     }
                 }
             });
