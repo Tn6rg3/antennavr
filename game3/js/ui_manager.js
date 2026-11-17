@@ -142,6 +142,7 @@ window.checkGameTypeUI = function() {
         groupCharSet: document.getElementById('groupCharSetContainer'),
         charsGroupLength: document.getElementById('charsGroupLengthContainer'),
         charsAutoDelay: document.getElementById('charsAutoDelayContainer'),
+        charsWeightKeyboard: document.getElementById('charsWeightKeyboardContainer'),
         koch: document.getElementById('setupKochLevelContainer'),
         memoryCards: document.getElementById('memoryCardCountContainer'),
         keyer: document.getElementById('mainMenuKeyerConfig')
@@ -166,6 +167,13 @@ window.checkGameTypeUI = function() {
     const groupLengthVal = parseInt(document.getElementById('charsGroupLengthInput')?.value) || 1;
     if (containers.charsGroupLength) containers.charsGroupLength.style.display = (selectedMode === 'chars') ? 'block' : 'none';
     if (containers.charsAutoDelay) containers.charsAutoDelay.style.display = (selectedMode === 'chars' && groupLengthVal === 1) ? 'flex' : 'none';
+    if (containers.charsWeightKeyboard) {
+        const isCharsMode = (selectedMode === 'chars');
+        containers.charsWeightKeyboard.style.display = isCharsMode ? 'block' : 'none';
+        if (isCharsMode && typeof window.renderCharsWeightKeyboard === 'function') {
+            window.renderCharsWeightKeyboard();
+        }
+    }
     if (containers.memoryCards) containers.memoryCards.style.display = (selectedMode === 'memory_cw') ? 'block' : 'none';
 
     // --- NUOVA LOGICA ASCOLTO (TTS) + RISPOSTA VOCALE + AVANZAMENTO AUTO ---
@@ -323,4 +331,54 @@ window.setLanguage = function(lang) {
     window.populateGameModesUI();
     window.checkGameTypeUI();
     if (typeof window.updateMuteBtnUI === 'function') window.updateMuteBtnUI();
+};
+
+window.selectedWeightedChars = new Set(JSON.parse(localStorage.getItem('cwgame_pref_boosted_chars') || "[]"));
+
+window.renderCharsWeightKeyboard = function() {
+    const grid = document.getElementById('charsWeightKeyboardGrid');
+    if (!grid) return;
+
+    const charSetType = (document.getElementById('groupCharSetInput')?.value) || 'letters';
+    let pool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    if (charSetType === 'numbers') {
+        pool = "0123456789";
+    } else if (charSetType === 'alphanumeric') {
+        pool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    } else if (charSetType === 'mixed' || charSetType === 'full') {
+        pool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,/?=-+@!:;()\"'";
+    }
+
+    grid.innerHTML = '';
+    const charArr = pool.split('');
+
+    charArr.forEach(char => {
+        const isSelected = window.selectedWeightedChars.has(char);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.style.cssText = `width:32px; height:32px; padding:0; font-size:0.9em; font-weight:bold; border-radius:6px; cursor:pointer; font-family:monospace; margin:2px; transition:all 0.15s; ${isSelected ? 'background:#00bcd4; color:#000000; border:2px solid #00e5ff; box-shadow:0 0 6px rgba(0,188,212,0.6); transform:scale(1.08);' : 'background:#f1f5f9; color:#1e293b; border:1px solid #cbd5e1;'}`;
+        btn.textContent = char;
+        btn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            window.toggleCharWeightBoost(char);
+        };
+        grid.appendChild(btn);
+    });
+};
+
+window.toggleCharWeightBoost = function(char) {
+    if (window.selectedWeightedChars.has(char)) {
+        window.selectedWeightedChars.delete(char);
+    } else {
+        window.selectedWeightedChars.add(char);
+    }
+    localStorage.setItem('cwgame_pref_boosted_chars', JSON.stringify(Array.from(window.selectedWeightedChars)));
+    window.renderCharsWeightKeyboard();
+};
+
+window.clearCharsWeightSelection = function() {
+    window.selectedWeightedChars.clear();
+    localStorage.setItem('cwgame_pref_boosted_chars', JSON.stringify([]));
+    window.renderCharsWeightKeyboard();
 };

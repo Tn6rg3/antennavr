@@ -391,11 +391,23 @@ window.GAME_MODES = {
                 pool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,/?=-+@!:;()\"'";
             }
 
+            // Caratteri potenziati selezionati dall'utente (con frequenza maggiorata)
+            const boostedChars = (window.selectedWeightedChars && window.selectedWeightedChars.size > 0)
+                ? Array.from(window.selectedWeightedChars).filter(c => pool.includes(c))
+                : [];
+
+            const boostPercent = parseInt(document.getElementById('charsBoostPercentInput')?.value) || 40;
+
             let groups = [];
             for (let i = 0; i < num; i++) {
                 let grp = "";
                 for (let j = 0; j < groupLength; j++) {
-                    grp += pool[Math.floor(Math.random() * pool.length)];
+                    const roll = Math.random() * 100;
+                    if (boostedChars.length > 0 && roll < boostPercent) {
+                        grp += boostedChars[Math.floor(Math.random() * boostedChars.length)];
+                    } else {
+                        grp += pool[Math.floor(Math.random() * pool.length)];
+                    }
                 }
                 groups.push(grp);
             }
