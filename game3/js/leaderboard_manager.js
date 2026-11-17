@@ -543,11 +543,13 @@ window.fetchAndRenderTriDailyLeaderboard = function() {
 
             if (commentText) {
                 html += `
-                    <tr id="${boxId}" style="display:none; background:rgba(0,188,212,0.1); border-bottom:1px solid rgba(0,188,212,0.25);">
-                        <td colspan="5" style="padding:8px 14px; font-size:0.85em; color:var(--text-color); text-align:left; width:100%;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box;">
-                                <span style="font-style:italic; font-weight:normal; line-height:1.4; word-break:break-word;">💭 <b>Commento:</b> "${commentText}"</span>
-                                ${trashBtn}
+                    <tr id="${boxId}" style="display:none; background:rgba(0,188,212,0.12); border-bottom:2px solid #00bcd4;">
+                        <td colspan="5" style="padding:10px 14px; text-align:left; width:100%; box-sizing:border-box;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; width:100%; max-width:100%; box-sizing:border-box; gap:10px;">
+                                <div style="font-style:italic; font-weight:normal; font-size:0.9em; line-height:1.5; color:var(--text-color); flex:1; word-break:break-word;">
+                                    💭 <b>Commento:</b> "${commentText}"
+                                </div>
+                                <div style="flex-shrink:0;">${trashBtn}</div>
                             </div>
                         </td>
                     </tr>
@@ -1223,15 +1225,13 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
         actionsScoreDiv.appendChild(scoreDiv);
         row.appendChild(actionsScoreDiv);
 
-        container.appendChild(row);
-
         if (player.comment) {
             const boxId = `player_comment_box_${index}_${player.id}`;
             const commentText = (typeof window.escapeHtml === 'function') ? window.escapeHtml(player.comment) : player.comment;
 
             const commentBtn = document.createElement('button');
             commentBtn.className = 'action-btn-small btn-secondary';
-            commentBtn.style.cssText = 'width:auto; padding:1px 6px; margin-left:6px; font-size:0.75em; display:inline-block;';
+            commentBtn.style.cssText = 'width:auto; padding:1px 6px; margin-left:6px; font-size:0.75em; display:inline-block; vertical-align:middle;';
             commentBtn.textContent = '💬';
             commentBtn.title = 'Leggi commento a caldo';
             commentBtn.onclick = (e) => {
@@ -1240,20 +1240,26 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
             };
             nameDiv.appendChild(commentBtn);
 
-            const commentBox = document.createElement('div');
-            commentBox.id = boxId;
-            commentBox.style.cssText = 'display:none; width:100%; margin:-2px 0 8px 0; padding:8px 12px; font-size:0.85em; color:var(--text-color); background:rgba(0,188,212,0.12); border-radius:0 0 8px 8px; border-left:4px solid #00bcd4; border-bottom:1px solid #00bcd4; box-sizing:border-box; clear:both;';
-
             const isMeOrAdmin = isMe || window.isAdmin;
             const trashHtml = isMeOrAdmin ? `<button onclick="window.deletePlayerComment('${player.dbPath}/comment', '${boxId}')" title="Elimina commento" style="background:none; border:none; color:#f44336; cursor:pointer; font-size:0.95em; margin-left:10px; padding:2px 6px;">🗑️</button>` : "";
 
+            const commentBox = document.createElement('div');
+            commentBox.id = boxId;
+            commentBox.style.cssText = 'display:none; width:100%; margin:-2px 0 8px 0; padding:10px 14px; font-size:0.88em; color:var(--text-color); background:rgba(0,188,212,0.12); border-radius:0 0 8px 8px; border-left:4px solid #00bcd4; border-bottom:2px solid #00bcd4; box-sizing:border-box; clear:both;';
+
             commentBox.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box;">
-                    <span style="font-style:italic; font-weight:normal; line-height:1.4; word-break:break-word;">💭 <b>Commento:</b> "${commentText}"</span>
-                    ${trashHtml}
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%; max-width:100%; box-sizing:border-box; gap:10px;">
+                    <div style="font-style:italic; font-weight:normal; line-height:1.5; color:var(--text-color); flex:1; word-break:break-word;">💭 <b>Commento:</b> "${commentText}"</div>
+                    <div style="flex-shrink:0;">${trashHtml}</div>
                 </div>
             `;
-            container.appendChild(commentBox);
+            player._commentBoxElement = commentBox;
+        }
+
+        container.appendChild(row);
+
+        if (player._commentBoxElement) {
+            container.appendChild(player._commentBoxElement);
         }
     });
 };
