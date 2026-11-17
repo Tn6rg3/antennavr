@@ -4273,7 +4273,6 @@ window.triggerCommunityMilestoneCelebration = function(milestoneNumber) {
         }, 500);
     }
 };
-};
 
 window.startMilestoneConfetti = function(durationMs = 4000) {
     const canvas = document.getElementById('milestoneConfettiCanvas');
