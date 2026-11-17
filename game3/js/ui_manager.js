@@ -22,17 +22,17 @@ window.populateGameModesUI = function() {
         // --- LOGICA FILTRI ---
         if (isSingle) {
             // QSO, modalità Arcade (Pioggia, Torre, Memory CW), Tx/Rx e Gruppi non sono ammesse in Solo
-            if (mode.id === 'qso' || mode.id === 'code_groups' || mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'memory_cw' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'qso_audio_search' || mode.id === 'addestra_ia') return;
+            if (mode.id === 'qso' || mode.id === 'code_groups' || mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'memory_cw' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'addestra_ia') return;
         } else if (isMulti) {
             // Modalità ammesse in Multi
-            if (mode.id === 'code_groups' || mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'memory_cw' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'qso_audio_search' || mode.id === 'addestra_ia') return;
+            if (mode.id === 'code_groups' || mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'memory_cw' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'addestra_ia') return;
         } else if (isCoop) {
             if (mode.id !== 'conquest') return;
         } else if (isTx) {
-            // Mostriamo Standard, Gruppi 5 Chars, Gruppi Tx, Ricezione Audio e Ascolto QSO Reali
-            if (mode.id !== 'standard' && mode.id !== 'code_groups' && mode.id !== 'groups_tx' && mode.id !== 'real_tx' && mode.id !== 'qso_audio_search') return;
+            // Mostriamo Standard, Gruppi 5 Chars, Gruppi Tx e Ricezione Audio
+            if (mode.id !== 'standard' && mode.id !== 'code_groups' && mode.id !== 'groups_tx' && mode.id !== 'real_tx') return;
         } else {
-            if (mode.id === 'code_groups' || mode.id === 'qso_audio_search' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'addestra_ia') return;
+            if (mode.id === 'code_groups' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'addestra_ia') return;
             if (typeInput.value === 'arcade' && mode.id !== 'arcade' && mode.id !== 'la_torre') return;
             if (typeInput.value === 'tournament') return; // Gestito da optgroup
         }
@@ -47,7 +47,6 @@ window.populateGameModesUI = function() {
             else if (mode.id === 'code_groups') opt.textContent = lang === 'it' ? "Esercizio Gruppi (5 Chars)" : "Code Groups Exercise (5 Chars)";
             else if (mode.id === 'groups_tx') opt.textContent = lang === 'it' ? "Trasmissione Gruppi" : "Groups Transmission";
             else if (mode.id === 'real_tx') opt.textContent = lang === 'it' ? "Ricezione Audio (Tasto Reale)" : "Audio Reception (Real Key)";
-            else if (mode.id === 'qso_audio_search') opt.textContent = lang === 'it' ? "Ascolto QSO Reali 🎧" : "Listen Real QSOs 🎧";
             else return;
         } else {
             opt.textContent = lang === 'it' ? mode.titleIt : mode.titleEn;
@@ -150,7 +149,7 @@ window.checkGameTypeUI = function() {
 
     if (containers.timeout) containers.timeout.style.display = (isSingle || isTrn || isCoop || isArcadeType || isTx || selectedMode === 'qso') ? 'none' : 'block';
 
-    const isFixedAllowed = (isSingle || isTx) && selectedMode !== 'qso' && selectedMode !== 'real_tx' && selectedMode !== 'groups_tx' && selectedMode !== 'qso_audio_search';
+    const isFixedAllowed = (isSingle || isTx) && selectedMode !== 'qso' && selectedMode !== 'real_tx' && selectedMode !== 'groups_tx';
     const isEasyAllowed = isFixedAllowed && selectedMode !== 'daily_challenge' && selectedMode !== 'tri_daily' && selectedMode !== 'code_groups' && selectedMode !== 'quiz';
     if (containers.fixed) containers.fixed.style.display = isFixedAllowed ? 'flex' : 'none';
     if (containers.easy) containers.easy.style.display = isEasyAllowed ? 'flex' : 'none';

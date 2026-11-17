@@ -4760,11 +4760,6 @@ if (els.createRoomBtn) {
         window.wordsPerGroup = (window.currentMode === 'standard_plus') ? (parseInt(document.getElementById('wordsPerGroupInput')?.value) || 2) : 1;
 
         if (gType === 'transmission') {
-            if (gMode === 'qso_audio_search') {
-                window.showScreen('qsoAudioScreen');
-                if (typeof window.initQsoAudioModule === 'function') window.initQsoAudioModule();
-                return;
-            }
             if (gMode === 'groups_tx' || gMode === 'real_tx') {
                 window.startTransmissionFree(gMode);
                 return;
