@@ -1683,6 +1683,19 @@ window.finishGame = async function() {
     if (els.gameInputArea) els.gameInputArea.style.display = 'none';
     if (els.scoreDisplay) els.scoreDisplay.innerHTML = `<b style="color:var(--champ-color)">FINITO!</b> PT: ${totalScore}`;
 
+    // --- COMMENTO A CALDO POST-SFIDA (Sfida Giornaliera, Sfida Tripla, 50 Nominativi) ---
+    const isTargetCommentMode = ['daily_challenge', 'tri_daily', 'weekly_callsign'].includes(window.currentMode);
+    if (isTargetCommentMode && totalScore > 0 && db && window.myId) {
+        setTimeout(() => {
+            const modal = document.getElementById('postMatchCommentModal');
+            const input = document.getElementById('postMatchCommentInput');
+            if (modal) {
+                if (input) input.value = "";
+                modal.style.display = 'flex';
+            }
+        }, 1200);
+    }
+
     // --- NUOVO: AUTO-NAVIGAZIONE PER SFIDA GIORNALIERA ---
     if (window.currentMode === 'daily_challenge' && totalScore > 0) {
         setTimeout(() => {

@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.318";
+const APP_VERSION = "20261105.319";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -2185,6 +2185,47 @@ window.sanitizeUserHistoryOnFirebase = async function() {
     } catch(e) {
         alert("Errore pulizia: " + e.message);
     }
+};
+
+window.submitPostMatchComment = function() {
+    const input = document.getElementById('postMatchCommentInput');
+    const commentText = input ? input.value.trim() : "";
+    const modal = document.getElementById('postMatchCommentModal');
+
+    if (!commentText) {
+        if (modal) modal.style.display = 'none';
+        return;
+    }
+
+    const mode = window.currentMode;
+    const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+    let targetRef = null;
+
+    if (mode === 'daily_challenge') {
+        targetRef = db.ref(`leaderboard/daily_challenge/${todayStr}/${window.myId}/comment`);
+    } else if (mode === 'tri_daily') {
+        targetRef = db.ref(`leaderboard/tri_daily/${todayStr}/${window.myId}/comment`);
+    } else if (mode === 'weekly_callsign') {
+        const eventKey = typeof window.getWeeklyCallsignEventKey === 'function' ? window.getWeeklyCallsignEventKey() : todayStr;
+        targetRef = db.ref(`leaderboard/weekly_callsign_challenge/${eventKey}/${window.myId}/comment`);
+    }
+
+    if (targetRef) {
+        targetRef.set(commentText).then(() => {
+            if (typeof showToast === 'function') showToast("💬 Commento salvato!");
+            if (modal) modal.style.display = 'none';
+        }).catch(err => {
+            console.error("Comment Save Error:", err);
+            if (modal) modal.style.display = 'none';
+        });
+    } else {
+        if (modal) modal.style.display = 'none';
+    }
+};
+
+window.skipPostMatchComment = function() {
+    const modal = document.getElementById('postMatchCommentModal');
+    if (modal) modal.style.display = 'none';
 };
 
 window.renderAdminCwgEditionsList = function() {

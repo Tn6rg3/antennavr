@@ -519,20 +519,40 @@ window.fetchAndRenderTriDailyLeaderboard = function() {
             const rank = idx + 1;
             const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
             const isMe = (p.id === window.myId);
-            const name = p.name || 'Telegrafista';
+            const name = (typeof window.escapeHtml === 'function') ? window.escapeHtml(p.name || 'Telegrafista') : (p.name || 'Telegrafista');
             const slots = `${p.completedSlots || 1}/3`;
             const score = p.totalScore || 0;
             const wpm = p.peakWpm || 20;
 
+            const boxId = `tri_comment_box_${idx}_${p.id}`;
+            const commentText = p.comment ? ((typeof window.escapeHtml === 'function') ? window.escapeHtml(p.comment) : p.comment) : "";
+            const commentBtn = commentText ? `<button class="action-btn-small btn-secondary" onclick="window.togglePlayerCommentBox('${boxId}')" title="Leggi commento a caldo" style="width:auto; padding:1px 5px; margin-left:6px; font-size:0.75em;">💬</button>` : "";
+            const isMeOrAdmin = (isMe || window.isAdmin);
+            const commentPath = `leaderboard/tri_daily/${todayStr}/${p.id}/comment`;
+            const trashBtn = isMeOrAdmin ? `<button onclick="window.deletePlayerComment('${commentPath}', '${boxId}')" title="Elimina commento" style="background:none; border:none; color:#f44336; cursor:pointer; font-size:0.9em; margin-left:6px;">🗑️</button>` : "";
+
             html += `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.05); ${isMe ? 'background:rgba(255,152,0,0.15); font-weight:bold;' : ''}">
                     <td style="padding:8px 6px;">${medal}</td>
-                    <td style="padding:8px 6px;">${name}</td>
+                    <td style="padding:8px 6px;">${name} ${commentBtn}</td>
                     <td style="padding:8px 6px; text-align:center; color:#2e7d32;"><b>${slots}</b></td>
                     <td style="padding:8px 6px; text-align:right; color:#ff9800;"><b>${score} pt</b></td>
                     <td style="padding:8px 6px; text-align:right;">${wpm} WPM</td>
                 </tr>
             `;
+
+            if (commentText) {
+                html += `
+                    <tr id="${boxId}" style="display:none; background:rgba(0,188,212,0.08); border-bottom:1px solid rgba(0,188,212,0.2);">
+                        <td colspan="5" style="padding:6px 12px; font-size:0.8em; color:var(--text-color); text-align:left;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span>💭 <em>"${commentText}"</em></span>
+                                ${trashBtn}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
         });
 
         html += `</tbody></table>`;
@@ -1528,4 +1548,25 @@ window.fetchAndRenderGameRatings = function() {
             els.leaderboardContainer.appendChild(row);
         });
     });
+};
+
+window.togglePlayerCommentBox = function(boxId) {
+    const box = document.getElementById(boxId);
+    if (!box) return;
+    box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
+};
+
+window.deletePlayerComment = function(commentDbPath, boxId) {
+    if (!db || !commentDbPath) return;
+    const isMeOrAdmin = window.isAdmin || (commentDbPath.includes(window.myId));
+    if (!isMeOrAdmin) return alert("⚠️ Puoi eliminare solo i tuoi commenti.");
+
+    if (!confirm("Sei sicuro di voler eliminare questo commento dalla classifica?")) return;
+
+    db.ref(commentDbPath).remove().then(() => {
+        if (typeof showToast === 'function') showToast("🗑️ Commento eliminato.");
+        const box = document.getElementById(boxId);
+        if (box) box.style.display = 'none';
+    }).catch(err => alert("Errore eliminazione: " + err.message));
+};
 };
