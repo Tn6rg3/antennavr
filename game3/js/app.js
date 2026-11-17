@@ -4917,10 +4917,16 @@ window.openAppUsageStatsModal = async function() {
     if (!modal) return;
     modal.style.display = 'flex';
 
+    // Uso cache locale se gia scaricata per azzerare il consumo di banda
+    if (window.cachedAppUsageStatsDataPoints && Array.isArray(window.cachedAppUsageStatsDataPoints) && window.cachedAppUsageStatsDataPoints.length > 0) {
+        window.renderAppUsageStatsChart(window.cachedAppUsageStatsDataPoints);
+        return;
+    }
+
     if (!db) return;
 
     try {
-        const snap = await db.ref('activity/daily').limitToLast(14).once('value');
+        const snap = await db.ref('activity/daily').once('value');
         const dailyData = snap.exists() ? snap.val() : {};
 
         const dataPoints = [];
@@ -4935,14 +4941,19 @@ window.openAppUsageStatsModal = async function() {
                         mCount += uData;
                     }
                 });
+
+                const parts = dateStr.split('-');
+                const formattedDate = (parts.length === 3) ? `${parts[2]}/${parts[1]}` : dateStr.slice(-5);
+
                 dataPoints.push({
-                    date: dateStr.slice(-5),
+                    date: formattedDate,
                     users: uCount,
                     matches: mCount
                 });
             }
         });
 
+        window.cachedAppUsageStatsDataPoints = dataPoints;
         window.renderAppUsageStatsChart(dataPoints);
     } catch(e) {
         console.error("AppUsageStats Error:", e);
