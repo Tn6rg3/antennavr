@@ -142,6 +142,7 @@ window.checkGameTypeUI = function() {
         wordLen: document.getElementById('wordLengthContainer'),
         groupCharSet: document.getElementById('groupCharSetContainer'),
         charsGroupLength: document.getElementById('charsGroupLengthContainer'),
+        charsAutoDelay: document.getElementById('charsAutoDelayContainer'),
         koch: document.getElementById('setupKochLevelContainer'),
         memoryCards: document.getElementById('memoryCardCountContainer'),
         keyer: document.getElementById('mainMenuKeyerConfig')
@@ -163,7 +164,9 @@ window.checkGameTypeUI = function() {
     const isWordLenAllowed = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection' || selectedMode === 'custom' || selectedMode === 'target_training');
     if (containers.wordLen) containers.wordLen.style.display = isWordLenAllowed ? 'block' : 'none';
     if (containers.groupCharSet) containers.groupCharSet.style.display = (selectedMode === 'code_groups' || selectedMode === 'chars') ? 'block' : 'none';
+    const groupLengthVal = parseInt(document.getElementById('charsGroupLengthInput')?.value) || 1;
     if (containers.charsGroupLength) containers.charsGroupLength.style.display = (selectedMode === 'chars') ? 'block' : 'none';
+    if (containers.charsAutoDelay) containers.charsAutoDelay.style.display = (selectedMode === 'chars' && groupLengthVal === 1) ? 'flex' : 'none';
     if (containers.memoryCards) containers.memoryCards.style.display = (selectedMode === 'memory_cw') ? 'block' : 'none';
 
     // --- NUOVA LOGICA ASCOLTO (TTS) + RISPOSTA VOCALE + AVANZAMENTO AUTO ---

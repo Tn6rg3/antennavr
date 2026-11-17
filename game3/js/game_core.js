@@ -2112,28 +2112,48 @@ if (els.permanentGameInput) {
             return;
         }
         if (window.currentMode === 'chars' && inputActive && gameRunning) {
-            const rawVal = els.permanentGameInput.value;
-            // Estraiamo solo il carattere digitato ignorando spazi/controlli aggiunti dal tablet
-            const cleanVal = rawVal.replace(/\s/g, '').toUpperCase();
-            if (cleanVal.length >= 1) {
-                // Prendiamo l'ultimo carattere inserito in caso di buffer tastiera
-                window.handleWordSubmission(cleanVal[cleanVal.length - 1]);
-                els.permanentGameInput.value = "";
+            const groupLength = parseInt(document.getElementById('charsGroupLengthInput')?.value) || 1;
+            // Invio automatico istantaneo o temporizzato SOLO SE il gruppo e da 1 singolo carattere
+            if (groupLength === 1) {
+                const rawVal = els.permanentGameInput.value;
+                const cleanVal = rawVal.replace(/\s/g, '').toUpperCase();
+                if (cleanVal.length >= 1) {
+                    const charDelaySec = parseFloat(localStorage.getItem('cwgame_pref_chars_auto_delay') || document.getElementById('charsAutoDelaySelect')?.value || "0");
+                    if (charDelaySec > 0) {
+                        if (window.charsAutoSubmitTimer) clearTimeout(window.charsAutoSubmitTimer);
+                        window.charsAutoSubmitTimer = setTimeout(() => {
+                            if (inputActive && gameRunning) {
+                                window.handleWordSubmission(els.permanentGameInput.value.replace(/\s/g, '').toUpperCase().slice(-1));
+                                els.permanentGameInput.value = "";
+                            }
+                        }, charDelaySec * 1000);
+                    } else {
+                        window.handleWordSubmission(cleanVal[cleanVal.length - 1]);
+                        els.permanentGameInput.value = "";
+                    }
+                }
             }
         }
     });
     els.permanentGameInput.addEventListener('keydown', function(e) {
-        if ((e.key === 'Enter' || e.keyCode === 13) && inputActive && gameRunning && window.currentMode !== 'chars') {
-            const val = els.permanentGameInput.value.trim().toUpperCase();
-            if (val) {
-                // --- SBLOCCO VOCE PER MOBILE (AL TOCCO ENTER) ---
-                if (window.isSpeakMode && ('speechSynthesis' in window)) {
-                    const silent = new SpeechSynthesisUtterance(" ");
-                    silent.volume = 0.001;
-                    window.speechSynthesis.speak(silent);
+        if ((e.key === 'Enter' || e.keyCode === 13) && inputActive && gameRunning) {
+            const groupLength = parseInt(document.getElementById('charsGroupLengthInput')?.value) || 1;
+            if (window.currentMode !== 'chars' || groupLength > 1) {
+                if (window.charsAutoSubmitTimer) {
+                    clearTimeout(window.charsAutoSubmitTimer);
+                    window.charsAutoSubmitTimer = null;
                 }
-                window.handleWordSubmission(val);
-                els.permanentGameInput.value = "";
+                const val = els.permanentGameInput.value.trim().toUpperCase();
+                if (val) {
+                    // --- SBLOCCO VOCE PER MOBILE (AL TOCCO ENTER) ---
+                    if (window.isSpeakMode && ('speechSynthesis' in window)) {
+                        const silent = new SpeechSynthesisUtterance(" ");
+                        silent.volume = 0.001;
+                        window.speechSynthesis.speak(silent);
+                    }
+                    window.handleWordSubmission(val);
+                    els.permanentGameInput.value = "";
+                }
             }
         }
     });

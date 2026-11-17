@@ -4,7 +4,7 @@
 
 const BOT_USERNAME = "cwappgame_bot";
 const WEBAPP_NAME = "cwgame";
-const APP_VERSION = "20261105.317";
+const APP_VERSION = "20261105.318";
 
 // URL della Web App di Google Apps Script per la validazione identità (Letto dinamicamente da Firebase Config)
 let VALIDATION_SERVER_URL = window.VALIDATION_SERVER_URL || "";
@@ -943,6 +943,7 @@ async function initGame() {
     if (document.getElementById('voiceInputCheckbox')) document.getElementById('voiceInputCheckbox').checked = localStorage.getItem('cwgame_pref_voice_input') === 'true';
     if (document.getElementById('autoAdvanceCheckbox')) document.getElementById('autoAdvanceCheckbox').checked = localStorage.getItem('cwgame_pref_auto_advance') === 'true';
     if (document.getElementById('autoAdvanceDelaySelect')) document.getElementById('autoAdvanceDelaySelect').value = localStorage.getItem('cwgame_pref_auto_advance_delay') || "5";
+    if (document.getElementById('charsAutoDelaySelect')) document.getElementById('charsAutoDelaySelect').value = localStorage.getItem('cwgame_pref_chars_auto_delay') || "0";
 
     // SALVATAGGIO AUTOMATICO DELLE PREFERENZE AL CAMBIO
     const savePref = (key, val) => localStorage.setItem(key, val);
@@ -957,6 +958,8 @@ async function initGame() {
     document.getElementById('voiceInputCheckbox')?.addEventListener('change', (e) => savePref('cwgame_pref_voice_input', e.target.checked));
     document.getElementById('autoAdvanceCheckbox')?.addEventListener('change', (e) => savePref('cwgame_pref_auto_advance', e.target.checked));
     document.getElementById('autoAdvanceDelaySelect')?.addEventListener('change', (e) => savePref('cwgame_pref_auto_advance_delay', e.target.value));
+    document.getElementById('charsAutoDelaySelect')?.addEventListener('change', (e) => savePref('cwgame_pref_chars_auto_delay', e.target.value));
+    document.getElementById('charsGroupLengthInput')?.addEventListener('change', () => window.checkGameTypeUI?.());
 
     isChatCwEnabled = localStorage.getItem(STORAGE_CHAT_CW_ENABLED) === 'true';
     chatCwWpm = parseInt(localStorage.getItem(STORAGE_CHAT_CW_WPM)) || 20;
