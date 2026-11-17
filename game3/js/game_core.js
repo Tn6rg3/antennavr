@@ -2140,19 +2140,20 @@ if (els.permanentGameInput) {
                 const rawVal = els.permanentGameInput.value;
                 const cleanVal = rawVal.replace(/\s/g, '').toUpperCase();
                 if (cleanVal.length >= 1) {
+                    const keypressTs = Date.now(); // CATTURA REALE MILLISECONDI REAZIONE TASTIERA
                     const charToSubmit = cleanVal[cleanVal.length - 1];
-                    els.permanentGameInput.value = ""; // Pulizia istantanea dell'input in 0ms!
+                    els.permanentGameInput.value = ""; // Pulizia istantanea input in 0ms
 
                     const charDelaySec = parseFloat(localStorage.getItem('cwgame_pref_chars_auto_delay') || document.getElementById('charsAutoDelaySelect')?.value || "0.3");
                     if (charDelaySec > 0) {
                         if (window.charsAutoSubmitTimer) clearTimeout(window.charsAutoSubmitTimer);
                         window.charsAutoSubmitTimer = setTimeout(() => {
                             if (inputActive && gameRunning) {
-                                window.handleWordSubmission(charToSubmit);
+                                window.handleWordSubmission(charToSubmit, keypressTs);
                             }
                         }, charDelaySec * 1000);
                     } else {
-                        window.handleWordSubmission(charToSubmit);
+                        window.handleWordSubmission(charToSubmit, keypressTs);
                     }
                 }
             }
@@ -2182,7 +2183,7 @@ if (els.permanentGameInput) {
     });
 }
 
-window.handleWordSubmission = function(userWord) {
+window.handleWordSubmission = function(userWord, exactKeypressTimestamp = null) {
     if (window.autoAdvanceTimer) {
         clearTimeout(window.autoAdvanceTimer);
         window.autoAdvanceTimer = null;
@@ -2337,7 +2338,9 @@ window.handleWordSubmission = function(userWord) {
     if (!currentWord) return;
 
     let points = 0, scoreColor = "";
-    const reactionMs = Date.now() - lastWordStartTime;
+    const reactionMs = (exactKeypressTimestamp && exactKeypressTimestamp > lastWordStartTime)
+        ? (exactKeypressTimestamp - lastWordStartTime)
+        : Math.max(0, Date.now() - lastWordStartTime);
     let levDist = 0;
 
     // --- LOGICA SPECIALE PER PAROLE COMUNI + (GRANULARE) ---
