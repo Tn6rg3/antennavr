@@ -63,14 +63,15 @@
                 statusText.innerHTML = "Rete lenta o aggiornamento in corso...<br><small>Stiamo tentando di avvisare il bot.</small>";
             }
 
-            // Tentativo di notifica via GAS (indipendente da altri file JS)
+            // Tentativo di notifica via GAS (indipendente da altri file JS o da Firebase)
             try {
                 var tg = window.Telegram.WebApp;
                 var userId = (tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user.id : window.myId;
                 if (userId) {
                     var errorMsg = "⚠️ <b>L'app sta impiegando troppo tempo a caricarsi.</b>\nPossibile problema di rete o aggiornamento. Riprova tra poco! 📻";
-                    var url = (window.VALIDATION_SERVER_URL || "") + "?action=notify&targetId=" + userId + "&text=" + encodeURIComponent(errorMsg);
-                    fetch(url, { method: 'GET', redirect: 'follow' }).catch(function(e){ console.warn("Watchdog notify error", e); });
+                    var serverUrl = window.VALIDATION_SERVER_URL || "https://script.google.com/macros/s/AKfycbyQWLxiT_tcvjYZg8ntkwPUTsUhLv4MGx0wGDnC3d2JDKuiuT6nmzS3fuX1_R-t0v7tjg/exec";
+                    var url = serverUrl + "?action=notify&targetId=" + userId + "&text=" + encodeURIComponent(errorMsg);
+                    fetch(url, { method: 'GET', mode: 'no-cors' }).catch(function(e){ console.warn("Watchdog notify error", e); });
                 }
             } catch(e) {}
         }
