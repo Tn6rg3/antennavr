@@ -889,7 +889,12 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
         }
 
         sessions.sort((a,b) => (a.ts || 0) - (b.ts || 0));
-        sessions = sessions.slice(-35);
+        // Storico Globale: Mantiene l'intero arco temporale dal Giorno 1 (fino a 500 sessioni)
+        if (period !== 'daily_challenge' && period !== 'today' && period !== 'last_match') {
+            if (sessions.length > 500) sessions = sessions.slice(-500);
+        } else {
+            if (sessions.length > 100) sessions = sessions.slice(-100);
+        }
     }
 
     const badgeAvgWpm = document.getElementById('badgeAvgWpm');
