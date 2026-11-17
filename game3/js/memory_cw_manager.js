@@ -114,7 +114,8 @@ window.updateMemoryUI = function() {
             cardBtn.style.background = "rgba(76, 175, 80, 0.25)";
             cardBtn.style.border = "2px solid #4caf50";
             cardBtn.style.color = "#00ff66";
-            cardBtn.innerHTML = `<span>✅</span><b style="font-size:0.8em; margin-top:2px;">${card.word}</b>`;
+            const safeWord = (typeof window.escapeHtml === 'function') ? window.escapeHtml(card.word) : card.word;
+            cardBtn.innerHTML = `<span>✅</span><b style="font-size:0.8em; margin-top:2px;">${safeWord}</b>`;
             cardBtn.disabled = true;
         } else if (card.isFlipped) {
             cardBtn.style.background = "rgba(0, 188, 212, 0.3)";

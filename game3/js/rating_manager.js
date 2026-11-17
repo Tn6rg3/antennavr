@@ -77,9 +77,9 @@ window.loadUserRatings = function() {
             const div = document.createElement('div');
             div.style.cssText = "display:grid; grid-template-columns: 1fr 35px 35px; align-items:center; gap:10px; padding:10px 12px; background:rgba(255,255,255,0.05); border-radius:12px; margin-bottom:8px; border:1px solid rgba(255,255,255,0.08); width:100%; box-sizing:border-box;";
 
-            const info = document.createElement('div');
-            info.style.cssText = "min-width: 0; text-align: left; overflow:hidden;";
-            info.innerHTML = `<b style="color:var(--link-color); font-size:0.85em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;">${modeCfg.titleIt}</b><small style="opacity:0.6; font-size:0.65em; text-transform:uppercase; display:block;">${type}</small>`;
+            const safeTitle = (typeof window.escapeHtml === 'function') ? window.escapeHtml(modeCfg.titleIt) : modeCfg.titleIt;
+            const safeType = (typeof window.escapeHtml === 'function') ? window.escapeHtml(type) : type;
+            info.innerHTML = `<b style="color:var(--link-color); font-size:0.85em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;">${safeTitle}</b><small style="opacity:0.6; font-size:0.65em; text-transform:uppercase; display:block;">${safeType}</small>`;
 
             const btnUp = document.createElement('button');
             btnUp.innerHTML = '👍';
