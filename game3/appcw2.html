@@ -171,6 +171,29 @@
     <button onclick="document.getElementById('maxWpmRecordsModal').style.display='none'" class="btn-success" style="width:100%; padding:10px; font-weight:bold; font-size:0.9em;">CHIUDI ✅</button>
 </div>
 
+<!-- POPUP GRAFICO STATISTICHE UTILIZZO COMMUNITY (SVOLGIMENTO NEL TEMPO) -->
+<div id="appUsageStatsModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 450px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5600; border: 2px solid #00bcd4; border-radius: 14px; padding: 18px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.7); text-align: center; max-height: 95vh; overflow-y: auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h3 style="color: #00bcd4; margin: 0; font-size: 1.1em; display:flex; align-items:center; gap:6px;">📊 Statistiche Utilizzo Community</h3>
+        <button onclick="document.getElementById('appUsageStatsModal').style.display='none'" class="btn-secondary" style="width:auto; padding:2px 8px; margin:0; font-size:0.8em;">✖️</button>
+    </div>
+
+    <p style="font-size:0.8em; color:var(--hint-color); margin:0 0 12px 0;">Andamento nel tempo degli Utenti Giornalieri e delle Partite Giocate.</p>
+
+    <!-- LEGGENDA GRAFICO -->
+    <div style="display:flex; justify-content:center; gap:16px; margin-bottom:10px; font-size:0.8em; font-weight:bold;">
+        <span style="color:#00ff66;">🟢 Utenti Giornalieri</span>
+        <span style="color:#ff9800;">🟠 Partite Giocate</span>
+    </div>
+
+    <!-- CANVAS GRAFICO CURVE MORBIDE -->
+    <div style="width:100%; background:rgba(0,0,0,0.3); border-radius:10px; padding:8px; box-sizing:border-box; border:1px solid rgba(255,255,255,0.1); margin-bottom:12px;">
+        <canvas id="appUsageStatsCanvas" width="380" height="200" style="width:100%; height:180px; display:block;"></canvas>
+    </div>
+
+    <button onclick="document.getElementById('appUsageStatsModal').style.display='none'" class="btn-success" style="width:100%; padding:10px; font-weight:bold; font-size:0.9em; background:#00bcd4; color:#000; border:none; cursor:pointer;">CHIUDI ✅</button>
+</div>
+
 <!-- POPUP HUB SFIDA TRIPLA GIORNALIERA -->
 <div id="triDailyModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 450px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5200; border: 2px solid #ff9800; border-radius: 14px; padding: 18px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.6); text-align: center; max-height: 95vh; overflow-y: auto;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -700,8 +723,8 @@
                 <ul id="onlineUsersList" class="data-list">
                     <li id="txt_you_are_alone" style="justify-content: center; color: var(--hint-color); background: none; border: none;">Sei solo.</li>
                 </ul>
-                <div style="text-align: center; font-size: 0.65em; color: var(--hint-color); margin-top: auto; padding-top: 5px;">
-                    Versione: <span id="appVersionFooter">--</span> | <span id="totalMatchesBadge" style="color:var(--champ-color); font-weight:bold;">🎮 Partite Oggi: --</span>
+                <div style="text-align: center; font-size: 0.7em; color: var(--hint-color); margin-top: auto; padding-top: 5px;">
+                    V: <span id="appVersionFooter">--</span> | <span id="totalMatchesBadge" style="color:var(--champ-color); font-weight:bold;">Partite: --</span> | <button onclick="window.openAppUsageStatsModal()" style="background:none; border:none; color:var(--link-color); font-size:1em; font-weight:bold; cursor:pointer; text-decoration:underline; padding:0;">📊 Statistiche</button>
                 </div>
             </div>
         </div>
