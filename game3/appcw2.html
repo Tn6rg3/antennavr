@@ -195,6 +195,22 @@
     <button onclick="document.getElementById('appUsageStatsModal').style.display='none'" class="btn-success" style="width:100%; padding:10px; font-weight:bold; font-size:0.9em; background:#00bcd4; color:#000; border:none; cursor:pointer;">CHIUDI ✅</button>
 </div>
 
+<!-- CANVAS CORIANDOLI DALL'ALTO PER TRAGUARDI PARTITE -->
+<canvas id="milestoneConfettiCanvas" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; pointer-events:none; z-index:99999;"></canvas>
+
+<!-- POPUP FESTEGGIAMENTO TRAGUARDO 100 / 200 / 300 PARTITE -->
+<div id="matchesMilestoneModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 420px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 99990; border: 3px solid #ffd700; border-radius: 16px; padding: 22px 18px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 40px rgba(255,215,0,0.6); text-align: center;">
+    <span style="font-size: 4em; margin-bottom: 4px; animation: pulse 1.5s infinite;">🏆</span>
+    <h2 style="color: #ffd700; margin: 0 0 8px 0; font-size: 1.35em; text-shadow: 0 2px 8px rgba(0,0,0,0.5);">TRAGUARDO STRAORDINARIO!</h2>
+    <p id="matchesMilestoneText" style="font-size: 1em; font-weight: bold; color: var(--text-color); margin-bottom: 12px; line-height: 1.4;">
+        Hai appena completato 100 Partite!
+    </p>
+    <p style="font-size: 0.82em; color: var(--hint-color); margin-bottom: 16px;">
+        La community di Sfida Telegrafia celebra questo traguardo di partecipazione collettiva! Grazie a tutti i telegrafisti per l'entusiasmo! 📻⚡
+    </p>
+    <button onclick="document.getElementById('matchesMilestoneModal').style.display='none'" class="btn-success" style="width:100%; padding:12px; font-weight:bold; font-size:1.05em; background: linear-gradient(135deg, #ffd700, #ff9800); color:#000; border:none; cursor:pointer;">AVANTI CON GRINTA 🚀</button>
+</div>
+
 <!-- POPUP HUB SFIDA TRIPLA GIORNALIERA -->
 <div id="triDailyModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 450px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 5200; border: 2px solid #ff9800; border-radius: 14px; padding: 18px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.6); text-align: center; max-height: 95vh; overflow-y: auto;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
