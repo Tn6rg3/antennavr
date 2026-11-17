@@ -282,6 +282,21 @@ th { background-color: var(--bg-color); position: sticky; top: 0; z-index: 10; }
 
 #loadingText { font-style: italic; color: #ff9800; margin-bottom: 10px; font-weight: bold; text-align:center; font-size: 0.9em; }
 
+/* ANIMAZIONE VIBRAZIONE PAGINA HOME (TRAGUARDO 100/200/300 PARTITE) */
+.milestone-screen-shake {
+    animation: milestoneShake 0.8s ease-in-out;
+}
+
+@keyframes milestoneShake {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    15% { transform: translate(-8px, 6px) rotate(-1.5deg); }
+    30% { transform: translate(8px, -6px) rotate(1.5deg); }
+    45% { transform: translate(-6px, 4px) rotate(-1deg); }
+    60% { transform: translate(6px, -4px) rotate(1deg); }
+    75% { transform: translate(-3px, 2px) rotate(-0.5deg); }
+    90% { transform: translate(3px, -2px) rotate(0.5deg); }
+}
+
 /* =========================================================
    TAB BAR, SCHEDE & OPZIONI DI GIOCO
    ========================================================= */
