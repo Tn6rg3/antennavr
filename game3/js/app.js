@@ -528,6 +528,19 @@ window.loadRegolamento = async function() {
     }
 };
 
+window.toggleRegolamentoBox = function() {
+    const box = document.getElementById('regolamentoContainer');
+    const btn = document.getElementById('btnToggleRegolamento');
+    if (!box) return;
+    if (box.style.display === 'none' || !box.style.display) {
+        box.style.display = 'block';
+        if (btn) btn.textContent = '📜 Regolamento & Guida 🔼';
+    } else {
+        box.style.display = 'none';
+        if (btn) btn.textContent = '📜 Regolamento & Guida 🔽';
+    }
+};
+
 if(document.getElementById('gameModeInput')) document.getElementById('gameModeInput').addEventListener('change', (e) => {
     window.checkGameTypeUI?.();
     if (typeof window.displayGlobalRatings === 'function') window.displayGlobalRatings();
