@@ -283,6 +283,20 @@
         <button id="btnExitMandatoryAlias" class="btn-danger" style="padding: 8px; font-size: 0.85em;">🚪 Esci dal Gioco</button>
     </div>
 </div>
+
+<!-- MODAL: COMMENTO A CALDO POST-SFIDA -->
+<div id="postMatchCommentModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; max-width: 420px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 6500; border: 2px solid #00bcd4; border-radius: 12px; padding: 18px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.7); text-align: center;">
+    <span style="font-size: 3em; margin-bottom: 6px;">💭</span>
+    <h3 style="color: #00bcd4; margin: 0 0 8px 0; font-size: 1.15em;">Commento a Caldo sulla Sfida</h3>
+    <p style="font-size: 0.85em; color: var(--hint-color); margin-bottom: 12px;">Scrivi un breve commento sulla tua prova (opzionale). Sarà visibile in classifica alla community!</p>
+
+    <input type="text" id="postMatchCommentInput" aria-label="Commento a caldo sulla sfida" placeholder="es. Ottimo ritmo! Sfida entusiasmante..." maxlength="120" style="width: 100%; padding: 10px; font-size: 0.9em; background: #ffffff; color: #000000; border-radius: 6px; border: 1px solid #00bcd4; box-sizing: border-box; margin-bottom: 14px; font-weight: bold;">
+
+    <div style="display: flex; gap: 8px;">
+        <button id="btnSavePostMatchComment" onclick="window.submitPostMatchComment()" class="btn-success" style="flex: 2; padding: 10px; font-weight: bold; background: #00bcd4; color: #000000; border: none;">INVIA COMMENTO 💬</button>
+        <button onclick="window.skipPostMatchComment()" class="btn-secondary" style="flex: 1; padding: 10px;">Salta</button>
+    </div>
+</div>
 <!-- POPUP BENVENUTO NUOVO UTENTE (SOLO PRIMO ACCESSO) -->
 <div id="welcomeNewUserModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 90%; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 6000; border: 2px solid var(--champ-color); border-radius: 12px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-height: 95vh; overflow-y: auto;">
     <span style="font-size: 3.5em; margin-bottom: 10px;">📻</span>
