@@ -637,6 +637,29 @@
                     </label>
                 </div>
 
+                <!-- SEZIONE TASTIERA CARATTERI DA POTENZIARE (MODALITÀ CARATTERI SINGOLI) -->
+                <div id="charsWeightKeyboardContainer" style="display: none; margin-top: 10px; background: rgba(0, 188, 212, 0.08); border: 1.5px solid #00bcd4; border-radius: 8px; padding: 10px; text-align: center;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="font-size:0.85em; font-weight:bold; color:#00bcd4;">🎯 Caratteri da Potenziare (Frequenza Personalizzata)</span>
+                        <button type="button" onclick="window.clearCharsWeightSelection()" class="action-btn-small btn-secondary" style="padding:2px 8px; font-size:0.75em; cursor:pointer;">Azzera 🔄</button>
+                    </div>
+                    <p style="font-size:0.75em; color:#333333; margin:0 0 8px 0; text-align:left; line-height:1.3;">
+                        Tocca i caratteri che vuoi ascoltare più spesso durante la prova. Verranno generati con una probabilità maggiore.
+                    </p>
+
+                    <!-- REGOLAZIONE PERCENTUALE BOOST (10% - 70%) -->
+                    <div style="display:flex; justify-content:center; align-items:center; gap:8px; margin-bottom:8px; font-size:0.82em; font-weight:bold;">
+                        <label for="charsBoostPercentInput" style="color:#000000;">Probabilità Presenza:</label>
+                        <input type="range" id="charsBoostPercentInput" min="10" max="70" step="5" value="40" oninput="document.getElementById('charsBoostPercentVal').textContent = this.value + '%'" style="width:110px; cursor:pointer;">
+                        <span id="charsBoostPercentVal" style="color:#00bcd4; font-weight:bold; min-width:32px;">40%</span>
+                    </div>
+
+                    <!-- GRIGLIA TASTIERA CARATTERI -->
+                    <div id="charsWeightKeyboardGrid" style="display:flex; flex-wrap:wrap; justify-content:center; gap:4px; max-height:140px; overflow-y:auto; padding:4px; background:#ffffff; border-radius:6px; border:1px solid #00bcd4;">
+                        <!-- Pulsanti caratteri generati da JS -->
+                    </div>
+                </div>
+
                 <div id="advancedSpacingContainer" style="display:none; justify-content:center; align-items:center; flex-wrap:wrap; gap:12px; font-size:0.85em;">
                     <div style="display:flex; flex-direction:column; align-items:center;">
                         <label for="charSpaceInput" style="color:#000000; font-weight:bold;">Spazio Caratt. (WPM)</label>
