@@ -1569,4 +1569,3 @@ window.deletePlayerComment = function(commentDbPath, boxId) {
         if (box) box.style.display = 'none';
     }).catch(err => alert("Errore eliminazione: " + err.message));
 };
-};
