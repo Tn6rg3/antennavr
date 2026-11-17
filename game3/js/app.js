@@ -4246,7 +4246,7 @@ window.checkCommunityMatchesMilestone = function(totalCommunityMatches, todayStr
 window.triggerCommunityMilestoneCelebration = function(milestoneNumber) {
     console.log(`🎉 COMMUNITY CELEBRATION: Reached ${milestoneNumber} Total Community Matches Today!`);
 
-    if ('vibrate' in navigator) {
+    if ('vibrate' in navigator && (typeof navigator.userActivation === 'undefined' || navigator.userActivation.isActive)) {
         try { navigator.vibrate([100, 50, 100, 50, 200]); } catch(e) {}
     }
 
