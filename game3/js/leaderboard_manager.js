@@ -502,7 +502,7 @@ window.fetchAndRenderTriDailyLeaderboard = function() {
                 <b style="color:#ff9800;">🏆 Sfida Tripla Giornaliera (${todayStr})</b>
                 <div style="font-size:0.8em; color:var(--hint-color); margin-top:4px;">Punteggio cumulativo delle 3 sessioni (Mattina, Pomeriggio, Sera)</div>
             </div>
-            <table class="leaderboard-table" style="width:100%; border-collapse:collapse; font-size:0.85em;">
+            <table class="leaderboard-table" style="width:100% !important; border-collapse:collapse; font-size:0.85em; table-layout:auto;">
                 <thead>
                     <tr style="border-bottom:2px solid var(--link-color); text-align:left;">
                         <th style="padding:6px;">#</th>
@@ -1593,7 +1593,16 @@ window.togglePlayerCommentBox = function(boxId) {
     const isHidden = (box.style.display === 'none' || !box.style.display);
 
     if (box.tagName === 'TR') {
-        box.style.display = isHidden ? 'table-row' : 'none';
+        if (isHidden) {
+            box.style.setProperty('display', 'table-row', 'important');
+            const td = box.querySelector('td');
+            if (td) {
+                td.style.setProperty('display', 'table-cell', 'important');
+                td.style.setProperty('width', '100%', 'important');
+            }
+        } else {
+            box.style.setProperty('display', 'none', 'important');
+        }
     } else {
         box.style.display = isHidden ? 'block' : 'none';
     }
