@@ -16,7 +16,8 @@ window.cleanCallsignString = function(str) {
     if (!str) return "";
     let s = String(str).trim();
     if (s.startsWith('@')) s = s.substring(1);
-    return s.toUpperCase().replace(/\s+/g, '');
+    // Sanitizzazione rigida: mantiene solo caratteri radioamatoriali validi (A-Z, 0-9, / e -)
+    return s.toUpperCase().replace(/[^A-Z0-9\/-]/g, '');
 };
 
 window.saveMyActivityCallPreference = function(newCall) {
