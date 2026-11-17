@@ -2152,9 +2152,6 @@ if (els.permanentGameInput) {
                 }
             }
         }
-                }
-            }
-        }
     });
     els.permanentGameInput.addEventListener('keydown', function(e) {
         if ((e.key === 'Enter' || e.keyCode === 13) && inputActive && gameRunning) {
