@@ -327,8 +327,8 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
         else if (isExplicitQuit) {
             db.ref(`rooms/${currentCode}/players/${myId}`).onDisconnect().cancel();
 
-            if (gameRunning) {
-                // Se abbandoniamo la sfida giornaliera, registriamo l'evento nel passato per bloccare nuovi tentativi
+            if (gameRunning && isExplicitQuit) {
+                // Abbandono esplicito dell'utente tramite tasto Abbandona
                 if (window.currentMode === 'daily_challenge') {
                     db.ref(`users/${myId}/history`).push().set({
                         date: firebase.database.ServerValue.TIMESTAMP,
@@ -342,7 +342,15 @@ window.exitRoomCleanly = function(roomWasDeletedByHost = false, isExplicitQuit =
                 }
 
                 db.ref(`rooms/${currentCode}/players/${myId}`).update({ finished: true, abandoned: true, online: false }).then(() => {
-                    // Se siamo in multiplayer, aggiorniamo subito il riepilogo match per la classifica
+                    if (!window.isSinglePlayer && !isCourseMode) {
+                        db.ref(`rooms/${currentCode}/players`).once('value', s => {
+                            if (s.exists()) window.saveMatchSummary(s.val());
+                        });
+                    }
+                });
+            } else if (gameRunning) {
+                // Uscita normale a fine partita completata (Nessun abbandono)
+                db.ref(`rooms/${currentCode}/players/${myId}`).update({ finished: true, online: false }).then(() => {
                     if (!window.isSinglePlayer && !isCourseMode) {
                         db.ref(`rooms/${currentCode}/players`).once('value', s => {
                             if (s.exists()) window.saveMatchSummary(s.val());
@@ -870,35 +878,37 @@ window.startCountdownSequence = function() {
                     return;
                 }
 
-                // 2. Verifichiamo l'abbandono solo se siamo oltre il countdown (o se il calo è drastico)
+                // 2. Rilevamento completamento o abbandono esplicito dell'avversario
                 const playersArray = Object.values(players);
-                const hasAbandoned = playersArray.some(p => p.abandoned);
+                const hasExplicitAbandoned = playersArray.some(p => p.abandoned === true);
+                const myNameLower = (myName || "").toLowerCase();
 
-                if (gameStartPlayerCount >= 2 && (currentPCount < gameStartPlayerCount || hasAbandoned)) {
-                    // Verifichiamo lo stato reale della stanza prima di chiudere
+                // Se l'avversario ha completato la prova normalmente (finished === true), lo notifichiamo senza interrompere il gioco
+                const finishedOpponent = playersArray.find(p => p.finished === true && (p.name || "").toLowerCase() !== myNameLower);
+                if (finishedOpponent && !window.hasNotifiedOpponentFinished) {
+                    window.hasNotifiedOpponentFinished = true;
+                    showToast(currentLang === 'it' ? `🏁 ${finishedOpponent.name || 'L\'avversario'} ha completato la prova! Concludi le tue parole.` : `🏁 ${finishedOpponent.name || 'Opponent'} finished their test! Complete your words.`);
+                }
+
+                if (gameStartPlayerCount >= 2 && hasExplicitAbandoned) {
+                    // Chiudiamo a tavolino solo se c'è stato un abbandono esplicito (pulsante Abbandona)
                     db.ref(`rooms/${roomCode}/status`).once('value', sSnap => {
                         const currentStatus = sSnap.val();
 
-                        // Chiudiamo a tavolino solo se la partita era iniziata o se l'abbandono è esplicito
-                        if (currentStatus === 'playing' || hasAbandoned) {
-                            if (currentPCount === 1 && players[myId]) {
-                                // --- FIX CO-OP: Se siamo in collaborazione, la partita NON termina se resta solo 1 giocatore ---
-                                if (window.currentMode === 'conquest' || window.isCoopMode) {
-                                    showToast(currentLang === 'it' ? "Il tuo compagno ha abbandonato. Continua la missione da solo! ⚔️" : "Your teammate left. Continue the mission alone! ⚔️");
-                                    return;
-                                }
-
-                                window.isForfeitWin = true;
-                                window.totalScore = Math.max(Number(window.totalScore) || 0, 100);
-                                if (!window.peakWpm || window.peakWpm === 0) window.peakWpm = Number(window.currentWpm) || 20;
-
-                                gameRunning = false;
-                                const msg = currentLang === 'it' ? "🏆 L'avversario si è ritirato! Hai vinto a tavolino (+100 pt)!" : "🏆 Opponent withdrew! You win by default (+100 pt)!";
-                                if (window.tg && window.tg.showAlert) window.tg.showAlert(msg); else alert(msg);
-                                window.finishGame();
-                            } else if (!players[myId]?.abandoned) {
-                                showToast(currentLang === 'it' ? "Un giocatore ha abbandonato." : "A player left the game.");
+                        if ((currentStatus === 'playing' || hasExplicitAbandoned) && !players[myId]?.finished) {
+                            if (window.currentMode === 'conquest' || window.isCoopMode) {
+                                showToast(currentLang === 'it' ? "Il tuo compagno ha abbandonato. Continua la missione da solo! ⚔️" : "Your teammate left. Continue the mission alone! ⚔️");
+                                return;
                             }
+
+                            window.isForfeitWin = true;
+                            window.totalScore = Math.max(Number(window.totalScore) || 0, 100);
+                            if (!window.peakWpm || window.peakWpm === 0) window.peakWpm = Number(window.currentWpm) || 20;
+
+                            gameRunning = false;
+                            const msg = currentLang === 'it' ? "🏆 L'avversario ha abbandonato la partita! Hai vinto a tavolino (+100 pt)!" : "🏆 Opponent abandoned! You win by default (+100 pt)!";
+                            if (window.tg && window.tg.showAlert) window.tg.showAlert(msg); else alert(msg);
+                            window.finishGame();
                         }
                     });
                 }
