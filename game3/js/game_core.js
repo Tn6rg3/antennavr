@@ -2136,23 +2136,23 @@ if (els.permanentGameInput) {
         }
         if (window.currentMode === 'chars' && inputActive && gameRunning) {
             const groupLength = parseInt(document.getElementById('charsGroupLengthInput')?.value) || 1;
-            // Invio automatico istantaneo o temporizzato SOLO SE il gruppo e da 1 singolo carattere
             if (groupLength === 1) {
                 const rawVal = els.permanentGameInput.value;
                 const cleanVal = rawVal.replace(/\s/g, '').toUpperCase();
                 if (cleanVal.length >= 1) {
+                    const charToSubmit = cleanVal[cleanVal.length - 1];
+                    els.permanentGameInput.value = ""; // Pulizia istantanea dell'input in 0ms!
+
                     const charDelaySec = parseFloat(localStorage.getItem('cwgame_pref_chars_auto_delay') || document.getElementById('charsAutoDelaySelect')?.value || "0.3");
                     if (charDelaySec > 0) {
                         if (window.charsAutoSubmitTimer) clearTimeout(window.charsAutoSubmitTimer);
                         window.charsAutoSubmitTimer = setTimeout(() => {
                             if (inputActive && gameRunning) {
-                                window.handleWordSubmission(els.permanentGameInput.value.replace(/\s/g, '').toUpperCase().slice(-1));
-                                els.permanentGameInput.value = "";
+                                window.handleWordSubmission(charToSubmit);
                             }
                         }, charDelaySec * 1000);
                     } else {
-                        window.handleWordSubmission(cleanVal[cleanVal.length - 1]);
-                        els.permanentGameInput.value = "";
+                        window.handleWordSubmission(charToSubmit);
                     }
                 }
             }
@@ -2474,23 +2474,25 @@ window.handleWordSubmission = function(userWord) {
     };
     matchDetailsArray.push(lastEntry);
 
-    // FEED IN TEMPO REALE PER GLI SPETTATORI (Solo se abilitato nelle Impostazioni Avanzate o in Multiplayer)
+    // FEED IN TEMPO REALE PER GLI SPETTATORI (Eseguito in sottofondo asincrono per azzerare la latenza di digitazione)
     const isSpectatorBroadcastAllowed = !window.isSinglePlayer || (window.isAllowSpectators === true);
     if (roomCode && db && isSpectatorBroadcastAllowed) {
-        db.ref(`rooms/${roomCode}/players/${window.myId}`).update({
-            score: totalScore,
-            wpm: currentWpm,
-            wordIndex: wordIndex + 1,
-            lastUpdate: lastEntry
-        }).catch(() => {});
+        setTimeout(() => {
+            db.ref(`rooms/${roomCode}/players/${window.myId}`).update({
+                score: totalScore,
+                wpm: currentWpm,
+                wordIndex: wordIndex + 1,
+                lastUpdate: lastEntry
+            }).catch(() => {});
 
-        db.ref(`rooms/${roomCode}/spectatorFeed`).set({
-            lastUpdate: lastEntry,
-            score: totalScore,
-            wpm: currentWpm,
-            wordIndex: wordIndex + 1,
-            ts: Date.now()
-        }).catch(() => {});
+            db.ref(`rooms/${roomCode}/spectatorFeed`).set({
+                lastUpdate: lastEntry,
+                score: totalScore,
+                wpm: currentWpm,
+                wordIndex: wordIndex + 1,
+                ts: Date.now()
+            }).catch(() => {});
+        }, 0);
     }
 
     // Salva lo stato di avanzamento in tempo reale per la Sfida Tripla
