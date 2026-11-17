@@ -1429,6 +1429,7 @@ window.initMandatoryAliasHandlers = function() {
                         }
                     });
                     updateBadge(totalMatchesSum);
+                    window.checkCommunityMatchesMilestone(totalMatchesSum, todayStr);
                 } else {
                     updateBadge(0);
                 }
@@ -4224,6 +4225,130 @@ window.checkTodayStartupModals = function(skipYesterdayCheck = false) {
     if (!triDeclined && slotInfo.id !== 'night' && !triSlotPlayed && !triLaterInThisSession) {
         window.openTriDailyHub();
     }
+
+    // Step 4: Controllo Traguardo 100 / 200 / 300 Partite Giocate
+    setTimeout(window.checkMatchesMilestoneOnHome, 1000);
+};
+
+window.checkCommunityMatchesMilestone = function(totalCommunityMatches, todayStr) {
+    if (window.isMandatoryAliasPending || window.isNewUserWaitingWelcome) return;
+    if (!totalCommunityMatches || totalCommunityMatches < 100) return;
+
+    const milestone = Math.floor(totalCommunityMatches / 100) * 100;
+    const ackKey = `cwgame_community_milestone_${todayStr}_${milestone}`;
+
+    if (!localStorage.getItem(ackKey)) {
+        localStorage.setItem(ackKey, "true");
+        window.triggerCommunityMilestoneCelebration(milestone);
+    }
+};
+
+window.triggerCommunityMilestoneCelebration = function(milestoneNumber) {
+    console.log(`🎉 COMMUNITY CELEBRATION: Reached ${milestoneNumber} Total Community Matches Today!`);
+
+    if ('vibrate' in navigator) {
+        try { navigator.vibrate([100, 50, 100, 50, 200]); } catch(e) {}
+    }
+
+    const homeScreen = document.getElementById('setupScreen') || document.body;
+    if (homeScreen) {
+        homeScreen.classList.remove('milestone-screen-shake');
+        void homeScreen.offsetWidth;
+        homeScreen.classList.add('milestone-screen-shake');
+        setTimeout(() => homeScreen.classList.remove('milestone-screen-shake'), 900);
+    }
+
+    window.startMilestoneConfetti(4500);
+
+    const modal = document.getElementById('matchesMilestoneModal');
+    const textEl = document.getElementById('matchesMilestoneText');
+
+    if (textEl) {
+        textEl.innerHTML = `🏆 Oggi la community ha appena raggiunto le <b style="color:#ffd700; font-size:1.2em;">${milestoneNumber} Partite Giocate</b> complessive! 🚀`;
+    }
+
+    if (modal) {
+        setTimeout(() => {
+            modal.style.display = 'flex';
+        }, 500);
+    }
+};
+        homeScreen.classList.remove('milestone-screen-shake');
+        void homeScreen.offsetWidth;
+        homeScreen.classList.add('milestone-screen-shake');
+        setTimeout(() => homeScreen.classList.remove('milestone-screen-shake'), 900);
+    }
+
+    window.startMilestoneConfetti(4500);
+
+    const modal = document.getElementById('matchesMilestoneModal');
+    const textEl = document.getElementById('matchesMilestoneText');
+
+    if (textEl) {
+        textEl.innerHTML = `🏆 Hai raggiunto lo straordinario traguardo delle <b style="color:#ffd700; font-size:1.2em;">${milestoneNumber} Partite Giocate</b>! 🚀`;
+    }
+
+    if (modal) {
+        setTimeout(() => {
+            modal.style.display = 'flex';
+        }, 500);
+    }
+};
+
+window.startMilestoneConfetti = function(durationMs = 4000) {
+    const canvas = document.getElementById('milestoneConfettiCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    canvas.style.display = 'block';
+
+    const colors = ["#ffd700", "#00ff66", "#00bcd4", "#ff9800", "#ff4081", "#e040fb"];
+    const particles = [];
+
+    for (let i = 0; i < 120; i++) {
+        particles.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * -canvas.height,
+            size: Math.random() * 8 + 4,
+            speedY: Math.random() * 4 + 2,
+            speedX: (Math.random() - 0.5) * 2,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            rotation: Math.random() * 360,
+            rotSpeed: (Math.random() - 0.5) * 6
+        });
+    }
+
+    const startTime = Date.now();
+
+    function animate() {
+        const elapsed = Date.now() - startTime;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        particles.forEach(p => {
+            p.y += p.speedY;
+            p.x += p.speedX;
+            p.rotation += p.rotSpeed;
+
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate((p.rotation * Math.PI) / 180);
+            ctx.fillStyle = p.color;
+            ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+            ctx.restore();
+        });
+
+        if (elapsed < durationMs) {
+            requestAnimationFrame(animate);
+        } else {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            canvas.style.display = 'none';
+        }
+    }
+
+    animate();
 };
 
 window.checkAndTriggerTriDailySlotNotifications = function() {
