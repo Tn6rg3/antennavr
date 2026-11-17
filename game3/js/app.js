@@ -2980,14 +2980,6 @@ window.loadAdminCallsignChallengeSettings = function() {
                         incompleteIds.add(id);
                     }
                 }
-            } else {
-                    const isGenericName = !userProfile.alias || userProfile.alias === "Giocatore" || userProfile.alias.startsWith("Giocatore") || userProfile.alias === "Operatore";
-                    const hasNoHistory = !userProfile.history || Object.keys(userProfile.history).length === 0;
-                    const hasNoScore = !userProfile.score || userProfile.score === 0;
-                    if (isGenericName && hasNoHistory && hasNoScore) {
-                        incompleteIds.add(id);
-                    }
-                }
             }
 
             const targetIds = Array.from(incompleteIds);
