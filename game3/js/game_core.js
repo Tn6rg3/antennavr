@@ -2147,17 +2147,11 @@ if (els.permanentGameInput) {
                     const charToSubmit = cleanVal[cleanVal.length - 1];
                     els.permanentGameInput.value = ""; // Pulizia istantanea input in 0ms
 
-                    const charDelaySec = parseFloat(localStorage.getItem('cwgame_pref_chars_auto_delay') || document.getElementById('charsAutoDelaySelect')?.value || "0.3");
-                    if (charDelaySec > 0) {
-                        if (window.charsAutoSubmitTimer) clearTimeout(window.charsAutoSubmitTimer);
-                        window.charsAutoSubmitTimer = setTimeout(() => {
-                            if (inputActive && gameRunning) {
-                                window.handleWordSubmission(charToSubmit, keypressTs);
-                            }
-                        }, charDelaySec * 1000);
-                    } else {
-                        window.handleWordSubmission(charToSubmit, keypressTs);
-                    }
+                    // ELABORAZIONE ED INSERIMENTO ISTANTANEO IN 0 MS!
+                    window.handleWordSubmission(charToSubmit, keypressTs);
+                }
+            }
+        }
                 }
             }
         }
