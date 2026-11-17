@@ -376,10 +376,30 @@ window.GAME_MODES = {
         defaultWordCount: 20,
         wpmConfigurable: true,
         wordCountConfigurable: true,
-        fixedSpeedAllowed: false,
-        spacingConfigurable: false,
-        generateWords: function(num, dicts) {
-            return Array.from({length: num}, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random() * 36)]);
+        fixedSpeedAllowed: true,
+        spacingConfigurable: true,
+        generateWords: function(num, dicts, options) {
+            const charSetType = options?.charSetType || (document.getElementById('groupCharSetInput')?.value) || 'letters';
+            const groupLength = parseInt(options?.groupLength || document.getElementById('charsGroupLengthInput')?.value) || 1;
+
+            let pool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            if (charSetType === 'numbers') {
+                pool = "0123456789";
+            } else if (charSetType === 'alphanumeric') {
+                pool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            } else if (charSetType === 'mixed' || charSetType === 'full') {
+                pool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,/?=-+@!:;()\"'";
+            }
+
+            let groups = [];
+            for (let i = 0; i < num; i++) {
+                let grp = "";
+                for (let j = 0; j < groupLength; j++) {
+                    grp += pool[Math.floor(Math.random() * pool.length)];
+                }
+                groups.push(grp);
+            }
+            return groups;
         }
     },
     "quiz": {

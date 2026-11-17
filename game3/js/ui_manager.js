@@ -141,6 +141,7 @@ window.checkGameTypeUI = function() {
         wordsPerGroup: document.getElementById('wordsPerGroupContainer'),
         wordLen: document.getElementById('wordLengthContainer'),
         groupCharSet: document.getElementById('groupCharSetContainer'),
+        charsGroupLength: document.getElementById('charsGroupLengthContainer'),
         koch: document.getElementById('setupKochLevelContainer'),
         memoryCards: document.getElementById('memoryCardCountContainer'),
         keyer: document.getElementById('mainMenuKeyerConfig')
@@ -160,7 +161,8 @@ window.checkGameTypeUI = function() {
     if (containers.spectator) containers.spectator.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
     if (containers.wordsPerGroup) containers.wordsPerGroup.style.display = (selectedMode === 'standard_plus') ? 'block' : 'none';
     if (containers.wordLen) containers.wordLen.style.display = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection') ? 'block' : 'none';
-    if (containers.groupCharSet) containers.groupCharSet.style.display = (selectedMode === 'code_groups') ? 'block' : 'none';
+    if (containers.groupCharSet) containers.groupCharSet.style.display = (selectedMode === 'code_groups' || selectedMode === 'chars') ? 'block' : 'none';
+    if (containers.charsGroupLength) containers.charsGroupLength.style.display = (selectedMode === 'chars') ? 'block' : 'none';
     if (containers.memoryCards) containers.memoryCards.style.display = (selectedMode === 'memory_cw') ? 'block' : 'none';
 
     // --- NUOVA LOGICA ASCOLTO (TTS) + RISPOSTA VOCALE + AVANZAMENTO AUTO ---
