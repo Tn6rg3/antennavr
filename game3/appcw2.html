@@ -1753,23 +1753,41 @@
     </div>
 </div>
 
-<!-- SCHERMATA REGOLE E PRIVACY -->
+<!-- SCHERMATA REGOLE E PRIVACY (ORDINATA A MODULI) -->
 <div id="privacyScreen" class="screen">
     <div class="screen-content">
-        <div id="regolamentoContainer" style="text-align: left; font-size: 0.9em; padding: 10px; margin-bottom: 10px; background: var(--sec-bg-color); border-radius: 10px; border: 1px solid var(--hint-color);">
-            <p style="text-align:center; color:var(--hint-color);">Caricamento regolamento...</p>
+
+        <!-- MODULO 1: REGOLAMENTO & COME SI GIOCA (RICHIUDIBILE) -->
+        <div class="box-panel" style="margin-bottom: 12px; border-color: var(--link-color);">
+            <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="window.toggleRegolamentoBox()">
+                <h3 style="color: var(--link-color); margin: 0; font-size: 1.05em;">📜 Regolamento & Guida di Gioco</h3>
+                <button type="button" id="btnToggleRegolamento" class="action-btn-small btn-secondary" style="width:auto; margin:0; padding:4px 8px; font-size:0.75em;">📜 Regolamento & Guida 🔽</button>
+            </div>
+            <div id="regolamentoContainer" style="display:none; text-align: left; font-size: 0.88em; padding: 10px; margin-top: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid var(--hint-color); line-height:1.5;">
+                <p style="text-align:center; color:var(--hint-color);">Caricamento regolamento...</p>
+            </div>
         </div>
 
-        <!-- SEZIONE SEGNALAZIONE BUG (VISIBILE A TUTTI) -->
-        <div class="box-panel" style="border-color: var(--champ-color); margin-bottom: 15px;">
-            <h3 style="color: var(--champ-color); margin: 0 0 5px 0; font-size: 1em;">🐞 Segnalazione Bug</h3>
-            <textarea id="bugReportText" aria-label="Descrivi il problema o suggerimento" placeholder="Descrivi il problema o suggerimento..." style="width: 100%; height: 60px; padding: 8px; border-radius: 8px; border: 1px solid var(--hint-color); background: var(--bg-color); color: var(--text-color); font-family: inherit; resize: none; font-size: 0.9em; box-sizing: border-box;"></textarea>
-            <button id="btnSendBugReport" class="btn-success" style="margin-top: 8px; width: 100%; padding: 8px;">Invia allo Sviluppatore 🚀</button>
+        <!-- MODULO 2: PRIVACY & TRATTAMENTO DATI -->
+        <div class="box-panel" style="margin-bottom: 12px; border-color: var(--champ-color);">
+            <h3 style="color: var(--champ-color); margin: 0 0 8px 0; font-size: 1.05em;">🔒 Privacy Policy & Trattamento Dati</h3>
+            <p style="font-size: 0.82em; color: var(--text-color); margin: 0; line-height: 1.4; text-align: left;">
+                I tuoi dati di gioco (Alias, Punteggi, WPM, Stato Lezioni) sono conservati in modo sicuro e utilizzati esclusivamente per la classifica della community e per l'esperienza multiplayer in tempo reale.<br>
+                Nessun dato personale o sensibile viene mai ceduto a terzi.
+            </p>
         </div>
 
-        <!-- PANNELLO ADMIN (VISIBILE SOLO ALLO SVILUPPATORE) -->
+        <!-- MODULO 3: SUPPORTO TECNICO & SEGNALAZIONE BUG -->
+        <div class="box-panel" style="border-color: #00bcd4; margin-bottom: 15px;">
+            <h3 style="color: #00bcd4; margin: 0 0 6px 0; font-size: 1.05em;">🛠️ Supporto Tecnico & Segnalazione Bug</h3>
+            <p style="font-size: 0.8em; color: var(--hint-color); margin: 0 0 8px 0; text-align: left;">Hai riscontrato un problema o vuoi suggerire una nuova funzione? Scrivi qui sotto per inviare un rapporto diretto allo sviluppatore:</p>
+            <textarea id="bugReportText" aria-label="Descrivi il problema o suggerimento" placeholder="Descrivi qui il problema o il suggerimento..." style="width: 100%; height: 60px; padding: 8px; border-radius: 8px; border: 1px solid var(--hint-color); background: var(--bg-color); color: var(--text-color); font-family: inherit; resize: none; font-size: 0.88em; box-sizing: border-box;"></textarea>
+            <button id="btnSendBugReport" class="btn-success" style="margin-top: 8px; width: 100%; padding: 8px; font-weight: bold; background: #00bcd4; color: #000; border: none;">Invia allo Sviluppatore 🚀</button>
+        </div>
+
+        <!-- MODULO 4: PANNELLO ADMIN (VISIBILE SOLO ALLO SVILUPPATORE) -->
         <div id="adminBugPanel" class="box-panel" style="display:none; border-color: #d32f2f; background: rgba(211, 47, 47, 0.05); margin-bottom: 15px;">
-            <h3 style="color: #d32f2f; margin: 0 0 10px 0; font-size: 1em;">🛡️ Pannello Amministratore</h3>
+            <h3 style="color: #d32f2f; margin: 0 0 10px 0; font-size: 1em;">👑 Pannello Amministratore</h3>
 
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
                 <button id="btnReadAllBugs" class="btn-danger" style="padding: 8px; font-size:0.8em; margin-top:0;">Bug 📜</button>
