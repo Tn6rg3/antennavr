@@ -1382,15 +1382,16 @@ window.initMandatoryAliasHandlers = function() {
         // --- GESTIONE VERSIONI E BANNER AGGIORNAMENTO ---
         const updateVers = () => {
             if (els.appVersionDisplay) els.appVersionDisplay.textContent = "v" + APP_VERSION;
-            const footer
-
-             = document.getElementById('appVersionFooter');
-            if (footer) footer.textContent = APP_VERSION;
+            const footer = document.getElementById('appVersionFooter');
+            if (footer) {
+                const terminalVer = APP_VERSION.includes('.') ? APP_VERSION.split('.').pop() : APP_VERSION;
+                footer.textContent = terminalVer;
+            }
         };
         updateVers();
-        setTimeout(updateVers, 1500); // Forza dopo caricamento altri script
+        setTimeout(updateVers, 1500);
 
-        // --- CONTATORE GIORNALIERO PARTITE GIOCATE (SOMMA REALE DELLE PARTITE GIOCATE OGGI) ---
+        // --- CONTATORE GIORNALIERO PARTITE GIOCATE ---
         window.initTotalMatchesCounterListener = function() {
             if (!db || window.isMatchesCounterListenerActive) return;
             window.isMatchesCounterListenerActive = true;
@@ -1400,7 +1401,7 @@ window.initMandatoryAliasHandlers = function() {
             const updateBadge = (num) => {
                 const badge = document.getElementById('totalMatchesBadge');
                 if (badge) {
-                    badge.textContent = `🎮 Partite Oggi: ${(Number(num) || 0).toLocaleString('it-IT')}`;
+                    badge.textContent = `Partite: ${(Number(num) || 0).toLocaleString('it-IT')}`;
                 }
             };
 
@@ -4910,5 +4911,146 @@ if (els.createRoomBtn) {
         }
     };
 }
+
+window.openAppUsageStatsModal = async function() {
+    const modal = document.getElementById('appUsageStatsModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    if (!db) return;
+
+    try {
+        const snap = await db.ref('activity/daily').limitToLast(14).once('value');
+        const dailyData = snap.exists() ? snap.val() : {};
+
+        const dataPoints = [];
+        Object.entries(dailyData).forEach(([dateStr, dayObj]) => {
+            if (dayObj && typeof dayObj === 'object') {
+                const uCount = Object.keys(dayObj).length;
+                let mCount = 0;
+                Object.values(dayObj).forEach(uData => {
+                    if (uData && typeof uData === 'object') {
+                        mCount += (Number(uData.games) || Number(uData.count) || 1);
+                    } else if (typeof uData === 'number') {
+                        mCount += uData;
+                    }
+                });
+                dataPoints.push({
+                    date: dateStr.slice(-5),
+                    users: uCount,
+                    matches: mCount
+                });
+            }
+        });
+
+        window.renderAppUsageStatsChart(dataPoints);
+    } catch(e) {
+        console.error("AppUsageStats Error:", e);
+    }
+};
+
+window.renderAppUsageStatsChart = function(dataPoints) {
+    const canvas = document.getElementById('appUsageStatsCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const width = canvas.width;
+    const height = canvas.height;
+
+    ctx.clearRect(0, 0, width, height);
+
+    if (!dataPoints || dataPoints.length === 0) {
+        ctx.fillStyle = "#999999";
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("Nessun dato di utilizzo sufficiente registrato.", width / 2, height / 2);
+        return;
+    }
+
+    const paddingLeft = 30;
+    const paddingRight = 15;
+    const paddingTop = 20;
+    const paddingBottom = 25;
+
+    const chartW = width - paddingLeft - paddingRight;
+    const chartH = height - paddingTop - paddingBottom;
+
+    const maxUsers = Math.max(5, ...dataPoints.map(p => p.users));
+    const maxMatches = Math.max(10, ...dataPoints.map(p => p.matches));
+    const maxVal = Math.max(maxUsers, maxMatches) + 2;
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.lineWidth = 1;
+    ctx.fillStyle = "#64748b";
+    ctx.font = "9px sans-serif";
+
+    for (let i = 0; i <= 3; i++) {
+        const y = paddingTop + (chartH / 3) * i;
+        ctx.beginPath();
+        ctx.moveTo(paddingLeft, y);
+        ctx.lineTo(width - paddingRight, y);
+        ctx.stroke();
+
+        const val = Math.round(maxVal - (i / 3) * maxVal);
+        ctx.textAlign = "right";
+        ctx.fillText(val.toString(), paddingLeft - 4, y + 3);
+    }
+
+    const userPoints = [];
+    const matchPoints = [];
+
+    dataPoints.forEach((p, i) => {
+        const x = paddingLeft + (chartW / Math.max(1, dataPoints.length - 1)) * i;
+        const yUser = paddingTop + chartH - (chartH * (p.users / maxVal));
+        const yMatch = paddingTop + chartH - (chartH * (p.matches / maxVal));
+
+        userPoints.push({ x, y: yUser });
+        matchPoints.push({ x, y: yMatch });
+
+        if (dataPoints.length <= 10 || i === 0 || i === dataPoints.length - 1 || i % 3 === 0) {
+            ctx.fillStyle = "#64748b";
+            ctx.font = "8px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(p.date, x, height - 8);
+        }
+    });
+
+    window.drawSmoothTrendLine(ctx, userPoints, "#00ff66", "rgba(0, 255, 102, 0.1)");
+    window.drawSmoothTrendLine(ctx, matchPoints, "#ff9800", "rgba(255, 152, 0, 0.1)");
+};
+
+window.drawSmoothTrendLine = function(ctx, points, color, fillColor) {
+    if (!points || points.length === 0) return;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+
+    if (points.length === 1) {
+        ctx.arc(points[0].x, points[0].y, 2, 0, Math.PI * 2);
+    } else {
+        for (let i = 0; i < points.length - 1; i++) {
+            const xc = (points[i].x + points[i + 1].x) / 2;
+            const yc = (points[i].y + points[i + 1].y) / 2;
+            ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+        }
+        ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+    }
+    ctx.stroke();
+
+    if (fillColor && points.length > 1) {
+        const bottomY = ctx.canvas.height - 25;
+        ctx.lineTo(points[points.length - 1].x, bottomY);
+        ctx.lineTo(points[0].x, bottomY);
+        ctx.closePath();
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+    }
+};
 
 // --- LISTA STANZE (SPOSTATO IN SOCIAL_MANAGER.JS) ---
