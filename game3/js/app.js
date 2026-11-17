@@ -4273,26 +4273,6 @@ window.triggerCommunityMilestoneCelebration = function(milestoneNumber) {
         }, 500);
     }
 };
-        homeScreen.classList.remove('milestone-screen-shake');
-        void homeScreen.offsetWidth;
-        homeScreen.classList.add('milestone-screen-shake');
-        setTimeout(() => homeScreen.classList.remove('milestone-screen-shake'), 900);
-    }
-
-    window.startMilestoneConfetti(4500);
-
-    const modal = document.getElementById('matchesMilestoneModal');
-    const textEl = document.getElementById('matchesMilestoneText');
-
-    if (textEl) {
-        textEl.innerHTML = `🏆 Hai raggiunto lo straordinario traguardo delle <b style="color:#ffd700; font-size:1.2em;">${milestoneNumber} Partite Giocate</b>! 🚀`;
-    }
-
-    if (modal) {
-        setTimeout(() => {
-            modal.style.display = 'flex';
-        }, 500);
-    }
 };
 
 window.startMilestoneConfetti = function(durationMs = 4000) {
