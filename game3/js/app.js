@@ -4917,7 +4917,6 @@ window.openAppUsageStatsModal = async function() {
     if (!modal) return;
     modal.style.display = 'flex';
 
-    // Uso cache locale se gia scaricata per azzerare il consumo di banda
     if (window.cachedAppUsageStatsDataPoints && Array.isArray(window.cachedAppUsageStatsDataPoints) && window.cachedAppUsageStatsDataPoints.length > 0) {
         window.renderAppUsageStatsChart(window.cachedAppUsageStatsDataPoints);
         return;
@@ -4946,6 +4945,7 @@ window.openAppUsageStatsModal = async function() {
                 const formattedDate = (parts.length === 3) ? `${parts[2]}/${parts[1]}` : dateStr.slice(-5);
 
                 dataPoints.push({
+                    rawDate: dateStr,
                     date: formattedDate,
                     users: uCount,
                     matches: mCount
@@ -4979,21 +4979,20 @@ window.renderAppUsageStatsChart = function(dataPoints) {
         return;
     }
 
-    const paddingLeft = 30;
-    const paddingRight = 15;
+    const paddingLeft = 32;
+    const paddingRight = 32;
     const paddingTop = 20;
     const paddingBottom = 25;
 
     const chartW = width - paddingLeft - paddingRight;
     const chartH = height - paddingTop - paddingBottom;
 
-    const maxUsers = Math.max(5, ...dataPoints.map(p => p.users));
-    const maxMatches = Math.max(10, ...dataPoints.map(p => p.matches));
-    const maxVal = Math.max(maxUsers, maxMatches) + 2;
+    const maxUsers = Math.max(5, Math.max(...dataPoints.map(p => p.users)) + 2);
+    const maxMatches = Math.max(10, Math.max(...dataPoints.map(p => p.matches)) + 5);
 
+    // Linee di Griglia ed Assi Y Indipendenti (Doppia Scala Y)
     ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
     ctx.lineWidth = 1;
-    ctx.fillStyle = "#64748b";
     ctx.font = "9px sans-serif";
 
     for (let i = 0; i <= 3; i++) {
@@ -5003,32 +5002,50 @@ window.renderAppUsageStatsChart = function(dataPoints) {
         ctx.lineTo(width - paddingRight, y);
         ctx.stroke();
 
-        const val = Math.round(maxVal - (i / 3) * maxVal);
+        // Scala Utenti Giornalieri (Asse SX - Verde #00ff66)
+        const userVal = Math.round(maxUsers - (i / 3) * maxUsers);
+        ctx.fillStyle = "#00ff66";
         ctx.textAlign = "right";
-        ctx.fillText(val.toString(), paddingLeft - 4, y + 3);
+        ctx.fillText(userVal.toString(), paddingLeft - 4, y + 3);
+
+        // Scala Partite Giocate (Asse DX - Arancione #ff9800)
+        const matchVal = Math.round(maxMatches - (i / 3) * maxMatches);
+        ctx.fillStyle = "#ff9800";
+        ctx.textAlign = "left";
+        ctx.fillText(matchVal.toString(), width - paddingRight + 4, y + 3);
     }
+
+    const monthNames = { "01":"Gen", "02":"Feb", "03":"Mar", "04":"Apr", "05":"Mag", "06":"Giu", "07":"Lug", "08":"Ago", "09":"Set", "10":"Ott", "11":"Nov", "12":"Dic" };
 
     const userPoints = [];
     const matchPoints = [];
+    let lastRenderedMonth = "";
 
     dataPoints.forEach((p, i) => {
         const x = paddingLeft + (chartW / Math.max(1, dataPoints.length - 1)) * i;
-        const yUser = paddingTop + chartH - (chartH * (p.users / maxVal));
-        const yMatch = paddingTop + chartH - (chartH * (p.matches / maxVal));
+        const yUser = paddingTop + chartH - (chartH * (p.users / maxUsers));
+        const yMatch = paddingTop + chartH - (chartH * (p.matches / maxMatches));
 
         userPoints.push({ x, y: yUser });
         matchPoints.push({ x, y: yMatch });
 
-        if (dataPoints.length <= 10 || i === 0 || i === dataPoints.length - 1 || i % 3 === 0) {
-            ctx.fillStyle = "#64748b";
-            ctx.font = "8px sans-serif";
+        // Etichette dell'Asse X pulite (Solo il nome del Mese quando cambia)
+        const monthKey = p.rawDate ? p.rawDate.split('-')[1] : (p.date ? p.date.split('/')[1] : "");
+        if (monthKey && monthKey !== lastRenderedMonth) {
+            lastRenderedMonth = monthKey;
+            const monthLabel = monthNames[monthKey] || monthKey;
+            ctx.fillStyle = "#94a3b8";
+            ctx.font = "bold 9px sans-serif";
             ctx.textAlign = "center";
-            ctx.fillText(p.date, x, height - 8);
+            ctx.fillText(monthLabel, x, height - 8);
         }
     });
 
-    window.drawSmoothTrendLine(ctx, userPoints, "#00ff66", "rgba(0, 255, 102, 0.1)");
-    window.drawSmoothTrendLine(ctx, matchPoints, "#ff9800", "rgba(255, 152, 0, 0.1)");
+    // CURVA MORBIDA 1: UTENTI GIORNALIERI (VERDE #00ff66 - SCALA SX)
+    window.drawSmoothTrendLine(ctx, userPoints, "#00ff66", "rgba(0, 255, 102, 0.12)");
+
+    // CURVA MORBIDA 2: PARTITE GIOCATE (ARANCIONE #ff9800 - SCALA DX)
+    window.drawSmoothTrendLine(ctx, matchPoints, "#ff9800", "rgba(255, 152, 0, 0.12)");
 };
 
 window.drawSmoothTrendLine = function(ctx, points, color, fillColor) {
