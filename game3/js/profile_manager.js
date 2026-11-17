@@ -428,7 +428,7 @@ window.loadAdvancedStats = function() {
     Promise.all([
         fetchStatsPromise,
         localHistPromise,
-        db.ref(`users/${userId}/history`).limitToLast(20).once('value').catch(() => null)
+        db.ref(`users/${userId}/history`).limitToLast(50).once('value').catch(() => null)
     ]).then(([stats, localHist, histSnap]) => {
         let historyData = localHist || [];
 
@@ -899,14 +899,11 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
 
     const legLeft = document.getElementById('chartLegendLeft');
     const legRight = document.getElementById('chartLegendRight');
-    if (legLeft && legRight) {
-        if (period === 'daily_challenge') {
-            legLeft.textContent = "🔵 Accuratezza Sfida (%) [Asse SX]";
-            legRight.textContent = "🟠 Picco WPM Sfida [Asse DX]";
-        } else {
-            legLeft.textContent = "🔵 Accuratezza (%) [Asse SX]";
-            legRight.textContent = "🟠 Velocità (WPM) [Asse DX]";
-        }
+    if (legLeft) {
+        legLeft.textContent = period === 'daily_challenge' ? "🧡 Picco WPM Sfida Giornaliera" : "🧡 Andamento Velocità (WPM)";
+    }
+    if (legRight) {
+        legRight.style.display = "none";
     }
 
     if (sessions.length === 0) {
@@ -916,12 +913,11 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
         ctx.textAlign = "center";
         const emptyMsg = period === 'daily_challenge'
             ? "Nessuna Sfida Giornaliera trovata nello storico. Gioca la Sfida per tracciare il tuo andamento!"
-            : "Gioca più partite per vedere la progressione WPM ed accuratezza";
+            : "Gioca più partite per vedere la progressione WPM";
         ctx.fillText(emptyMsg, width/2, height/2);
 
         if (badgeAvgWpm) badgeAvgWpm.textContent = "-- WPM";
         if (badgePeakWpm) badgePeakWpm.textContent = "-- WPM";
-        if (badgeAvgAcc) badgeAvgAcc.textContent = "-- %";
         if (badgeWpmGrowth) badgeWpmGrowth.textContent = "-- WPM";
         return;
     }
@@ -930,9 +926,6 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
     const totalWpmSum = sessions.reduce((s, x) => s + x.wpm, 0);
     const avgWpm = Math.round(totalWpmSum / sessions.length);
     const peakWpm = Math.max(...sessions.map(x => x.wpm));
-
-    const totalAccSum = sessions.reduce((s, x) => s + x.acc, 0);
-    const avgAcc = Math.round(totalAccSum / sessions.length);
 
     let growthStr = "0 WPM";
     if (sessions.length >= 4) {
@@ -945,7 +938,6 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
 
     if (badgeAvgWpm) badgeAvgWpm.textContent = `${avgWpm} WPM`;
     if (badgePeakWpm) badgePeakWpm.textContent = `${peakWpm} WPM`;
-    if (badgeAvgAcc) badgeAvgAcc.textContent = `${avgAcc}%`;
     if (badgeWpmGrowth) badgeWpmGrowth.textContent = growthStr;
 
     if (sessions.length < 2) {
@@ -960,9 +952,9 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
         return;
     }
 
-    // RENDERING GRAFICO DUAL-AXIS (Accuratezza % SX, WPM DX)
+    // RENDERING GRAFICO VELOCITÀ WPM (ARANCIONE #ff9800)
     const paddingLeft = 32;
-    const paddingRight = 32;
+    const paddingRight = 20;
     const paddingTop = 20;
     const paddingBottom = 25;
 
@@ -987,37 +979,14 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
         ctx.lineTo(width - paddingRight, y);
         ctx.stroke();
 
-        const accLabel = 100 - i * 25;
-        ctx.textAlign = "right";
-        ctx.fillText(`${accLabel}%`, paddingLeft - 4, y + 3);
-
         const wpmLabel = Math.round(maxWpm - (i / 4) * wpmRange);
-        ctx.textAlign = "left";
-        ctx.fillText(`${wpmLabel}`, width - paddingRight + 4, y + 3);
+        ctx.textAlign = "right";
+        ctx.fillText(`${wpmLabel}`, paddingLeft - 4, y + 3);
     }
 
-    // LINEA 1: ACCURATEZZA % (BLU #1976d2)
-    ctx.strokeStyle = "#1976d2";
-    ctx.lineWidth = 2.2;
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-
-    sessions.forEach((s, i) => {
-        const x = paddingLeft + (chartW / (sessions.length - 1)) * i;
-        const y = paddingTop + chartH - (chartH * (s.acc / 100));
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-
-    const lastX = paddingLeft + chartW;
-    ctx.lineTo(lastX, paddingTop + chartH);
-    ctx.lineTo(paddingLeft, paddingTop + chartH);
-    ctx.fillStyle = "rgba(25, 118, 210, 0.08)";
-    ctx.fill();
-
-    // LINEA 2: VELOCITA' WPM (ARANCIONE #ff9800)
+    // LINEA VELOCITA' WPM (ARANCIONE #ff9800)
     ctx.strokeStyle = "#ff9800";
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 2.5;
     ctx.lineJoin = "round";
     ctx.beginPath();
 
@@ -1029,23 +998,22 @@ window.renderAccuracyTrend = function(trendData, historyMatches = []) {
     });
     ctx.stroke();
 
+    const lastX = paddingLeft + chartW;
+    ctx.lineTo(lastX, paddingTop + chartH);
+    ctx.lineTo(paddingLeft, paddingTop + chartH);
+    ctx.fillStyle = "rgba(255, 152, 0, 0.12)";
+    ctx.fill();
+
     // DENTI / PUNTI SUL GRAFICO & ETICHETTE DATA
     sessions.forEach((s, i) => {
         const x = paddingLeft + (chartW / (sessions.length - 1)) * i;
-
-        // Punto Accuratezza (Blu)
-        const yAcc = paddingTop + chartH - (chartH * (s.acc / 100));
-        ctx.fillStyle = "#1976d2";
-        ctx.beginPath();
-        ctx.arc(x, yAcc, 3.5, 0, Math.PI * 2);
-        ctx.fill();
 
         // Punto WPM (Arancione)
         const yRatio = (s.wpm - minWpm) / wpmRange;
         const yWpm = paddingTop + chartH - (chartH * yRatio);
         ctx.fillStyle = "#ff9800";
         ctx.beginPath();
-        ctx.arc(x, yWpm, 3.5, 0, Math.PI * 2);
+        ctx.arc(x, yWpm, 4, 0, Math.PI * 2);
         ctx.fill();
 
         // Etichetta Data (Giorno/Mese) sull'Asse X
