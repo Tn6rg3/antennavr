@@ -2937,8 +2937,13 @@ window.loadAdminCallsignChallengeSettings = function() {
                 await db.ref(`uid_mapping/${firebase.auth().currentUser.uid}`).set(window.myId).catch(() => {});
             }
 
-            const presenceSnap = await db.ref('presence').once('value').catch(() => null);
-            const usersData = {};
+            // Scarica sia la mappa utenti che la mappa presenze per il confronto reale
+            const [usersSnap, presenceSnap] = await Promise.all([
+                db.ref('users').once('value').catch(() => null),
+                db.ref('presence').once('value').catch(() => null)
+            ]);
+
+            const usersData = (usersSnap && usersSnap.exists()) ? usersSnap.val() : {};
             const presenceData = (presenceSnap && presenceSnap.exists()) ? presenceSnap.val() : {};
 
             let incompleteIds = new Set();
@@ -2947,25 +2952,35 @@ window.loadAdminCallsignChallengeSettings = function() {
             for (const [id, userObj] of Object.entries(usersData)) {
                 if (!userObj || id === window.myId) continue;
 
-                const isGenericName = !userObj.alias || userObj.alias === "Giocatore" || userObj.alias.startsWith("Giocatore") || userObj.alias === "Operatore";
+                const hasValidAlias = userObj.alias && !userObj.alias.startsWith("Giocatore") && userObj.alias !== "Operatore";
+                const hasValidCall = userObj.activity_call && String(userObj.activity_call).trim().length >= 2;
+                const hasValidUsername = userObj.username && String(userObj.username).trim().length >= 2;
+                const hasValidName = userObj.name && !userObj.name.startsWith("Giocatore") && userObj.name !== "Operatore";
+
+                const isGenericName = !hasValidAlias && !hasValidCall && !hasValidUsername && !hasValidName;
                 const hasNoHistory = !userObj.history || Object.keys(userObj.history).length === 0;
                 const hasNoScore = !userObj.score || userObj.score === 0;
                 const hasNoCourse = !userObj.course || (!userObj.course.active_plan && (!userObj.course.completedLessons || userObj.course.completedLessons.length === 0));
 
-                // E' un fantasma SOLO SE ha un nome generico/mancante E non ha mai giocato/studiato!
+                // E' un fantasma SOLO SE NON HA ALIAS/CALL/USERNAME E NON HA MAI GIOCATO/STUDIATO!
                 if (isGenericName && hasNoHistory && hasNoScore && hasNoCourse) {
                     incompleteIds.add(id);
                 }
             }
 
-            // 2. Controlla presenze in presence (Pulisce presenze orfane di utenti mai registrati)
-            for (const [id, userObj] of Object.entries(presenceData)) {
-                if (!userObj || id === window.myId) continue;
+            // 2. Controlla presenze orfane in presence (Solo se l'ID non esiste del tutto in users o non ha profilo)
+            for (const [id, pObj] of Object.entries(presenceData)) {
+                if (!pObj || id === window.myId) continue;
                 const userProfile = usersData[id];
 
                 if (!userProfile) {
-                    incompleteIds.add(id);
-                } else {
+                    const pName = pObj.name || pObj.alias || "";
+                    const isPGeneric = !pName || pName.startsWith("Giocatore") || pName === "Operatore" || pName === "Anonimo";
+                    if (isPGeneric) {
+                        incompleteIds.add(id);
+                    }
+                }
+            } else {
                     const isGenericName = !userProfile.alias || userProfile.alias === "Giocatore" || userProfile.alias.startsWith("Giocatore") || userProfile.alias === "Operatore";
                     const hasNoHistory = !userProfile.history || Object.keys(userProfile.history).length === 0;
                     const hasNoScore = !userProfile.score || userProfile.score === 0;
