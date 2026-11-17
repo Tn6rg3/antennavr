@@ -1256,7 +1256,6 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
             container.appendChild(commentBox);
         }
     });
-    });
 };
 
 window.deleteLeaderboardEntry = function(path) {
