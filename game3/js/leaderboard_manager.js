@@ -1586,7 +1586,13 @@ window.fetchAndRenderGameRatings = function() {
 window.togglePlayerCommentBox = function(boxId) {
     const box = document.getElementById(boxId);
     if (!box) return;
-    box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
+    const isHidden = (box.style.display === 'none' || !box.style.display);
+
+    if (box.tagName === 'TR') {
+        box.style.display = isHidden ? 'table-row' : 'none';
+    } else {
+        box.style.display = isHidden ? 'block' : 'none';
+    }
 };
 
 window.deletePlayerComment = function(commentDbPath, boxId) {
