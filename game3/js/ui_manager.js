@@ -117,7 +117,7 @@ window.checkGameTypeUI = function() {
         window.populateGameModesUI();
     }
 
-    const selectedMode = modeInput.value;
+    const selectedMode = modeInput.value || 'standard';
     const modeCfg = window.GAME_MODES ? window.GAME_MODES[selectedMode] : null;
 
     // --- LOGICA VISIBILITÀ OPZIONI ---
@@ -160,7 +160,8 @@ window.checkGameTypeUI = function() {
     if (containers.custom) containers.custom.style.display = (selectedMode === 'custom') ? 'flex' : 'none';
     if (containers.spectator) containers.spectator.style.display = (isSingle && !isTx && selectedMode !== 'qso') ? 'flex' : 'none';
     if (containers.wordsPerGroup) containers.wordsPerGroup.style.display = (selectedMode === 'standard_plus') ? 'block' : 'none';
-    if (containers.wordLen) containers.wordLen.style.display = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection') ? 'block' : 'none';
+    const isWordLenAllowed = (selectedMode === 'standard' || selectedMode === 'standard_plus' || selectedMode === 'perfection' || selectedMode === 'custom' || selectedMode === 'target_training');
+    if (containers.wordLen) containers.wordLen.style.display = isWordLenAllowed ? 'block' : 'none';
     if (containers.groupCharSet) containers.groupCharSet.style.display = (selectedMode === 'code_groups' || selectedMode === 'chars') ? 'block' : 'none';
     if (containers.charsGroupLength) containers.charsGroupLength.style.display = (selectedMode === 'chars') ? 'block' : 'none';
     if (containers.memoryCards) containers.memoryCards.style.display = (selectedMode === 'memory_cw') ? 'block' : 'none';
