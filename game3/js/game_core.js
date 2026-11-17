@@ -2131,7 +2131,7 @@ if (els.permanentGameInput) {
                 const rawVal = els.permanentGameInput.value;
                 const cleanVal = rawVal.replace(/\s/g, '').toUpperCase();
                 if (cleanVal.length >= 1) {
-                    const charDelaySec = parseFloat(localStorage.getItem('cwgame_pref_chars_auto_delay') || document.getElementById('charsAutoDelaySelect')?.value || "0");
+                    const charDelaySec = parseFloat(localStorage.getItem('cwgame_pref_chars_auto_delay') || document.getElementById('charsAutoDelaySelect')?.value || "0.3");
                     if (charDelaySec > 0) {
                         if (window.charsAutoSubmitTimer) clearTimeout(window.charsAutoSubmitTimer);
                         window.charsAutoSubmitTimer = setTimeout(() => {

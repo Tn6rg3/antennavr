@@ -943,7 +943,7 @@ async function initGame() {
     if (document.getElementById('voiceInputCheckbox')) document.getElementById('voiceInputCheckbox').checked = localStorage.getItem('cwgame_pref_voice_input') === 'true';
     if (document.getElementById('autoAdvanceCheckbox')) document.getElementById('autoAdvanceCheckbox').checked = localStorage.getItem('cwgame_pref_auto_advance') === 'true';
     if (document.getElementById('autoAdvanceDelaySelect')) document.getElementById('autoAdvanceDelaySelect').value = localStorage.getItem('cwgame_pref_auto_advance_delay') || "5";
-    if (document.getElementById('charsAutoDelaySelect')) document.getElementById('charsAutoDelaySelect').value = localStorage.getItem('cwgame_pref_chars_auto_delay') || "0";
+    if (document.getElementById('charsAutoDelaySelect')) document.getElementById('charsAutoDelaySelect').value = localStorage.getItem('cwgame_pref_chars_auto_delay') || "0.3";
 
     // SALVATAGGIO AUTOMATICO DELLE PREFERENZE AL CAMBIO
     const savePref = (key, val) => localStorage.setItem(key, val);
