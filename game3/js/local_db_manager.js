@@ -307,157 +307,17 @@ window.exportLocalBackupToTelegramChat = async function() {
             return alert("⚠️ Nessun dato locale o storico trovato da esportare.\n\nGioca almeno 1 partita per generare lo storico!");
         }
 
-        const backupObj = {
-            exportDate: new Date().toISOString(),
-            userId: window.myId,
-            userName: window.myName,
-            matchCount: history.length,
-            history: history
-        };
-
-        const jsonStr = JSON.stringify(backupObj, null, 2);
-
-        const modal = document.getElementById('backupModal');
-        const textarea = document.getElementById('backupJsonTextarea');
-
-        if (modal && textarea) {
-            textarea.value = jsonStr;
-            modal.style.display = 'flex';
-            if (typeof showToast === 'function') showToast("💾 Finestra di Backup aperta!");
-        } else {
-            window.copyBackupToClipboardWithText(jsonStr);
-        }
-    } catch(e) {
-        alert("Errore generazione backup: " + e.message);
-    }
+window.generateAndShowBackupJson = function() {
+    if (typeof showToast === 'function') showToast("☁️ Sincronizzazione Cloud Automatica attiva!");
+    alert("☁️ SINCRONIZZAZIONE CLOUD AUTOMATICA PROTETTA:\n\nI tuoi dati, lo storico e le statistiche sono sincronizzati ed al sicuro sul cloud di Firebase collegato al tuo account Telegram.\n\nNon è necessario scaricare file esterni!");
 };
 
-window.copyBackupToClipboard = function() {
-    const textarea = document.getElementById('backupJsonTextarea');
-    if (!textarea || !textarea.value) return;
-
-    window.copyBackupToClipboardWithText(textarea.value);
+window.copyBackupToClipboard = function() {};
+window.copyBackupToClipboardWithText = function() {};
+window.downloadBackupFileDirectly = function() {};
+window.importLocalBackupFromJson = function() {
+    alert("☁️ La sincronizzazione dei tuoi dati avviene in modo automatico e protetto direttamente sul Cloud di Firebase!");
 };
-
-window.copyBackupToClipboardWithText = function(text) {
-    if (!text) return;
-
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(() => {
-            alert("📋 TESTO BACKUP COPIATO NEGLI APPUNTI!\n\nI browser interni di Telegram bloccano il download diretto di file dentro le WebApp. Il testo del tuo backup è stato copiato negli appunti: puoi incollarlo nelle tue Note, in Chat o in un file di testo!");
-        }).catch(() => {
-            window.selectAndCopyTextarea();
-        });
-    } else {
-        window.selectAndCopyTextarea();
-    }
-};
-
-window.selectAndCopyTextarea = function() {
-    const textarea = document.getElementById('backupJsonTextarea');
-    if (textarea) {
-        textarea.focus();
-        textarea.select();
-        try {
-            document.execCommand('copy');
-            alert("📋 TESTO BACKUP COPIATO NEGLI APPUNTI!\n\nPuoi incollarlo dove vuoi (Note o Chat).");
-        } catch(e) {
-            alert("📋 Seleziona il testo nella casella e copialo manualmente.");
-        }
-    }
-};
-
-window.deleteLocalMatchRecord = function(keyOrTs) {
-    return new Promise((resolve) => {
-        if (!window.isLocalDbReady || !window.localDb || !keyOrTs) {
-            resolve(false);
-            return;
-        }
-
-        try {
-            const tx = window.localDb.transaction(['matchHistory'], 'readwrite');
-            const store = tx.objectStore('matchHistory');
-
-            if (!isNaN(keyOrTs)) {
-                try { store.delete(Number(keyOrTs)); } catch(e){}
-            }
-
-            const request = store.openCursor();
-            request.onsuccess = function(e) {
-                const cursor = e.target.result;
-                if (cursor) {
-                    const val = cursor.value;
-                    if (String(val.id) === String(keyOrTs) || String(val.ts) === String(keyOrTs) || String(val.key) === String(keyOrTs)) {
-                        cursor.delete();
-                    }
-                    cursor.continue();
-                } else {
-                    resolve(true);
-                }
-            };
-            request.onerror = function() { resolve(false); };
-        } catch(e) {
-            resolve(false);
-        }
-    });
-};
-
-window.downloadBackupFileDirectly = async function() {
-    const textarea = document.getElementById('backupJsonTextarea');
-    if (!textarea || !textarea.value) return;
-
-    const jsonStr = textarea.value;
-    const fileName = `cwgame_backup_${window.myId || 'user'}_${new Date().toISOString().split('T')[0]}.json`;
-
-    const isInsideTelegramIframe = (window.self !== window.top);
-
-    // Se siamo all'interno dell'iframe di Telegram, bypassiamo la chiamata a showSaveFilePicker evitando avvisi in console
-    if (!isInsideTelegramIframe && typeof window.showSaveFilePicker === 'function') {
-        try {
-            const handle = await window.showSaveFilePicker({
-                suggestedName: fileName,
-                types: [{
-                    description: 'File Backup JSON (.json)',
-                    accept: { 'application/json': ['.json', '.txt'], 'text/plain': ['.txt'] }
-                }]
-            });
-            const writable = await handle.createWritable();
-            await writable.write(jsonStr);
-            await writable.close();
-            if (typeof showToast === 'function') showToast("💾 File salvato con successo!");
-            alert("✅ FILE DI BACKUP SALVATO CON SUCCESSO!\n\nIl file è stato salvato nella cartella che hai scelto.");
-            return;
-        } catch (e) {
-            if (e.name === 'AbortError') return;
-        }
-    }
-
-    // FALLBACK SILENZIOSO PER TELEGRAM WEBAPP: Copia direttamente negli appunti
-    window.copyBackupToClipboardWithText(jsonStr);
-};
-
-// 6. IMPORTAZIONE BACKUP MANUALE DA FILE .JSON
-window.importLocalBackupFromJson = function(file) {
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async function(e) {
-        try {
-            const data = JSON.parse(e.target.result);
-            if (!data || (!data.history && !Array.isArray(data))) {
-                throw new Error("Formato backup non valido.");
-            }
-
-            const items = Array.isArray(data) ? data : data.history;
-
-            if (window.isLocalDbReady && window.localDb) {
-                const tx = window.localDb.transaction(['matchHistory'], 'readwrite');
-                const store = tx.objectStore('matchHistory');
-                items.forEach(item => {
-                    store.add({
-                        ts: item.ts || Date.now(),
-                        date: item.date || new Date().toISOString().split('T')[0],
-                        mode: item.mode || 'standard',
                         score: item.score || 0,
                         wpm: item.wpm || 20,
                         wordCount: item.wordCount || 10,
