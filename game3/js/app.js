@@ -2695,67 +2695,167 @@ window.loadAdminCallsignChallengeSettings = function() {
 
     // --- HELPER DI RICERCA UNIVERSALE UTENTI ADMIN ---
     window.findAdminUserCandidates = async function(inputVal) {
+        if (!inputVal || !inputVal.trim()) return [];
         const cleanVal = inputVal.replace('@', '').trim().toLowerCase();
         let candidates = new Map();
 
-        // 1. Cerca nei dati di presenza online
+        // 1. Cerca nel nodo users di Firebase Database
+        try {
+            const usersSnap = await db.ref('users').once('value');
+            if (usersSnap.exists()) {
+                for (const [id, userObj] of Object.entries(usersSnap.val() || {})) {
+                    if (!userObj) continue;
+                    const uName = String(userObj.username || "").toLowerCase();
+                    const aliasName = String(userObj.alias || userObj.name || "").toLowerCase();
+                    const callSign = String(userObj.activity_call || userObj.callsign || "").toLowerCase();
+                    const idStr = String(id).toLowerCase();
+
+                    const matchesName = (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)));
+                    const matchesUser = (uName && (uName === cleanVal || uName.includes(cleanVal)));
+                    const matchesCall = (callSign && (callSign === cleanVal || callSign.includes(cleanVal)));
+                    const matchesGeneric = (cleanVal.includes('giocat') || cleanVal.includes('anonim')) && (!aliasName || aliasName.includes('giocat') || aliasName.includes('anonim'));
+                    const matchesId = (idStr === cleanVal || idStr.includes(cleanVal));
+
+                    if (matchesName || matchesUser || matchesCall || matchesGeneric || matchesId) {
+                        const displayName = userObj.alias || userObj.name || userObj.activity_call || (uName ? '@' + uName : id);
+                        const userLevel = userObj.level || (userObj.course?.current_lesson) || 1;
+                        candidates.set(id, {
+                            id: id,
+                            name: displayName,
+                            username: userObj.username || "",
+                            alias: userObj.alias || userObj.name || "",
+                            level: userLevel
+                        });
+                    }
+                }
+            }
+        } catch(e) {
+            console.warn("Error searching users node:", e);
+        }
+
+        // 2. Cerca anche nei dati di presenza online
         try {
             const presenceSnap = await db.ref('presence').once('value');
             if (presenceSnap.exists()) {
                 for (const [id, userObj] of Object.entries(presenceSnap.val() || {})) {
                     if (!userObj) continue;
-                    const uName = (userObj.username || "").toLowerCase();
-                    const aliasName = (userObj.name || "").toLowerCase();
+                    const uName = String(userObj.username || "").toLowerCase();
+                    const aliasName = String(userObj.name || "").toLowerCase();
+                    const callSign = String(userObj.activity_call || userObj.callsign || "").toLowerCase();
+                    const idStr = String(id).toLowerCase();
 
                     const matchesName = (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)));
                     const matchesUser = (uName && (uName === cleanVal || uName.includes(cleanVal)));
-                    const matchesGeneric = (cleanVal.includes('giocat') || cleanVal.includes('anonim')) && (!aliasName || aliasName.includes('giocat') || aliasName.includes('anonim'));
-                    const matchesId = (id === cleanVal || id.includes(cleanVal));
+                    const matchesCall = (callSign && (callSign === cleanVal || callSign.includes(cleanVal)));
+                    const matchesId = (idStr === cleanVal || idStr.includes(cleanVal));
 
-                    if (matchesName || matchesUser || matchesGeneric || matchesId) {
+                    if (matchesName || matchesUser || matchesCall || matchesId) {
+                        const existing = candidates.get(id);
+                        const displayName = userObj.name || userObj.username || (existing ? existing.name : id);
+                        const userLevel = userObj.level || (existing ? existing.level : 1);
                         candidates.set(id, {
                             id: id,
-                            name: userObj.name || userObj.username || "Giocatore / Anonimo",
-                            username: userObj.username || ""
+                            name: displayName,
+                            username: userObj.username || (existing ? existing.username : ""),
+                            alias: userObj.name || (existing ? existing.alias : ""),
+                            level: userLevel
                         });
                     }
                 }
             }
-        } catch(e) {}
-
-        // 2. Cerca nella presenza utenti (Ottimizzato: legge presence a 0 Byte di storico)
-        try {
-            const usersSnap = await db.ref('presence').once('value');
-            if (usersSnap.exists()) {
-                for (const [id, userObj] of Object.entries(usersSnap.val() || {})) {
-                    if (!userObj) continue;
-                    const uName = (userObj.username || "").toLowerCase();
-                    const aliasName = (userObj.name || "").toLowerCase();
-
-                    const matchesName = (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)));
-                    const matchesUser = (uName && (uName === cleanVal || uName.includes(cleanVal)));
-                    const matchesId = (id === cleanVal || id.includes(cleanVal));
-
-                    if (matchesName || matchesUser || matchesId) {
-                        if (!candidates.has(id)) {
-                            candidates.set(id, {
-                                id: id,
-                                name: userObj.name || id,
-                                username: userObj.username || ""
-                            });
-                        }
-                    }
-                }
-            }
-        } catch(e) {}
+        } catch(e) {
+            console.warn("Error searching presence node:", e);
+        }
 
         if (candidates.size === 0 && !isNaN(inputVal.trim())) {
             const cleanId = inputVal.trim();
-            candidates.set(cleanId, { id: cleanId, name: inputVal.trim(), username: "" });
+            candidates.set(cleanId, { id: cleanId, name: `Utente ID ${cleanId}`, username: "", alias: "", level: 1 });
         }
 
         return Array.from(candidates.values());
     };
+
+    // --- INITIALIZER AUTOCOMPLETE PER RICERCA LIVELLO UTENTE ADMIN ---
+    window.initAdminUserLevelSearch = function() {
+        const adminLevelInput = document.getElementById('adminLevelUserInput');
+        if (!adminLevelInput || adminLevelInput.dataset.initialized) return;
+        adminLevelInput.dataset.initialized = "true";
+
+        let searchTimer = null;
+        adminLevelInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimer);
+            const val = e.target.value.trim();
+            const suggestionsEl = document.getElementById('adminLevelUserSuggestions');
+            const selectedInfoEl = document.getElementById('adminLevelSelectedInfo');
+
+            if (selectedInfoEl) selectedInfoEl.style.display = 'none';
+            delete adminLevelInput.dataset.selectedId;
+            delete adminLevelInput.dataset.selectedName;
+            delete adminLevelInput.dataset.selectedLevel;
+
+            if (!val) {
+                if (suggestionsEl) {
+                    suggestionsEl.style.display = 'none';
+                    suggestionsEl.innerHTML = '';
+                }
+                return;
+            }
+
+            searchTimer = setTimeout(async () => {
+                if (typeof window.findAdminUserCandidates !== 'function') return;
+                const candidates = await window.findAdminUserCandidates(val);
+
+                if (!suggestionsEl) return;
+                suggestionsEl.innerHTML = '';
+
+                if (candidates.length === 0) {
+                    suggestionsEl.innerHTML = `<div style="font-size:0.8em; color:#ff9800; padding:6px; text-align:center;">⚠️ Nessun utente trovato per '${val}'</div>`;
+                    suggestionsEl.style.display = 'block';
+                    return;
+                }
+
+                candidates.forEach(c => {
+                    const item = document.createElement('div');
+                    item.style.cssText = "padding:6px 8px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.08); text-align:left; transition:background 0.2s;";
+                    item.onmouseenter = () => item.style.background = 'rgba(149, 117, 205, 0.25)';
+                    item.onmouseleave = () => item.style.background = 'transparent';
+
+                    const uNameStr = c.username ? ` <span style="color:#9575cd;">(@${c.username})</span>` : '';
+                    const lvlStr = `<span style="font-size:0.75em; color:var(--hint-color); float:right;">Lv. attuale: ${c.level || 1}</span>`;
+
+                    item.innerHTML = `<div><b style="color:#fff;">${c.name}</b>${uNameStr}${lvlStr}</div><div style="font-size:0.72em; opacity:0.6; color:#aaa;">ID: ${c.id}</div>`;
+
+                    item.onclick = () => {
+                        adminLevelInput.value = c.username ? `@${c.username}` : (c.alias || c.name || c.id);
+                        adminLevelInput.dataset.selectedId = c.id;
+                        adminLevelInput.dataset.selectedName = c.name;
+                        adminLevelInput.dataset.selectedLevel = c.level || 1;
+
+                        suggestionsEl.style.display = 'none';
+                        if (selectedInfoEl) {
+                            selectedInfoEl.innerHTML = `✅ Selezionato: <b>${c.name}</b> ${uNameStr} (ID: ${c.id}) - Lv. Attuale: <b>${c.level || 1}</b>`;
+                            selectedInfoEl.style.display = 'block';
+                        }
+                    };
+                    suggestionsEl.appendChild(item);
+                });
+                suggestionsEl.style.display = 'block';
+            }, 200);
+        });
+
+        document.addEventListener('click', (e) => {
+            const suggestionsEl = document.getElementById('adminLevelUserSuggestions');
+            if (suggestionsEl && !adminLevelInput.contains(e.target) && !suggestionsEl.contains(e.target)) {
+                suggestionsEl.style.display = 'none';
+            }
+        });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => window.initAdminUserLevelSearch());
+    } else {
+        setTimeout(() => window.initAdminUserLevelSearch(), 500);
+    }
 
     // --- FUNZIONE ADMIN: ELIMINAZIONE UTENTE PER NOME / ALIAS ---
     window.adminDeleteUserByName = async function(inputVal) {
@@ -4337,36 +4437,7 @@ window.startMilestoneConfetti = function(durationMs = 4000) {
     animate();
 };
 
-window.saveAdminUserLevel = async function() {
-    if (!db || !window.isAdmin) return;
-    const inputStr = document.getElementById('adminLevelUserInput')?.value.trim();
-    const newLevel = parseInt(document.getElementById('adminLevelNumInput')?.value) || 1;
-
-    if (!inputStr) return alert("⚠️ Inserisci l'Username o Alias dell'utente.");
-
-    if (typeof showToast === 'function') showToast("Ricerca utente in corso...");
-
-    try {
-        const targetId = await window.findUserIdByAliasOrName(inputStr);
-        if (!targetId) return alert(`❌ Nessun utente trovato con Username/Alias: ${inputStr}`);
-
-        await Promise.all([
-            db.ref(`users/${targetId}/level`).set(newLevel),
-            db.ref(`users/${targetId}/course/current_lesson`).set(newLevel),
-            db.ref(`users/${targetId}/course/completedLessons`).transaction(curr => {
-                let arr = Array.isArray(curr) ? curr : [];
-                for (let l = 1; l < newLevel; l++) {
-                    if (!arr.includes(l)) arr.push(l);
-                }
-                return arr;
-            })
-        ]);
-
-        alert(`✅ LIVELLO AGGIORNATO CON SUCCESSO!\n\nAll'utente ID: ${targetId} è stato assegnato il Livello ${newLevel}!`);
-    } catch(e) {
-        alert("Errore assegnazione livello: " + e.message);
-    }
-};
+// (saveAdminUserLevel gestito in basso)
 
 window.loadedAdminBackupData = null;
 
@@ -5335,7 +5406,8 @@ window.drawSmoothTrendLine = function(ctx, points, color, fillColor) {
 
 window.saveAdminUserLevel = async function() {
     if (!db || !window.isAdmin) return;
-    const inputStr = document.getElementById('adminLevelUserInput')?.value.trim();
+    const inputEl = document.getElementById('adminLevelUserInput');
+    const inputStr = inputEl?.value.trim();
     const newLevel = parseInt(document.getElementById('adminLevelNumInput')?.value) || 1;
 
     if (!inputStr) return alert("⚠️ Inserisci l'Username o Alias dell'utente.");
@@ -5349,20 +5421,38 @@ window.saveAdminUserLevel = async function() {
             return alert(`❌ Nessun utente trovato per '${inputStr}'. Verifica la scrittura (es. @username o Alias) o inserisci direttamente l'ID Telegram.`);
         }
 
-        let selectedUser = candidates[0];
-        if (candidates.length > 1) {
-            const listTxt = candidates.map((c, idx) => `${idx + 1}) ${c.name} (ID: ${c.id})`).join('\n');
-            const selIdx = prompt(`Trovati ${candidates.length} utenti corrispondenti per '${inputStr}':\n\n${listTxt}\n\nInserisci il numero dell'utente a cui assegnare il Livello ${newLevel} (1-${candidates.length}):`);
-            const parsedIdx = parseInt(selIdx) - 1;
-            if (!isNaN(parsedIdx) && candidates[parsedIdx]) {
-                selectedUser = candidates[parsedIdx];
+        let selectedUser = null;
+
+        // 1. Se l'utente ha pre-selezionato un candidato specifico dai suggerimenti
+        const preselectedId = inputEl?.dataset?.selectedId;
+        if (preselectedId) {
+            selectedUser = candidates.find(c => c.id === preselectedId) || candidates[0];
+        }
+
+        // 2. Se non c'è una pre-selezione, mostra la scelta se ci sono più corrispondenze
+        if (!selectedUser) {
+            if (candidates.length === 1) {
+                selectedUser = candidates[0];
             } else {
-                return;
+                const listTxt = candidates.map((c, idx) => `${idx + 1}) ${c.name} ${c.username ? '(@' + c.username + ')' : ''} - ID: ${c.id} (Lv. attuale: ${c.level || 1})`).join('\n');
+                const selIdx = prompt(`Trovati ${candidates.length} utenti corrispondenti per '${inputStr}':\n\n${listTxt}\n\nInserisci il numero dell'utente a cui assegnare il Livello ${newLevel} (da 1 a ${candidates.length}):`);
+                if (!selIdx) return; // Annullato dall'utente
+                const parsedIdx = parseInt(selIdx) - 1;
+                if (!isNaN(parsedIdx) && candidates[parsedIdx]) {
+                    selectedUser = candidates[parsedIdx];
+                } else {
+                    return alert("Selezione annullata o non valida.");
+                }
             }
         }
 
         const targetId = selectedUser.id;
         const targetName = selectedUser.name;
+        const currentLvl = selectedUser.level || 1;
+
+        if (!confirm(`Confermi di voler assegnare il LIVELLO ${newLevel} a:\n\n👤 ${targetName} ${selectedUser.username ? '(@' + selectedUser.username + ')' : ''}\n🆔 Telegram ID: ${targetId}\n📊 Livello Attuale: ${currentLvl}\n➡️ Nuovo Livello: ${newLevel}`)) {
+            return;
+        }
 
         await Promise.all([
             db.ref(`users/${targetId}/level`).set(newLevel),
@@ -5377,6 +5467,23 @@ window.saveAdminUserLevel = async function() {
         ]);
 
         alert(`✅ LIVELLO AGGIORNATO CON SUCCESSO!\n\nAll'utente '${targetName}' (ID: ${targetId}) è stato assegnato il Livello ${newLevel}!`);
+
+        if (inputEl) {
+            inputEl.value = '';
+            delete inputEl.dataset.selectedId;
+            delete inputEl.dataset.selectedName;
+            delete inputEl.dataset.selectedLevel;
+        }
+        const suggestionsEl = document.getElementById('adminLevelUserSuggestions');
+        if (suggestionsEl) {
+            suggestionsEl.style.display = 'none';
+            suggestionsEl.innerHTML = '';
+        }
+        const selectedInfoEl = document.getElementById('adminLevelSelectedInfo');
+        if (selectedInfoEl) {
+            selectedInfoEl.style.display = 'none';
+            selectedInfoEl.innerHTML = '';
+        }
     } catch(e) {
         console.error("Save Admin User Level Error:", e);
         alert("Errore assegnazione livello: " + e.message);
