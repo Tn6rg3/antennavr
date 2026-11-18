@@ -1866,6 +1866,24 @@
                 <button id="btnAdminCleanupIncompleteUsers" class="btn-success" style="width:100%; padding:8px; font-weight:bold; background:#e65100; border:none; cursor:pointer;">PULISCI UTENTI FANTASMA / SENZA ALIAS 🧹</button>
             </div>
 
+            <!-- AREA ADMIN: ASSEGNAZIONE LIVELLO UTENTE -->
+            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; margin-top:10px;">
+                <h4 style="margin: 0 0 8px 0; color: #9575cd; font-size: 0.9em;">🎓 Assegna Livello / Lezione Utente</h4>
+                <input type="text" id="adminLevelUserInput" aria-label="Username o Alias utente per livello" placeholder="Username o Alias dell'utente (es. @mario o IU2XYZ)..." style="width:100%; padding:8px; font-size:0.85em; background:rgba(0,0,0,0.2); border:1px solid #9575cd; color:white; border-radius:4px; box-sizing: border-box; margin-bottom: 6px;">
+                <div style="display:flex; gap:6px; margin-bottom:6px;">
+                    <input type="number" id="adminLevelNumInput" aria-label="Numero livello o lezione" placeholder="Livello (es. 5)" min="1" max="50" value="1" style="flex:1; padding:8px; font-size:0.85em; background:#fff; color:#000; border-radius:4px; font-weight:bold; box-sizing:border-box;">
+                    <button onclick="window.saveAdminUserLevel()" class="btn-success" style="flex:2; padding:8px; font-weight:bold; background:#673ab7; border:none; color:#fff; cursor:pointer;">ASSEGNA LIVELLO 🎓</button>
+                </div>
+            </div>
+
+            <!-- AREA ADMIN: RIPRISTINO SELETTIVO SINGOLO UTENTE DA BACKUP JSON -->
+            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; margin-top:10px;">
+                <h4 style="margin: 0 0 8px 0; color: #00bcd4; font-size: 0.9em;">🔄 Ripristina Singolo Utente da Backup JSON</h4>
+                <button onclick="document.getElementById('adminRestoreSingleUserModal').style.display='flex'" class="btn-secondary" style="width:100%; padding:8px; font-weight:bold; background:#00bcd4; border:none; color:#000; cursor:pointer;">
+                    📂 RIPRISTINA UTENTE DA FILE BACKUP .JSON
+                </button>
+            </div>
+
 
 
             <!-- AREA ADMIN: PUBBLICAZIONE VERSIONE APP -->
@@ -3154,25 +3172,27 @@
     </button>
 </div>
 
-<!-- MODAL: BACKUP E RIPRISTINO DATI -->
-<div id="backupModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 480px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 9600; border: 3px solid #ffd700; border-radius: 16px; padding: 16px; flex-direction: column; box-sizing: border-box; box-shadow: 0 15px 50px rgba(0,0,0,0.9); max-height: 90vh; overflow-y: auto;">
-    <h3 style="color: #ffd700; margin: 0 0 10px 0; text-align: center; font-size: 1.2em;">💾 Backup Dati Personali</h3>
+<!-- MODAL ADMIN: RIPRISTINO SINGOLO UTENTE DA FILE BACKUP JSON -->
+<div id="adminRestoreSingleUserModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; max-width: 480px; transform: translate(-50%, -50%); background: var(--bg-color); z-index: 9700; border: 3px solid #00bcd4; border-radius: 16px; padding: 18px; flex-direction: column; box-sizing: border-box; box-shadow: 0 15px 50px rgba(0,0,0,0.9); max-height: 90vh; overflow-y: auto; text-align: center;">
+    <h3 style="color: #00bcd4; margin: 0 0 8px 0; font-size: 1.15em;">🔄 Ripristino Singolo Utente da Backup JSON</h3>
+    <p style="font-size: 0.8em; color: var(--hint-color); margin-bottom: 12px;">Seleziona il file .json del backup scaricato da Drive, poi cerca l'utente per ripristinare la sua scheda ed il suo storico.</p>
 
-    <p style="font-size:0.85em; color:var(--text-color); margin-bottom:10px;">Puoi copiare il testo del backup negli appunti per incollarlo dove vuoi (es. Note o Chat Telegram), oppure scaricare il file .json sul tuo dispositivo.</p>
-
-    <textarea id="backupJsonTextarea" aria-label="Contenuto backup" rows="8" readonly style="width:100%; font-family:monospace; font-size:0.75em; padding:8px; background:#000; color:#00ff66; border:1px solid #ffd700; border-radius:8px; box-sizing:border-box; margin-bottom:12px; resize:none;"></textarea>
-
-    <div style="display:flex; flex-direction:column; gap:8px;">
-        <button onclick="window.copyBackupToClipboard()" class="btn-primary" style="padding:12px; font-weight:bold; font-size:0.95em; background:#ffd700; color:#000; border:none; cursor:pointer;">
-            📋 COPIA TESTO BACKUP NEGLI APPUNTI
-        </button>
-        <button onclick="window.downloadBackupFileDirectly()" class="btn-secondary" style="padding:10px; font-size:0.85em; cursor:pointer;">
-            📥 SCARICA FILE .JSON SUL DISPOSITIVO
-        </button>
-        <button onclick="document.getElementById('backupModal').style.display='none'" class="btn-secondary" style="padding:8px; font-size:0.85em; margin-top:4px; cursor:pointer;">
-            Chiudi
-        </button>
+    <div style="margin-bottom: 12px;">
+        <input type="file" id="adminBackupFileInput" accept=".json,application/json" onchange="window.loadAdminBackupJsonFile(event)" style="display:none;">
+        <button onclick="document.getElementById('adminBackupFileInput').click()" class="btn-primary" style="width:100%; padding:10px; font-weight:bold; background:#00bcd4; border:none; color:#000; cursor:pointer;">📂 SELEZIONA FILE BACKUP .JSON</button>
+        <small id="adminBackupFileInfo" style="font-size:0.75em; color:#00ff66; display:block; margin-top:4px; font-weight:bold;"></small>
     </div>
+
+    <div id="adminBackupSearchSection" style="display:none; text-align:left; margin-bottom:12px;">
+        <label for="adminSearchBackupUser" style="font-size:0.8em; font-weight:bold; color:var(--link-color); display:block; margin-bottom:4px;">🔍 Cerca Utente nel File Backup:</label>
+        <input type="text" id="adminSearchBackupUser" placeholder="Digita Nome, Alias, Username o ID..." oninput="window.searchUserInBackupJson()" style="width:100%; padding:8px; font-size:0.85em; background:#ffffff; color:#000000; border-radius:6px; border:1px solid var(--link-color); box-sizing:border-box;">
+
+        <div id="adminBackupSearchResults" style="max-height:180px; overflow-y:auto; margin-top:8px; display:flex; flex-direction:column; gap:6px;">
+            <!-- Risultati trovati da JS -->
+        </div>
+    </div>
+
+    <button onclick="document.getElementById('adminRestoreSingleUserModal').style.display='none'" class="btn-secondary" style="width:100%; padding:8px; font-size:0.85em; cursor:pointer;">Chiudi</button>
 </div>
 
 <!-- MODAL: STATISTICHE CORSISTA (PER TUTOR) -->
