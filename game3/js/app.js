@@ -2693,13 +2693,20 @@ window.loadAdminCallsignChallengeSettings = function() {
         }
     };
 
-    // --- HELPER DI RICERCA UNIVERSALE UTENTI ADMIN ---
-    window.findAdminUserCandidates = async function(inputVal) {
-        if (!inputVal || !inputVal.trim()) return [];
-        const cleanVal = inputVal.replace('@', '').trim().toLowerCase();
-        let candidates = new Map();
+    // --- CACHE IN MEMORIA UTENTI PER RICERCA ADMIN ISTANTANEA ---
+    window._adminUsersListCache = null;
+    window._adminUsersListCacheTs = 0;
+    const ADMIN_USERS_CACHE_TTL = 60000; // 60 secondi di validità cache
 
-        // 1. Cerca nel nodo users di Firebase Database
+    window.getAdminUsersListCached = async function(forceRefresh = false) {
+        const now = Date.now();
+        if (!forceRefresh && window._adminUsersListCache && (now - window._adminUsersListCacheTs < ADMIN_USERS_CACHE_TTL)) {
+            return window._adminUsersListCache;
+        }
+
+        let candidatesMap = new Map();
+
+        // 1. Legge nodo users
         try {
             const usersSnap = await db.ref('users').once('value');
             if (usersSnap.exists()) {
@@ -2709,70 +2716,90 @@ window.loadAdminCallsignChallengeSettings = function() {
                     const aliasName = String(userObj.alias || userObj.name || "").toLowerCase();
                     const callSign = String(userObj.activity_call || userObj.callsign || "").toLowerCase();
                     const idStr = String(id).toLowerCase();
+                    const displayName = userObj.alias || userObj.name || userObj.activity_call || (uName ? '@' + uName : id);
+                    const userLevel = userObj.level || userObj.course?.current_lesson || userObj.course?.progress?.current_lesson || userObj.progression?.level || userObj.rpg_level || 1;
 
-                    const matchesName = (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)));
-                    const matchesUser = (uName && (uName === cleanVal || uName.includes(cleanVal)));
-                    const matchesCall = (callSign && (callSign === cleanVal || callSign.includes(cleanVal)));
-                    const matchesGeneric = (cleanVal.includes('giocat') || cleanVal.includes('anonim')) && (!aliasName || aliasName.includes('giocat') || aliasName.includes('anonim'));
-                    const matchesId = (idStr === cleanVal || idStr.includes(cleanVal));
-
-                    if (matchesName || matchesUser || matchesCall || matchesGeneric || matchesId) {
-                        const displayName = userObj.alias || userObj.name || userObj.activity_call || (uName ? '@' + uName : id);
-                        const userLevel = userObj.level || userObj.course?.current_lesson || userObj.course?.progress?.current_lesson || userObj.progression?.level || userObj.rpg_level || 1;
-                        candidates.set(id, {
-                            id: id,
-                            name: displayName,
-                            username: userObj.username || "",
-                            alias: userObj.alias || userObj.name || "",
-                            level: userLevel
-                        });
-                    }
+                    candidatesMap.set(id, {
+                        id: id,
+                        idStr: idStr,
+                        name: displayName,
+                        aliasName: aliasName,
+                        uName: uName,
+                        callSign: callSign,
+                        username: userObj.username || "",
+                        alias: userObj.alias || userObj.name || "",
+                        level: userLevel
+                    });
                 }
             }
         } catch(e) {
-            console.warn("Error searching users node:", e);
+            console.warn("Error fetching users for admin cache:", e);
         }
 
-        // 2. Cerca anche nei dati di presenza online
+        // 2. Legge presenza online
         try {
             const presenceSnap = await db.ref('presence').once('value');
             if (presenceSnap.exists()) {
                 for (const [id, userObj] of Object.entries(presenceSnap.val() || {})) {
                     if (!userObj) continue;
-                    const uName = String(userObj.username || "").toLowerCase();
-                    const aliasName = String(userObj.name || "").toLowerCase();
-                    const callSign = String(userObj.activity_call || userObj.callsign || "").toLowerCase();
                     const idStr = String(id).toLowerCase();
+                    const existing = candidatesMap.get(id);
 
-                    const matchesName = (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)));
-                    const matchesUser = (uName && (uName === cleanVal || uName.includes(cleanVal)));
-                    const matchesCall = (callSign && (callSign === cleanVal || callSign.includes(callSign)));
-                    const matchesId = (idStr === cleanVal || idStr.includes(cleanVal));
+                    const uName = String(userObj.username || (existing?.username || "")).toLowerCase();
+                    const aliasName = String(userObj.name || (existing?.alias || "")).toLowerCase();
+                    const callSign = String(userObj.activity_call || userObj.callsign || (existing?.callSign || "")).toLowerCase();
+                    const displayName = userObj.name || userObj.username || (existing ? existing.name : id);
+                    const userLevel = userObj.level || userObj.course?.current_lesson || userObj.course?.progress?.current_lesson || userObj.progression?.level || userObj.rpg_level || (existing ? existing.level : 1);
 
-                    if (matchesName || matchesUser || matchesCall || matchesId) {
-                        const existing = candidates.get(id);
-                        const displayName = userObj.name || userObj.username || (existing ? existing.name : id);
-                        const userLevel = userObj.level || userObj.course?.current_lesson || userObj.course?.progress?.current_lesson || userObj.progression?.level || userObj.rpg_level || (existing ? existing.level : 1);
-                        candidates.set(id, {
-                            id: id,
-                            name: displayName,
-                            username: userObj.username || (existing ? existing.username : ""),
-                            alias: userObj.name || (existing ? existing.alias : ""),
-                            level: userLevel
-                        });
-                    }
+                    candidatesMap.set(id, {
+                        id: id,
+                        idStr: idStr,
+                        name: displayName,
+                        aliasName: aliasName,
+                        uName: uName,
+                        callSign: callSign,
+                        username: userObj.username || (existing ? existing.username : ""),
+                        alias: userObj.name || (existing ? existing.alias : ""),
+                        level: userLevel
+                    });
                 }
             }
         } catch(e) {
-            console.warn("Error searching presence node:", e);
+            console.warn("Error fetching presence for admin cache:", e);
         }
 
-        if (candidates.size === 0 && !isNaN(inputVal.trim())) {
+        const userList = Array.from(candidatesMap.values());
+        window._adminUsersListCache = userList;
+        window._adminUsersListCacheTs = now;
+        return userList;
+    };
+
+    // --- HELPER DI RICERCA UNIVERSALE UTENTI ADMIN ---
+    window.findAdminUserCandidates = async function(inputVal) {
+        if (!inputVal || !inputVal.trim()) return [];
+        const cleanVal = inputVal.replace('@', '').trim().toLowerCase();
+
+        const allUsers = await window.getAdminUsersListCached();
+        const matches = [];
+
+        for (const u of allUsers) {
+            const matchesName = (u.aliasName && (u.aliasName === cleanVal || u.aliasName.includes(cleanVal)));
+            const matchesUser = (u.uName && (u.uName === cleanVal || u.uName.includes(cleanVal)));
+            const matchesCall = (u.callSign && (u.callSign === cleanVal || u.callSign.includes(cleanVal)));
+            const matchesGeneric = (cleanVal.includes('giocat') || cleanVal.includes('anonim')) && (!u.aliasName || u.aliasName.includes('giocat') || u.aliasName.includes('anonim'));
+            const matchesId = (u.idStr === cleanVal || u.idStr.includes(cleanVal));
+
+            if (matchesName || matchesUser || matchesCall || matchesGeneric || matchesId) {
+                matches.push(u);
+            }
+        }
+
+        if (matches.length === 0 && !isNaN(inputVal.trim())) {
             const cleanId = inputVal.trim();
-            candidates.set(cleanId, { id: cleanId, name: `Utente ID ${cleanId}`, username: "", alias: "", level: 1 });
+            matches.push({ id: cleanId, name: `Utente ID ${cleanId}`, username: "", alias: "", level: 1 });
         }
 
-        return Array.from(candidates.values());
+        return matches;
     };
 
     // --- INITIALIZER AUTOCOMPLETE PER RICERCA LIVELLO UTENTE ADMIN ---
@@ -2780,6 +2807,11 @@ window.loadAdminCallsignChallengeSettings = function() {
         const adminLevelInput = document.getElementById('adminLevelUserInput');
         if (!adminLevelInput || adminLevelInput.dataset.initialized) return;
         adminLevelInput.dataset.initialized = "true";
+
+        // Precarica in background la cache utenti appena il campo riceve focus
+        adminLevelInput.addEventListener('focus', () => {
+            window.getAdminUsersListCached().catch(() => {});
+        });
 
         let searchTimer = null;
         adminLevelInput.addEventListener('input', (e) => {
@@ -2801,6 +2833,7 @@ window.loadAdminCallsignChallengeSettings = function() {
                 return;
             }
 
+            // Ricerca ultra-veloce istantanea (100ms debounce)
             searchTimer = setTimeout(async () => {
                 if (typeof window.findAdminUserCandidates !== 'function') return;
                 const candidates = await window.findAdminUserCandidates(val);
@@ -2838,6 +2871,18 @@ window.loadAdminCallsignChallengeSettings = function() {
                         }
                     };
                     suggestionsEl.appendChild(item);
+                });
+                suggestionsEl.style.display = 'block';
+            }, 100);
+        });
+
+        document.addEventListener('click', (e) => {
+            const suggestionsEl = document.getElementById('adminLevelUserSuggestions');
+            if (suggestionsEl && !adminLevelInput.contains(e.target) && !suggestionsEl.contains(e.target)) {
+                suggestionsEl.style.display = 'none';
+            }
+        });
+    };
                 });
                 suggestionsEl.style.display = 'block';
             }, 200);
@@ -5369,6 +5414,8 @@ window.saveAdminUserLevel = async function() {
         ]);
 
         alert(`✅ LIVELLO AGGIORNATO CON SUCCESSO!\n\nAll'utente '${targetName}' (ID: ${targetId}) è stato assegnato il Livello ${newLevel}!`);
+
+        window._adminUsersListCache = null; // Invalida la cache per la ricerca successiva
 
         if (inputEl) {
             inputEl.value = '';
