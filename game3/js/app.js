@@ -2705,67 +2705,87 @@ window.loadAdminCallsignChallengeSettings = function() {
         }
 
         let candidatesMap = new Map();
+        const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
 
-        // 1. Legge nodo users
+        // Legge in parallelo solo i nodi ultra-leggeri (Presenza, Iscritti Corso, Classifiche, Attività del Giorno)
+        // evitando il download del pesante nodo /users con tutti gli storici delle partite
         try {
-            const usersSnap = await db.ref('users').once('value');
-            if (usersSnap.exists()) {
-                for (const [id, userObj] of Object.entries(usersSnap.val() || {})) {
-                    if (!userObj) continue;
-                    const uName = String(userObj.username || "").toLowerCase();
-                    const aliasName = String(userObj.alias || userObj.name || "").toLowerCase();
-                    const callSign = String(userObj.activity_call || userObj.callsign || "").toLowerCase();
-                    const idStr = String(id).toLowerCase();
-                    const displayName = userObj.alias || userObj.name || userObj.activity_call || (uName ? '@' + uName : id);
-                    const userLevel = userObj.level || userObj.course?.current_lesson || userObj.course?.progress?.current_lesson || userObj.progression?.level || userObj.rpg_level || 1;
+            const [presenceSnap, courseSnap, callsignLbSnap, dailyActSnap] = await Promise.all([
+                db.ref('presence').once('value').catch(() => null),
+                db.ref('courseActiveEnrollments').once('value').catch(() => null),
+                db.ref('leaderboard/callsign/global').limitToLast(100).once('value').catch(() => null),
+                db.ref(`activity/daily/${todayStr}`).once('value').catch(() => null)
+            ]);
+
+            // 1. Dati da presenza online
+            if (presenceSnap && presenceSnap.exists()) {
+                for (const [id, uObj] of Object.entries(presenceSnap.val() || {})) {
+                    if (!uObj) continue;
+                    const uName = String(uObj.username || "").toLowerCase();
+                    const aliasName = String(uObj.name || "").toLowerCase();
+                    const callSign = String(uObj.activity_call || uObj.callsign || "").toLowerCase();
+                    const displayName = uObj.name || uObj.username || (uName ? '@' + uName : id);
+                    const userLevel = uObj.level || uObj.course?.current_lesson || uObj.course?.progress?.current_lesson || uObj.progression?.level || 1;
 
                     candidatesMap.set(id, {
-                        id: id,
-                        idStr: idStr,
-                        name: displayName,
-                        aliasName: aliasName,
-                        uName: uName,
-                        callSign: callSign,
-                        username: userObj.username || "",
-                        alias: userObj.alias || userObj.name || "",
-                        level: userLevel
+                        id: id, idStr: String(id).toLowerCase(), name: displayName, aliasName: aliasName,
+                        uName: uName, callSign: callSign, username: uObj.username || "", alias: uObj.name || "", level: userLevel
                     });
                 }
             }
-        } catch(e) {
-            console.warn("Error fetching users for admin cache:", e);
-        }
 
-        // 2. Legge presenza online
-        try {
-            const presenceSnap = await db.ref('presence').once('value');
-            if (presenceSnap.exists()) {
-                for (const [id, userObj] of Object.entries(presenceSnap.val() || {})) {
-                    if (!userObj) continue;
-                    const idStr = String(id).toLowerCase();
+            // 2. Dati da iscritti al corso
+            if (courseSnap && courseSnap.exists()) {
+                for (const [id, uObj] of Object.entries(courseSnap.val() || {})) {
+                    if (!uObj) continue;
                     const existing = candidatesMap.get(id);
-
-                    const uName = String(userObj.username || (existing?.username || "")).toLowerCase();
-                    const aliasName = String(userObj.name || (existing?.alias || "")).toLowerCase();
-                    const callSign = String(userObj.activity_call || userObj.callsign || (existing?.callSign || "")).toLowerCase();
-                    const displayName = userObj.name || userObj.username || (existing ? existing.name : id);
-                    const userLevel = userObj.level || userObj.course?.current_lesson || userObj.course?.progress?.current_lesson || userObj.progression?.level || userObj.rpg_level || (existing ? existing.level : 1);
+                    const aliasName = String(uObj.name || existing?.aliasName || "").toLowerCase();
+                    const displayName = uObj.name || existing?.name || id;
+                    const userLevel = uObj.current_lesson || uObj.lesson || existing?.level || 1;
 
                     candidatesMap.set(id, {
-                        id: id,
-                        idStr: idStr,
-                        name: displayName,
-                        aliasName: aliasName,
-                        uName: uName,
-                        callSign: callSign,
-                        username: userObj.username || (existing ? existing.username : ""),
-                        alias: userObj.name || (existing ? existing.alias : ""),
-                        level: userLevel
+                        id: id, idStr: String(id).toLowerCase(), name: displayName, aliasName: aliasName,
+                        uName: existing?.uName || "", callSign: existing?.callSign || "",
+                        username: existing?.username || "", alias: uObj.name || existing?.alias || "", level: userLevel
+                    });
+                }
+            }
+
+            // 3. Dati da classifica globale nominativi
+            if (callsignLbSnap && callsignLbSnap.exists()) {
+                for (const [id, uObj] of Object.entries(callsignLbSnap.val() || {})) {
+                    if (!uObj) continue;
+                    const existing = candidatesMap.get(id);
+                    const aliasName = String(uObj.name || existing?.aliasName || "").toLowerCase();
+                    const uName = String(uObj.username || existing?.uName || "").toLowerCase();
+                    const displayName = uObj.name || existing?.name || (uName ? '@' + uName : id);
+                    const userLevel = uObj.level || existing?.level || 1;
+
+                    candidatesMap.set(id, {
+                        id: id, idStr: String(id).toLowerCase(), name: displayName, aliasName: aliasName,
+                        uName: uName, callSign: existing?.callSign || "",
+                        username: uObj.username || existing?.username || "", alias: uObj.name || existing?.alias || "", level: userLevel
+                    });
+                }
+            }
+
+            // 4. Dati da attività giornaliera
+            if (dailyActSnap && dailyActSnap.exists()) {
+                for (const [id, uObj] of Object.entries(dailyActSnap.val() || {})) {
+                    if (!uObj || typeof uObj !== 'object') continue;
+                    const existing = candidatesMap.get(id);
+                    const aliasName = String(uObj.name || existing?.aliasName || "").toLowerCase();
+                    const displayName = uObj.name || existing?.name || id;
+
+                    candidatesMap.set(id, {
+                        id: id, idStr: String(id).toLowerCase(), name: displayName, aliasName: aliasName,
+                        uName: existing?.uName || "", callSign: existing?.callSign || "",
+                        username: existing?.username || "", alias: uObj.name || existing?.alias || "", level: existing?.level || 1
                     });
                 }
             }
         } catch(e) {
-            console.warn("Error fetching presence for admin cache:", e);
+            console.warn("Error fetching fast user list for admin cache:", e);
         }
 
         const userList = Array.from(candidatesMap.values());
@@ -2794,6 +2814,32 @@ window.loadAdminCallsignChallengeSettings = function() {
             }
         }
 
+        // Se non trova corrispondenze nella cache leggera e l'input è un ID o username specifico, tenta un lookup mirato e leggero solo sui campi essenziali (senza caricare lo storico!)
+        if (matches.length === 0) {
+            try {
+                const targetUid = cleanVal;
+                const [aliasSnap, nameSnap, usernameSnap, levelSnap, lessonSnap] = await Promise.all([
+                    db.ref(`users/${targetUid}/alias`).once('value').catch(() => null),
+                    db.ref(`users/${targetUid}/name`).once('value').catch(() => null),
+                    db.ref(`users/${targetUid}/username`).once('value').catch(() => null),
+                    db.ref(`users/${targetUid}/level`).once('value').catch(() => null),
+                    db.ref(`users/${targetUid}/course/current_lesson`).once('value').catch(() => null)
+                ]);
+
+                if ((aliasSnap && aliasSnap.exists()) || (nameSnap && nameSnap.exists()) || (usernameSnap && usernameSnap.exists()) || (levelSnap && levelSnap.exists())) {
+                    const aliasVal = aliasSnap?.val() || nameSnap?.val() || "";
+                    const uNameVal = usernameSnap?.val() || "";
+                    const levelVal = levelSnap?.val() || lessonSnap?.val() || 1;
+                    const displayName = aliasVal || (uNameVal ? '@' + uNameVal : targetUid);
+
+                    matches.push({
+                        id: targetUid, idStr: targetUid.toLowerCase(), name: displayName,
+                        username: uNameVal, alias: aliasVal, level: levelVal
+                    });
+                }
+            } catch(e) {}
+        }
+
         if (matches.length === 0 && !isNaN(inputVal.trim())) {
             const cleanId = inputVal.trim();
             matches.push({ id: cleanId, name: `Utente ID ${cleanId}`, username: "", alias: "", level: 1 });
@@ -2802,28 +2848,28 @@ window.loadAdminCallsignChallengeSettings = function() {
         return matches;
     };
 
-    // --- INITIALIZER AUTOCOMPLETE PER RICERCA LIVELLO UTENTE ADMIN ---
-    window.initAdminUserLevelSearch = function() {
-        const adminLevelInput = document.getElementById('adminLevelUserInput');
-        if (!adminLevelInput || adminLevelInput.dataset.initialized) return;
-        adminLevelInput.dataset.initialized = "true";
+    // --- BINDING AUTOCOMPLETE UNIVERSALE CAMPI ADMIN ---
+    window.bindAdminInputAutocomplete = function(inputId, suggestionsId, selectedInfoId) {
+        const inputEl = document.getElementById(inputId);
+        const suggestionsEl = document.getElementById(suggestionsId);
+        const selectedInfoEl = selectedInfoId ? document.getElementById(selectedInfoId) : null;
 
-        // Precarica in background la cache utenti appena il campo riceve focus
-        adminLevelInput.addEventListener('focus', () => {
+        if (!inputEl || inputEl.dataset.initialized) return;
+        inputEl.dataset.initialized = "true";
+
+        inputEl.addEventListener('focus', () => {
             window.getAdminUsersListCached().catch(() => {});
         });
 
         let searchTimer = null;
-        adminLevelInput.addEventListener('input', (e) => {
+        inputEl.addEventListener('input', (e) => {
             clearTimeout(searchTimer);
             const val = e.target.value.trim();
-            const suggestionsEl = document.getElementById('adminLevelUserSuggestions');
-            const selectedInfoEl = document.getElementById('adminLevelSelectedInfo');
 
             if (selectedInfoEl) selectedInfoEl.style.display = 'none';
-            delete adminLevelInput.dataset.selectedId;
-            delete adminLevelInput.dataset.selectedName;
-            delete adminLevelInput.dataset.selectedLevel;
+            delete inputEl.dataset.selectedId;
+            delete inputEl.dataset.selectedName;
+            delete inputEl.dataset.selectedLevel;
 
             if (!val) {
                 if (suggestionsEl) {
@@ -2833,7 +2879,6 @@ window.loadAdminCallsignChallengeSettings = function() {
                 return;
             }
 
-            // Ricerca ultra-veloce istantanea (100ms debounce)
             searchTimer = setTimeout(async () => {
                 if (typeof window.findAdminUserCandidates !== 'function') return;
                 const candidates = await window.findAdminUserCandidates(val);
@@ -2854,40 +2899,46 @@ window.loadAdminCallsignChallengeSettings = function() {
                     item.onmouseleave = () => item.style.background = 'transparent';
 
                     const uNameStr = c.username ? ` <span style="color:#9575cd;">(@${c.username})</span>` : '';
-                    const lvlStr = `<span style="font-size:0.75em; color:var(--hint-color); float:right;">Lv. attuale: ${c.level || 1}</span>`;
+                    const lvlStr = `<span style="font-size:0.75em; color:var(--hint-color); float:right;">Lv: ${c.level || 1}</span>`;
 
                     item.innerHTML = `<div><b style="color:#fff;">${c.name}</b>${uNameStr}${lvlStr}</div><div style="font-size:0.72em; opacity:0.6; color:#aaa;">ID: ${c.id}</div>`;
 
                     item.onclick = () => {
-                        adminLevelInput.value = c.username ? `@${c.username}` : (c.alias || c.name || c.id);
-                        adminLevelInput.dataset.selectedId = c.id;
-                        adminLevelInput.dataset.selectedName = c.name;
-                        adminLevelInput.dataset.selectedLevel = c.level || 1;
+                        inputEl.value = c.username ? `@${c.username}` : (c.alias || c.name || c.id);
+                        inputEl.dataset.selectedId = c.id;
+                        inputEl.dataset.selectedName = c.name;
+                        inputEl.dataset.selectedLevel = c.level || 1;
 
                         suggestionsEl.style.display = 'none';
                         if (selectedInfoEl) {
-                            selectedInfoEl.innerHTML = `✅ Selezionato: <b>${c.name}</b> ${uNameStr} (ID: ${c.id}) - Lv. Attuale: <b>${c.level || 1}</b>`;
+                            selectedInfoEl.innerHTML = `✅ Selezionato: <b>${c.name}</b> ${uNameStr} (ID: ${c.id})`;
                             selectedInfoEl.style.display = 'block';
                         }
                     };
                     suggestionsEl.appendChild(item);
                 });
                 suggestionsEl.style.display = 'block';
-            }, 100);
+            }, 80);
         });
 
         document.addEventListener('click', (e) => {
-            const suggestionsEl = document.getElementById('adminLevelUserSuggestions');
-            if (suggestionsEl && !adminLevelInput.contains(e.target) && !suggestionsEl.contains(e.target)) {
+            if (suggestionsEl && !inputEl.contains(e.target) && !suggestionsEl.contains(e.target)) {
                 suggestionsEl.style.display = 'none';
             }
         });
     };
 
+    window.initAdminUserLevelSearch = function() {
+        window.bindAdminInputAutocomplete('adminLevelUserInput', 'adminLevelUserSuggestions', 'adminLevelSelectedInfo');
+        window.bindAdminInputAutocomplete('adminCwgTesterInput', 'adminTesterUserSuggestions', 'adminTesterSelectedInfo');
+        window.bindAdminInputAutocomplete('adminResetUserInput', 'adminResetUserSuggestions', 'adminResetSelectedInfo');
+        window.bindAdminInputAutocomplete('adminDeleteUserInput', 'adminDeleteUserSuggestions', 'adminDeleteSelectedInfo');
+    };
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => window.initAdminUserLevelSearch());
     } else {
-        setTimeout(() => window.initAdminUserLevelSearch(), 500);
+        setTimeout(() => window.initAdminUserLevelSearch(), 300);
     }
 
     // --- FUNZIONE ADMIN: ELIMINAZIONE UTENTE PER NOME / ALIAS ---
