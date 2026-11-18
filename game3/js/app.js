@@ -5333,4 +5333,154 @@ window.drawSmoothTrendLine = function(ctx, points, color, fillColor) {
     }
 };
 
+window.saveAdminUserLevel = async function() {
+    if (!db || !window.isAdmin) return;
+    const inputStr = document.getElementById('adminLevelUserInput')?.value.trim();
+    const newLevel = parseInt(document.getElementById('adminLevelNumInput')?.value) || 1;
+
+    if (!inputStr) return alert("⚠️ Inserisci l'Username o Alias dell'utente.");
+
+    if (typeof showToast === 'function') showToast("Ricerca utente in corso...");
+
+    try {
+        const candidates = await window.findAdminUserCandidates(inputStr);
+
+        if (!candidates || candidates.length === 0) {
+            return alert(`❌ Nessun utente trovato per '${inputStr}'. Verifica la scrittura (es. @username o Alias) o inserisci direttamente l'ID Telegram.`);
+        }
+
+        let selectedUser = candidates[0];
+        if (candidates.length > 1) {
+            const listTxt = candidates.map((c, idx) => `${idx + 1}) ${c.name} (ID: ${c.id})`).join('\n');
+            const selIdx = prompt(`Trovati ${candidates.length} utenti corrispondenti per '${inputStr}':\n\n${listTxt}\n\nInserisci il numero dell'utente a cui assegnare il Livello ${newLevel} (1-${candidates.length}):`);
+            const parsedIdx = parseInt(selIdx) - 1;
+            if (!isNaN(parsedIdx) && candidates[parsedIdx]) {
+                selectedUser = candidates[parsedIdx];
+            } else {
+                return;
+            }
+        }
+
+        const targetId = selectedUser.id;
+        const targetName = selectedUser.name;
+
+        await Promise.all([
+            db.ref(`users/${targetId}/level`).set(newLevel),
+            db.ref(`users/${targetId}/course/current_lesson`).set(newLevel),
+            db.ref(`users/${targetId}/course/completedLessons`).transaction(curr => {
+                let arr = Array.isArray(curr) ? curr : [];
+                for (let l = 1; l < newLevel; l++) {
+                    if (!arr.includes(l)) arr.push(l);
+                }
+                return arr;
+            })
+        ]);
+
+        alert(`✅ LIVELLO AGGIORNATO CON SUCCESSO!\n\nAll'utente '${targetName}' (ID: ${targetId}) è stato assegnato il Livello ${newLevel}!`);
+    } catch(e) {
+        console.error("Save Admin User Level Error:", e);
+        alert("Errore assegnazione livello: " + e.message);
+    }
+};
+
+window.loadedAdminBackupData = null;
+
+window.loadAdminBackupJsonFile = function(e) {
+    const file = e.target.files ? e.target.files[0] : null;
+    const fileInfo = document.getElementById('adminBackupFileInfo');
+    const searchSection = document.getElementById('adminBackupSearchSection');
+
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        try {
+            const data = JSON.parse(evt.target.result);
+            window.loadedAdminBackupData = data;
+            const usersCount = Object.keys(data.users || data).length;
+            if (fileInfo) fileInfo.textContent = `✅ Backup Caricato: ${file.name} (${usersCount} elementi)`;
+            if (searchSection) searchSection.style.display = 'block';
+            window.searchUserInBackupJson();
+        } catch(err) {
+            alert("❌ File JSON non valido: " + err.message);
+        }
+    };
+    reader.readAsText(file);
+};
+
+window.searchUserInBackupJson = function() {
+    const query = (document.getElementById('adminSearchBackupUser')?.value || "").trim().toLowerCase();
+    const resultsContainer = document.getElementById('adminBackupSearchResults');
+    if (!resultsContainer || !window.loadedAdminBackupData) return;
+
+    resultsContainer.innerHTML = '';
+    const usersMap = window.loadedAdminBackupData.users || window.loadedAdminBackupData;
+
+    if (!usersMap || typeof usersMap !== 'object') {
+        resultsContainer.innerHTML = '<p style="font-size:0.8em; color:var(--hint-color); text-align:center;">Nessun utente trovato nel file.</p>';
+        return;
+    }
+
+    const matches = [];
+    Object.entries(usersMap).forEach(([uid, uObj]) => {
+        if (!uObj || typeof uObj !== 'object') return;
+        const name = String(uObj.name || uObj.alias || "").toLowerCase();
+        const username = String(uObj.username || "").toLowerCase();
+        const call = String(uObj.activity_call || "").toLowerCase();
+        const idStr = String(uid).toLowerCase();
+
+        if (!query || name.includes(query) || username.includes(query) || call.includes(query) || idStr.includes(query)) {
+            matches.push({ uid, ...uObj });
+        }
+    });
+
+    if (matches.length === 0) {
+        resultsContainer.innerHTML = '<p style="font-size:0.8em; color:var(--hint-color); text-align:center;">Nessun utente corrispondente alla ricerca.</p>';
+        return;
+    }
+
+    matches.slice(0, 15).forEach(m => {
+        const item = document.createElement('div');
+        item.style.cssText = "background:rgba(255,255,255,0.05); padding:8px; border-radius:6px; border:1px solid var(--link-color); display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box;";
+
+        const dispName = m.alias || m.name || m.activity_call || "Utente";
+        const levelNum = m.level || (m.course?.current_lesson) || 1;
+        const histCount = m.history ? Object.keys(m.history).length : 0;
+        const safeDispName = (typeof window.escapeHtml === 'function') ? window.escapeHtml(dispName) : dispName;
+
+        item.innerHTML = `
+            <div style="text-align:left;">
+                <b style="color:var(--champ-color); font-size:0.88em;">${safeDispName}</b> <small style="opacity:0.6;">(ID: ${m.uid})</small><br>
+                <small style="font-size:0.75em; color:var(--hint-color);">Livello: ${levelNum} | Storico: ${histCount} Partite</small>
+            </div>
+            <button onclick="window.restoreSelectedUserToFirebase('${m.uid}')" class="action-btn-small btn-success" style="padding:4px 8px; font-size:0.75em; font-weight:bold; background:#00ff66; color:#000; border:none; cursor:pointer;">
+                RIPRISTINA 🔄
+            </button>
+        `;
+        resultsContainer.appendChild(item);
+    });
+};
+
+window.restoreSelectedUserToFirebase = async function(targetUid) {
+    if (!db || !window.isAdmin || !window.loadedAdminBackupData) return;
+    const usersMap = window.loadedAdminBackupData.users || window.loadedAdminBackupData;
+    const userData = usersMap[targetUid];
+
+    if (!userData) return alert("❌ Dati utente non trovati nel backup.");
+
+    if (!confirm(`Vuoi RIPRISTINARE L'UTENTE '${userData.alias || userData.name || targetUid}' (ID: ${targetUid}) su Firebase?`)) return;
+
+    if (typeof showToast === 'function') showToast("Ripristino utente su Firebase in corso...");
+
+    try {
+        await db.ref(`users/${targetUid}`).set(userData);
+        if (userData.activity_call) {
+            await db.ref(`activity_cwg/registered_calls/${userData.activity_call}`).set(true).catch(() => {});
+        }
+        alert(`✅ UTENTE RIPRISTINATO CON SUCCESSO!\n\nL'utente '${userData.alias || userData.name}' (ID: ${targetUid}) è stato ripristinato sul database con tutto il suo profilo, livello e storico!`);
+    } catch(err) {
+        alert("Errore ripristino: " + err.message);
+    }
+};
+
 // --- LISTA STANZE (SPOSTATO IN SOCIAL_MANAGER.JS) ---

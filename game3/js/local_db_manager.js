@@ -303,10 +303,6 @@ window.exportLocalBackupToTelegramChat = async function() {
             }
         }
 
-        if (!history || history.length === 0) {
-            return alert("⚠️ Nessun dato locale o storico trovato da esportare.\n\nGioca almeno 1 partita per generare lo storico!");
-        }
-
 window.generateAndShowBackupJson = function() {
     if (typeof showToast === 'function') showToast("☁️ Sincronizzazione Cloud Automatica attiva!");
     alert("☁️ SINCRONIZZAZIONE CLOUD AUTOMATICA PROTETTA:\n\nI tuoi dati, lo storico e le statistiche sono sincronizzati ed al sicuro sul cloud di Firebase collegato al tuo account Telegram.\n\nNon è necessario scaricare file esterni!");
@@ -317,23 +313,6 @@ window.copyBackupToClipboardWithText = function() {};
 window.downloadBackupFileDirectly = function() {};
 window.importLocalBackupFromJson = function() {
     alert("☁️ La sincronizzazione dei tuoi dati avviene in modo automatico e protetto direttamente sul Cloud di Firebase!");
-};
-                        score: item.score || 0,
-                        wpm: item.wpm || 20,
-                        wordCount: item.wordCount || 10,
-                        details: item.details || []
-                    });
-                });
-            }
-
-            alert(`✅ Ripristino completato!\n\nImportate ${items.length} partite nel tuo database locale.`);
-            if (typeof window.loadProfileInfo === 'function') window.loadProfileInfo();
-            if (typeof window.loadAdvancedStats === 'function') window.loadAdvancedStats();
-        } catch(err) {
-            alert("❌ Errore durante l'importazione del backup: " + err.message);
-        }
-    };
-    reader.readAsText(file);
 };
 
 // Inizializza subito il database locale al caricamento dello script
