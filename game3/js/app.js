@@ -2883,18 +2883,6 @@ window.loadAdminCallsignChallengeSettings = function() {
             }
         });
     };
-                });
-                suggestionsEl.style.display = 'block';
-            }, 200);
-        });
-
-        document.addEventListener('click', (e) => {
-            const suggestionsEl = document.getElementById('adminLevelUserSuggestions');
-            if (suggestionsEl && !adminLevelInput.contains(e.target) && !suggestionsEl.contains(e.target)) {
-                suggestionsEl.style.display = 'none';
-            }
-        });
-    };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => window.initAdminUserLevelSearch());
