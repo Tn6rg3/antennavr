@@ -975,6 +975,10 @@ window.startCountdownSequence = function() {
     if (els.pingPongSendArea) els.pingPongSendArea.style.display = 'none';
     if (els.gameInputArea) els.gameInputArea.style.display = 'flex';
 
+    if (typeof window.hidePostMatchAnalysisButton === 'function') {
+        window.hidePostMatchAnalysisButton();
+    }
+
     if (window.currentMode === 'pingpong' && (myId === roomHostId || roomCode.startsWith("TRN_"))) {
         // RESET E INIZIALIZZAZIONE PING PONG (Il primo sender è sempre l'Host o chi avvia il match)
         const initialSender = roomHostId || myId;
@@ -1703,6 +1707,12 @@ window.finishGame = async function() {
 
     if (els.gameInputArea) els.gameInputArea.style.display = 'none';
     if (els.scoreDisplay) els.scoreDisplay.innerHTML = `<b style="color:var(--champ-color)">FINITO!</b> PT: ${totalScore}`;
+
+    // --- BOTTONE ANALISI DETTAGLIATA POST-MATCH ---
+    if (typeof window.showPostMatchAnalysisButton === 'function') {
+        const parent = qBtn ? qBtn.parentNode : (els.gameInputArea ? els.gameInputArea.parentNode : null);
+        window.showPostMatchAnalysisButton(window.currentMode, matchDetailsArray, parent);
+    }
 
     // --- COMMENTO A CALDO POST-SFIDA (Sfida Giornaliera, Sfida Tripla, 50 Nominativi) ---
     const isTargetCommentMode = ['daily_challenge', 'tri_daily', 'weekly_callsign'].includes(window.currentMode);
