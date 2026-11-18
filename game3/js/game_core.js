@@ -1389,6 +1389,10 @@ window.finishGame = async function() {
                     resumeData: null,
                     ts: Date.now()
                 }).catch(() => {});
+
+                if (typeof window.updateActivity === 'function') {
+                    window.updateActivity(window.totalScore > 0);
+                }
             } else if (window.currentMode === 'tri_daily') {
                 let todayStr = window.getLocalDateString();
                 const slotId = window.currentTriDailySlotId || (typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot().id : 'morning');
@@ -1445,6 +1449,10 @@ window.finishGame = async function() {
                 const curEventKey = (typeof window.getWeeklyCallsignEventKey === 'function') ? window.getWeeklyCallsignEventKey() : 'current';
                 const lbRef = db.ref(`leaderboard/weekly_callsign_challenge/${curEventKey}/${window.myId}`);
 
+                if (typeof window.updateActivity === 'function') {
+                    window.updateActivity(window.totalScore > 0);
+                }
+
                 lbRef.once('value', s => {
                     const oldData = s.val();
                     const oldScore = oldData ? (Number(oldData.score) || 0) : 0;
@@ -1458,7 +1466,7 @@ window.finishGame = async function() {
                             score: window.totalScore,
                             peakWpm: window.peakWpm,
                             startWpm: window.baseWpm || 20,
-                            date: (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0],
+                            date: (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().split('T')[0],
                             ts: Date.now()
                         }).catch(() => {});
                         window.showToast(currentLang === 'it' ? `🏆 Nuovo Record Personale nella Sfida! (${window.totalScore} pt)` : `🏆 New Personal Best! (${window.totalScore} pt)`);
