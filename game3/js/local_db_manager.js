@@ -286,22 +286,9 @@ window.syncFromFirebaseHistoryBackup = async function() {
 
 // 5. ESPORTAZIONE BACKUP MANUALE IN CHAT BOT TELEGRAM (.JSON)
 window.exportLocalBackupToTelegramChat = async function() {
-    try {
-        let history = await window.loadLocalMatchHistory(100);
-
-        if (!history || history.length === 0) {
-            if (Array.isArray(window.userMatchHistory) && window.userMatchHistory.length > 0) {
-                history = window.userMatchHistory;
-            } else if (db && window.myId) {
-                const snap = await db.ref(`users/${window.myId}/history`).limitToLast(50).once('value');
-                if (snap.exists()) {
-                    history = [];
-                    snap.forEach(child => {
-                        history.push({ key: child.key, ...child.val() });
-                    });
-                }
-            }
-        }
+    if (typeof showToast === 'function') showToast("☁️ Sincronizzazione Cloud Automatica attiva!");
+    alert("☁️ SINCRONIZZAZIONE CLOUD AUTOMATICA PROTETTA:\n\nI tuoi dati, lo storico e le statistiche sono sincronizzati ed al sicuro sul cloud di Firebase collegato al tuo account Telegram.\n\nNon è necessario scaricare file esterni!");
+};
 
 window.generateAndShowBackupJson = function() {
     if (typeof showToast === 'function') showToast("☁️ Sincronizzazione Cloud Automatica attiva!");
