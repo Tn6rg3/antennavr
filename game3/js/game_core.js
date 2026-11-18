@@ -1727,18 +1727,8 @@ window.finishGame = async function() {
         }, 1200);
     }
 
-    // --- NUOVO: AUTO-NAVIGAZIONE PER SFIDA GIORNALIERA ---
-    if (window.currentMode === 'daily_challenge' && totalScore > 0) {
-        setTimeout(() => {
-            if (typeof window.finishGameNavigation === 'function') {
-                const savedRoom = roomCode;
-                const actualWordCount = (matchDetailsArray && matchDetailsArray.length > 0) ? matchDetailsArray.length : 20;
-                window.lbManualRouting = true;
-                window.exitRoomCleanly(false, false);
-                window.finishGameNavigation('daily_challenge', actualWordCount, true, savedRoom);
-            }
-        }, 3000);
-    }
+    // Rimosso reindirizzamento automatico dopo 3s per consentire la revisione e l'analisi della partita
+
 
     // --- NUOVO: REPORT ALLENAMENTO MIRATO ---
     if (window.currentMode === 'target_training' && window.targetTrainingContext) {

@@ -5,12 +5,17 @@ window.showPostMatchAnalysisButton = function(mode, detailsList, parentContainer
     if (!isAllowed || !detailsList || !Array.isArray(detailsList) || detailsList.length === 0) return;
 
     window.lastMatchDetailsForAnalysis = [...detailsList];
+
+    // Mostra il pulsante anche nel modal del commento a caldo se visibile
+    const modalCommentBtn = document.getElementById('btnCommentModalAnalysis');
+    if (modalCommentBtn) modalCommentBtn.style.display = 'block';
+
     let btnAnalysis = document.getElementById('btnOpenPostMatchAnalysis');
     if (!btnAnalysis) {
         btnAnalysis = document.createElement('button');
         btnAnalysis.id = 'btnOpenPostMatchAnalysis';
         btnAnalysis.className = 'btn-success';
-        btnAnalysis.style.cssText = 'width:100%; margin-top:8px; padding:10px; font-weight:bold; background:#9575cd; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:0.92em; box-shadow:0 4px 10px rgba(0,0,0,0.3);';
+        btnAnalysis.style.cssText = 'width:100%; margin-top:8px; padding:12px; font-weight:bold; background:#9575cd; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:0.95em; box-shadow:0 4px 10px rgba(0,0,0,0.3); display:block;';
         btnAnalysis.textContent = '📊 Analisi Dettagliata Match';
         btnAnalysis.onclick = () => window.openPostMatchAnalysisModal();
         if (parentContainer) parentContainer.appendChild(btnAnalysis);
@@ -23,6 +28,9 @@ window.showPostMatchAnalysisButton = function(mode, detailsList, parentContainer
 window.hidePostMatchAnalysisButton = function() {
     const btn = document.getElementById('btnOpenPostMatchAnalysis');
     if (btn) btn.style.display = 'none';
+
+    const modalCommentBtn = document.getElementById('btnCommentModalAnalysis');
+    if (modalCommentBtn) modalCommentBtn.style.display = 'none';
 };
 
 window.openPostMatchAnalysisModal = function() {
@@ -67,9 +75,9 @@ window.generatePostMatchAnalysisHTML = function(details, selectedStyle) {
     let posErrors = { inizio: 0, centro: 0, fine: 0 };
     let totalPosErrors = 0;
 
-    let omittedChars = 0; 
-    let substitutedChars = 0; 
-    let confusionMatrix = {}; 
+    let omittedChars = 0;
+    let substitutedChars = 0;
+    let confusionMatrix = {};
 
     let matchSectionStats = {
         sec1: { total: 0, exact: 0, accuracySum: 0 },
@@ -165,7 +173,7 @@ window.generatePostMatchAnalysisHTML = function(details, selectedStyle) {
     // SCELTA FRASI DINAMICHE PER STILE E TEMPI
     let styleFeedback = "";
     let styleStatusClass = "color:#4caf50;";
-    
+
     if (selectedStyle === 'realtime') {
         if (avgMsPerChar <= 500) {
             styleFeedback = randomPhrase([
@@ -173,20 +181,20 @@ window.generatePostMatchAnalysisHTML = function(details, selectedStyle) {
                 "⚡ Riflessi fulminei. Stai mappando i suoni direttamente sulla tastiera.",
                 "⚡ Sincronia perfetta tra orecchio e dita. Ottimo flow!"
             ]);
-        } else if (avgMsPerChar <= 800) { 
+        } else if (avgMsPerChar <= 800) {
             styleFeedback = randomPhrase([
                 "👍 Buona copia istantanea, ma con qualche piccola trattenuta ritmica.",
                 "👍 Reattività solida, a tratti esiti un istante di troppo.",
                 "👍 Stai tenendo il passo, cerca solo di ammorbidire le tensioni sulle dita."
             ]);
-            styleStatusClass = "color:#ff9800;"; 
-        } else { 
+            styleStatusClass = "color:#ff9800;";
+        } else {
             styleFeedback = randomPhrase([
                 "🐢 Tendi ad accumulare ritardo sul segnale in tempo reale.",
                 "🐢 Stai lottando per restare in sincrono. Non forzare, lascia scorrere il suono.",
                 "🐢 Il buffer mentale si satura. Ascolta senza tradurre e reagisci d'istinto."
             ]);
-            styleStatusClass = "color:#f44336;"; 
+            styleStatusClass = "color:#f44336;";
         }
     } else if (selectedStyle === 'short_delay') {
         if (avgMsPerChar <= 700) {
@@ -195,20 +203,20 @@ window.generatePostMatchAnalysisHTML = function(details, selectedStyle) {
                 "⚡ Coda d'ascolto perfetta, mantieni la melodia attiva in mente.",
                 "⚡ Transizione fluida e pulita tra la fine del suono e la digitazione."
             ]);
-        } else if (avgMsPerChar <= 1000) { 
+        } else if (avgMsPerChar <= 1000) {
             styleFeedback = randomPhrase([
                 "👍 Buona cadenza di coda, copia abbastanza fluida.",
                 "👍 Mantieni bene il suono, ma potresti scaricarlo sulla tastiera un po' più in fretta.",
                 "👍 Discreta ritenzione ritmica, cerca di non prolungare troppo l'attesa."
             ]);
-            styleStatusClass = "color:#ff9800;"; 
-        } else { 
+            styleStatusClass = "color:#ff9800;";
+        } else {
             styleFeedback = randomPhrase([
                 "🐢 Lieve ritardo, attento a non trascinare l'ascolto sulle lettere successive.",
                 "🐢 Stai trattenendo il suono troppo a lungo, col rischio di sovrapporlo al nuovo segnale.",
                 "🐢 Esitazione eccessiva in chiusura: fidati del primo suono che hai percepito."
             ]);
-            styleStatusClass = "color:#f44336;"; 
+            styleStatusClass = "color:#f44336;";
         }
     } else {
         // full_receive
@@ -218,27 +226,27 @@ window.generatePostMatchAnalysisHTML = function(details, selectedStyle) {
                 "⚡ Ottima memoria a breve termine. Costruisci la parola in mente con sicurezza.",
                 "⚡ Ricezione globale impeccabile. Il suono della parola è chiaro e nitido nella tua testa."
             ]);
-        } else if (avgMsPerChar <= 1500) { 
+        } else if (avgMsPerChar <= 1500) {
             styleFeedback = randomPhrase([
                 "👍 Buona ricezione globale della parola, trascrizione abbastanza fluida.",
                 "👍 Trattieni bene il gruppo di suoni, ma esiti lievemente prima di scriverli.",
                 "👍 Ascolto completo pulito, cerca solo di velocizzare il momento in cui tocchi la tastiera."
             ]);
-            styleStatusClass = "color:#4caf50;"; 
-        } else { 
+            styleStatusClass = "color:#4caf50;";
+        } else {
             styleFeedback = randomPhrase([
                 "⏱️ Esiti troppo prima di digitare: fidati della tua memoria auditiva.",
                 "⏱️ C'è un vuoto troppo lungo a fine parola. Non rimettere in dubbio ciò che hai sentito.",
                 "⏱️ Tempo di trascrizione lungo: la melodia evapora se non la scarichi subito."
             ]);
-            styleStatusClass = "color:#ff9800;"; 
+            styleStatusClass = "color:#ff9800;";
         }
     }
 
     const sortedConfusions = Object.entries(confusionMatrix).sort((a, b) => b[1] - a[1]).slice(0, 4);
     let confusionsHTML = '';
     if (sortedConfusions.length > 0) {
-        confusionsHTML = sortedConfusions.map(([pair, cnt]) => 
+        confusionsHTML = sortedConfusions.map(([pair, cnt]) =>
             `<span style="background:rgba(244, 67, 54, 0.15); border:1px solid rgba(244, 67, 54, 0.4); padding:2px 6px; border-radius:4px; font-size:0.85em;"><b>${pair}</b> (${cnt}x)</span>`
         ).join(' ');
     }
