@@ -2886,8 +2886,10 @@ window.loadAdminCallsignChallengeSettings = function() {
                 if (!suggestionsEl) return;
                 suggestionsEl.innerHTML = '';
 
+                const safeVal = (typeof window.escapeHtml === 'function') ? window.escapeHtml(val) : String(val).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
                 if (candidates.length === 0) {
-                    suggestionsEl.innerHTML = `<div style="font-size:0.8em; color:#ff9800; padding:6px; text-align:center;">⚠️ Nessun utente trovato per '${val}'</div>`;
+                    suggestionsEl.innerHTML = `<div style="font-size:0.8em; color:#ff9800; padding:6px; text-align:center;">⚠️ Nessun utente trovato per '${safeVal}'</div>`;
                     suggestionsEl.style.display = 'block';
                     return;
                 }
@@ -2898,10 +2900,15 @@ window.loadAdminCallsignChallengeSettings = function() {
                     item.onmouseenter = () => item.style.background = 'rgba(149, 117, 205, 0.25)';
                     item.onmouseleave = () => item.style.background = 'transparent';
 
-                    const uNameStr = c.username ? ` <span style="color:#9575cd;">(@${c.username})</span>` : '';
-                    const lvlStr = `<span style="font-size:0.75em; color:var(--hint-color); float:right;">Lv: ${c.level || 1}</span>`;
+                    const safeName = (typeof window.escapeHtml === 'function') ? window.escapeHtml(c.name || '') : String(c.name || '');
+                    const safeUsername = (typeof window.escapeHtml === 'function') ? window.escapeHtml(c.username || '') : String(c.username || '');
+                    const safeId = (typeof window.escapeHtml === 'function') ? window.escapeHtml(c.id || '') : String(c.id || '');
+                    const safeLevel = (typeof window.escapeHtml === 'function') ? window.escapeHtml(c.level || 1) : String(c.level || 1);
 
-                    item.innerHTML = `<div><b style="color:#fff;">${c.name}</b>${uNameStr}${lvlStr}</div><div style="font-size:0.72em; opacity:0.6; color:#aaa;">ID: ${c.id}</div>`;
+                    const uNameStr = safeUsername ? ` <span style="color:#9575cd;">(@${safeUsername})</span>` : '';
+                    const lvlStr = `<span style="font-size:0.75em; color:var(--hint-color); float:right;">Lv: ${safeLevel}</span>`;
+
+                    item.innerHTML = `<div><b style="color:#fff;">${safeName}</b>${uNameStr}${lvlStr}</div><div style="font-size:0.72em; opacity:0.6; color:#aaa;">ID: ${safeId}</div>`;
 
                     item.onclick = () => {
                         inputEl.value = c.username ? `@${c.username}` : (c.alias || c.name || c.id);
@@ -2911,7 +2918,7 @@ window.loadAdminCallsignChallengeSettings = function() {
 
                         suggestionsEl.style.display = 'none';
                         if (selectedInfoEl) {
-                            selectedInfoEl.innerHTML = `✅ Selezionato: <b>${c.name}</b> ${uNameStr} (ID: ${c.id})`;
+                            selectedInfoEl.innerHTML = `✅ Selezionato: <b>${safeName}</b> ${uNameStr} (ID: ${safeId})`;
                             selectedInfoEl.style.display = 'block';
                         }
                     };
