@@ -1860,9 +1860,11 @@
             </div>
 
             <!-- AREA ADMIN: ASSEGNAZIONE LIVELLO UTENTE -->
-            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; margin-top:10px;">
+            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; margin-top:10px; position:relative;">
                 <h4 style="margin: 0 0 8px 0; color: #9575cd; font-size: 0.9em;">🎓 Assegna Livello / Lezione Utente</h4>
-                <input type="text" id="adminLevelUserInput" aria-label="Username o Alias utente per livello" placeholder="Username o Alias dell'utente (es. @mario o IU2XYZ)..." style="width:100%; padding:8px; font-size:0.85em; background:rgba(0,0,0,0.2); border:1px solid #9575cd; color:white; border-radius:4px; box-sizing: border-box; margin-bottom: 6px;">
+                <input type="text" id="adminLevelUserInput" aria-label="Username o Alias utente per livello" placeholder="Username o Alias dell'utente (es. @mario o IU2XYZ)..." autocomplete="off" style="width:100%; padding:8px; font-size:0.85em; background:rgba(0,0,0,0.2); border:1px solid #9575cd; color:white; border-radius:4px; box-sizing: border-box; margin-bottom: 6px;">
+                <div id="adminLevelUserSuggestions" style="display:none; max-height:160px; overflow-y:auto; background:#1e1b2e; border:1px solid #9575cd; border-radius:4px; margin-bottom:6px; padding:4px; box-shadow:0 4px 10px rgba(0,0,0,0.5);"></div>
+                <div id="adminLevelSelectedInfo" style="display:none; font-size:0.8em; color:#00ff66; margin-bottom:6px; background:rgba(0,255,102,0.1); padding:4px 8px; border-radius:4px; border:1px solid #00ff66; text-align:left;"></div>
                 <div style="display:flex; gap:6px; margin-bottom:6px;">
                     <input type="number" id="adminLevelNumInput" aria-label="Numero livello o lezione" placeholder="Livello (es. 5)" min="1" max="50" value="1" style="flex:1; padding:8px; font-size:0.85em; background:#fff; color:#000; border-radius:4px; font-weight:bold; box-sizing:border-box;">
                     <button onclick="window.saveAdminUserLevel()" class="btn-success" style="flex:2; padding:8px; font-weight:bold; background:#673ab7; border:none; color:#fff; cursor:pointer;">ASSEGNA LIVELLO 🎓</button>
