@@ -1297,6 +1297,26 @@ window.openMatchDetails = function(matchKey) {
         });
 
         els.matchDetailsBody.appendChild(frag);
+
+        let btnAnalysis = els.matchDetailsModal.querySelector('#btnHistoryModalAnalysis');
+        if (btnAnalysis) btnAnalysis.remove();
+
+        if (detailsList && detailsList.length > 0 && typeof window.openPostMatchAnalysisModal === 'function') {
+            window.lastMatchDetailsForAnalysis = [...detailsList];
+
+            btnAnalysis = document.createElement('button');
+            btnAnalysis.id = 'btnHistoryModalAnalysis';
+            btnAnalysis.className = 'btn-success';
+            btnAnalysis.style.cssText = 'width:100%; margin-top:12px; padding:12px; font-weight:bold; background:#9575cd; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:0.95em; box-shadow:0 4px 10px rgba(0,0,0,0.3); display:block;';
+            btnAnalysis.textContent = '📊 Analisi Dettagliata Match';
+            btnAnalysis.onclick = () => {
+                window.openPostMatchAnalysisModal();
+            };
+
+            const modalContent = els.matchDetailsModal.querySelector('.modal-content') || els.matchDetailsModal.firstElementChild || els.matchDetailsModal;
+            if (modalContent) modalContent.appendChild(btnAnalysis);
+        }
+
         els.matchDetailsModal.style.display = 'flex';
     };
 

@@ -1458,7 +1458,14 @@ window.showPlayerDetailsModal = function(name, details) {
     els.matchDetailsBody.innerHTML = '';
     const h3 = els.matchDetailsModal.querySelector('h3');
     if (h3) h3.textContent = `${currentLang === 'it' ? 'Dettagli Partita di' : 'Match Details for'} ${name}`;
-    details.forEach(row => {
+
+    let btnAnalysis = els.matchDetailsModal.querySelector('#btnHistoryModalAnalysis');
+    if (btnAnalysis) btnAnalysis.remove();
+
+    const detailsList = Array.isArray(details) ? details : (details ? Object.values(details) : []);
+
+    detailsList.forEach(row => {
+        if (!row) return;
         const tr = document.createElement('tr');
         let color = row.points > 0 ? "#4caf50" : (row.points === 0 && row.typed !== row.real ? "#d32f2f" : "#999999");
         const tdTyped = document.createElement('td'); tdTyped.textContent = row.typed || '-';
@@ -1466,6 +1473,23 @@ window.showPlayerDetailsModal = function(name, details) {
         const tdPoints = document.createElement('td'); tdPoints.style.color = color; tdPoints.style.fontWeight = 'bold'; tdPoints.textContent = row.points;
         tr.appendChild(tdTyped); tr.appendChild(tdReal); tr.appendChild(tdPoints); els.matchDetailsBody.appendChild(tr);
     });
+
+    if (detailsList && detailsList.length > 0 && typeof window.openPostMatchAnalysisModal === 'function') {
+        window.lastMatchDetailsForAnalysis = [...detailsList];
+
+        btnAnalysis = document.createElement('button');
+        btnAnalysis.id = 'btnHistoryModalAnalysis';
+        btnAnalysis.className = 'btn-success';
+        btnAnalysis.style.cssText = 'width:100%; margin-top:12px; padding:12px; font-weight:bold; background:#9575cd; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:0.95em; box-shadow:0 4px 10px rgba(0,0,0,0.3); display:block;';
+        btnAnalysis.textContent = '📊 Analisi Dettagliata Match';
+        btnAnalysis.onclick = () => {
+            window.openPostMatchAnalysisModal();
+        };
+
+        const modalContent = els.matchDetailsModal.querySelector('.modal-content') || els.matchDetailsModal.firstElementChild || els.matchDetailsModal;
+        if (modalContent) modalContent.appendChild(btnAnalysis);
+    }
+
     els.matchDetailsModal.style.display = 'flex';
 };
 

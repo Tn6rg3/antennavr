@@ -36,6 +36,7 @@ window.hidePostMatchAnalysisButton = function() {
 window.openPostMatchAnalysisModal = function() {
     const modal = document.getElementById('postMatchAnalysisModal');
     if (!modal) return;
+    modal.style.zIndex = '99999';
     modal.style.display = 'flex';
     window.recalculatePostMatchAnalysis();
 };
