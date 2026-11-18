@@ -2718,7 +2718,7 @@ window.loadAdminCallsignChallengeSettings = function() {
 
                     if (matchesName || matchesUser || matchesCall || matchesGeneric || matchesId) {
                         const displayName = userObj.alias || userObj.name || userObj.activity_call || (uName ? '@' + uName : id);
-                        const userLevel = userObj.level || (userObj.course?.current_lesson) || 1;
+                        const userLevel = userObj.level || userObj.course?.current_lesson || userObj.course?.progress?.current_lesson || userObj.progression?.level || userObj.rpg_level || 1;
                         candidates.set(id, {
                             id: id,
                             name: displayName,
@@ -2746,13 +2746,13 @@ window.loadAdminCallsignChallengeSettings = function() {
 
                     const matchesName = (aliasName && (aliasName === cleanVal || aliasName.includes(cleanVal)));
                     const matchesUser = (uName && (uName === cleanVal || uName.includes(cleanVal)));
-                    const matchesCall = (callSign && (callSign === cleanVal || callSign.includes(cleanVal)));
+                    const matchesCall = (callSign && (callSign === cleanVal || callSign.includes(callSign)));
                     const matchesId = (idStr === cleanVal || idStr.includes(cleanVal));
 
                     if (matchesName || matchesUser || matchesCall || matchesId) {
                         const existing = candidates.get(id);
                         const displayName = userObj.name || userObj.username || (existing ? existing.name : id);
-                        const userLevel = userObj.level || (existing ? existing.level : 1);
+                        const userLevel = userObj.level || userObj.course?.current_lesson || userObj.course?.progress?.current_lesson || userObj.progression?.level || userObj.rpg_level || (existing ? existing.level : 1);
                         candidates.set(id, {
                             id: id,
                             name: displayName,
@@ -4439,105 +4439,7 @@ window.startMilestoneConfetti = function(durationMs = 4000) {
 
 // (saveAdminUserLevel gestito in basso)
 
-window.loadedAdminBackupData = null;
-
-window.loadAdminBackupJsonFile = function(e) {
-    const file = e.target.files ? e.target.files[0] : null;
-    const fileInfo = document.getElementById('adminBackupFileInfo');
-    const searchSection = document.getElementById('adminBackupSearchSection');
-
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-        try {
-            const data = JSON.parse(evt.target.result);
-            window.loadedAdminBackupData = data;
-            const usersCount = Object.keys(data.users || data).length;
-            if (fileInfo) fileInfo.textContent = `✅ Backup Caricato: ${file.name} (${usersCount} elementi)`;
-            if (searchSection) searchSection.style.display = 'block';
-            window.searchUserInBackupJson();
-        } catch(err) {
-            alert("❌ File JSON non valido: " + err.message);
-        }
-    };
-    reader.readAsText(file);
-};
-
-window.searchUserInBackupJson = function() {
-    const query = (document.getElementById('adminSearchBackupUser')?.value || "").trim().toLowerCase();
-    const resultsContainer = document.getElementById('adminBackupSearchResults');
-    if (!resultsContainer || !window.loadedAdminBackupData) return;
-
-    resultsContainer.innerHTML = '';
-    const usersMap = window.loadedAdminBackupData.users || window.loadedAdminBackupData;
-
-    if (!usersMap || typeof usersMap !== 'object') {
-        resultsContainer.innerHTML = '<p style="font-size:0.8em; color:var(--hint-color); text-align:center;">Nessun utente trovato nel file.</p>';
-        return;
-    }
-
-    const matches = [];
-    Object.entries(usersMap).forEach(([uid, uObj]) => {
-        if (!uObj || typeof uObj !== 'object') return;
-        const name = String(uObj.name || uObj.alias || "").toLowerCase();
-        const username = String(uObj.username || "").toLowerCase();
-        const call = String(uObj.activity_call || "").toLowerCase();
-        const idStr = String(uid).toLowerCase();
-
-        if (!query || name.includes(query) || username.includes(query) || call.includes(query) || idStr.includes(query)) {
-            matches.push({ uid, ...uObj });
-        }
-    });
-
-    if (matches.length === 0) {
-        resultsContainer.innerHTML = '<p style="font-size:0.8em; color:var(--hint-color); text-align:center;">Nessun utente corrispondente alla ricerca.</p>';
-        return;
-    }
-
-    matches.slice(0, 15).forEach(m => {
-        const item = document.createElement('div');
-        item.style.cssText = "background:rgba(255,255,255,0.05); padding:8px; border-radius:6px; border:1px solid var(--link-color); display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box;";
-
-        const dispName = m.alias || m.name || m.activity_call || "Utente";
-        const levelNum = m.level || (m.course?.current_lesson) || 1;
-        const histCount = m.history ? Object.keys(m.history).length : 0;
-        const safeDispName = (typeof window.escapeHtml === 'function') ? window.escapeHtml(dispName) : dispName;
-
-        item.innerHTML = `
-            <div style="text-align:left;">
-                <b style="color:var(--champ-color); font-size:0.88em;">${safeDispName}</b> <small style="opacity:0.6;">(ID: ${m.uid})</small><br>
-                <small style="font-size:0.75em; color:var(--hint-color);">Livello: ${levelNum} | Storico: ${histCount} Partite</small>
-            </div>
-            <button onclick="window.restoreSelectedUserToFirebase('${m.uid}')" class="action-btn-small btn-success" style="padding:4px 8px; font-size:0.75em; font-weight:bold; background:#00ff66; color:#000; border:none; cursor:pointer;">
-                RIPRISTINA 🔄
-            </button>
-        `;
-        resultsContainer.appendChild(item);
-    });
-};
-
-window.restoreSelectedUserToFirebase = async function(targetUid) {
-    if (!db || !window.isAdmin || !window.loadedAdminBackupData) return;
-    const usersMap = window.loadedAdminBackupData.users || window.loadedAdminBackupData;
-    const userData = usersMap[targetUid];
-
-    if (!userData) return alert("❌ Dati utente non trovati nel backup.");
-
-    if (!confirm(`Vuoi RIPRISTINARE L'UTENTE '${userData.alias || userData.name || targetUid}' (ID: ${targetUid}) su Firebase?`)) return;
-
-    if (typeof showToast === 'function') showToast("Ripristino utente su Firebase in corso...");
-
-    try {
-        await db.ref(`users/${targetUid}`).set(userData);
-        if (userData.activity_call) {
-            await db.ref(`activity_cwg/registered_calls/${userData.activity_call}`).set(true).catch(() => {});
-        }
-        alert(`✅ UTENTE RIPRISTINATO CON SUCCESSO!\n\nL'utente '${userData.alias || userData.name}' (ID: ${targetUid}) è stato ripristinato sul database con tutto il suo profilo, livello e storico!`);
-    } catch(err) {
-        alert("Errore ripristino: " + err.message);
-    }
-};
+// (Gestione backup utente definita in basso)
 
 window.checkAndTriggerTriDailySlotNotifications = function() {
     if (!db || !window.myId) return;
@@ -5551,7 +5453,7 @@ window.searchUserInBackupJson = function() {
         item.style.cssText = "background:rgba(255,255,255,0.05); padding:8px; border-radius:6px; border:1px solid var(--link-color); display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box;";
 
         const dispName = m.alias || m.name || m.activity_call || "Utente";
-        const levelNum = m.level || (m.course?.current_lesson) || 1;
+        const levelNum = m.level || m.course?.current_lesson || m.course?.progress?.current_lesson || m.progression?.level || m.rpg_level || 1;
         const histCount = m.history ? Object.keys(m.history).length : 0;
         const safeDispName = (typeof window.escapeHtml === 'function') ? window.escapeHtml(dispName) : dispName;
 
@@ -5575,7 +5477,21 @@ window.restoreSelectedUserToFirebase = async function(targetUid) {
 
     if (!userData) return alert("❌ Dati utente non trovati nel backup.");
 
-    if (!confirm(`Vuoi RIPRISTINARE L'UTENTE '${userData.alias || userData.name || targetUid}' (ID: ${targetUid}) su Firebase?`)) return;
+    // Ricava e normalizza il livello utente ovunque sia salvato nel JSON (root, corso, progresso o rpg)
+    const restoredLevel = userData.level ||
+                          userData.course?.current_lesson ||
+                          userData.course?.progress?.current_lesson ||
+                          userData.progression?.level ||
+                          userData.rpg_level ||
+                          1;
+
+    userData.level = restoredLevel;
+    if (!userData.course) userData.course = {};
+    userData.course.current_lesson = restoredLevel;
+    if (!userData.course.progress) userData.course.progress = {};
+    userData.course.progress.current_lesson = restoredLevel;
+
+    if (!confirm(`Vuoi RIPRISTINARE L'UTENTE '${userData.alias || userData.name || targetUid}' (ID: ${targetUid}) su Firebase con LIVELLO ${restoredLevel}?`)) return;
 
     if (typeof showToast === 'function') showToast("Ripristino utente su Firebase in corso...");
 
@@ -5584,7 +5500,7 @@ window.restoreSelectedUserToFirebase = async function(targetUid) {
         if (userData.activity_call) {
             await db.ref(`activity_cwg/registered_calls/${userData.activity_call}`).set(true).catch(() => {});
         }
-        alert(`✅ UTENTE RIPRISTINATO CON SUCCESSO!\n\nL'utente '${userData.alias || userData.name}' (ID: ${targetUid}) è stato ripristinato sul database con tutto il suo profilo, livello e storico!`);
+        alert(`✅ UTENTE RIPRISTINATO CON SUCCESSO!\n\nL'utente '${userData.alias || userData.name}' (ID: ${targetUid}) è stato ripristinato sul database con Livello ${restoredLevel} e tutto il suo storico!`);
     } catch(err) {
         alert("Errore ripristino: " + err.message);
     }
