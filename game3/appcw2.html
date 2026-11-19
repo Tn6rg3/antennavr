@@ -2900,9 +2900,15 @@
 <!-- SCHERMATA: CACCIA QSO (SIMULATORE HF 40M) -->
 <div id="cacciaQsoScreen" class="screen">
     <div class="screen-content" style="padding-bottom:80px;">
-        <h2 style="color: var(--champ-color); margin-bottom: 10px; display:flex; align-items:center; justify-content:center; gap:8px;">
+        <h2 style="color: var(--champ-color); margin-bottom: 8px; display:flex; align-items:center; justify-content:center; gap:8px;">
             📻 Caccia QSO <span style="font-size:0.6em; opacity:0.8; background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:10px;">Banda 40m</span>
         </h2>
+
+        <!-- TAB PROMINENTI SELEZIONE MODALITÀ (S&P vs RUN) -->
+        <div style="display:flex; justify-content:center; gap:8px; margin-bottom:12px;">
+            <button id="btnSubModeSP" onclick="window.switchCacciaQsoSubMode('search_pounce')" class="btn-success" style="flex:1; padding:10px 6px; font-weight:bold; font-size:0.88em; border-radius:8px; border:2px solid #4caf50; cursor:pointer;">🔍 S&P (Caccia CQ)</button>
+            <button id="btnSubModeRUN" onclick="window.switchCacciaQsoSubMode('run')" class="btn-secondary" style="flex:1; padding:10px 6px; font-weight:bold; font-size:0.88em; border-radius:8px; border:2px solid #9575cd; background:rgba(149,117,205,0.2); color:#fff; cursor:pointer;">📢 RUN (Chiamo CQ io)</button>
+        </div>
 
         <!-- FRONT PANEL RICEVITORE RADIO -->
         <div class="box-panel" style="background:#111; border:2px solid #00bcd4; padding:15px; border-radius:12px; margin-bottom:12px;">
