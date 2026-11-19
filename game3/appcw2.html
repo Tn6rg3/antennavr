@@ -2913,14 +2913,14 @@
         <!-- FRONT PANEL RICEVITORE RADIO -->
         <div class="box-panel" style="background:#111; border:2px solid #00bcd4; padding:15px; border-radius:12px; margin-bottom:12px;">
 
-            <!-- RIGA DISPLAY FREQUENZA E TIMER -->
+            <!-- RIGA DISPLAY FREQUENZA E TIMER INTERATTIVO -->
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px;">
                 <div style="background:#000; padding:8px; border-radius:8px; border:1px solid #00ff41; text-align:center;">
                     <span style="font-size:0.7em; color:#00ff41; display:block; text-transform:uppercase; font-weight:bold;">FREQUENZA VFO</span>
                     <b id="cacciaQsoFreqDisplay" style="font-family:'Courier New', monospace; font-size:1.35em; color:#00ff41;">07.034.00 MHz</b>
                 </div>
-                <div style="background:#000; padding:8px; border-radius:8px; border:1px solid var(--champ-color); text-align:center;">
-                    <span style="font-size:0.7em; color:var(--champ-color); display:block; text-transform:uppercase; font-weight:bold;">TIMER SESSIONE</span>
+                <div id="cacciaQsoTimerBox" onclick="window.cycleCacciaQsoDuration()" style="cursor:pointer; background:#000; padding:8px; border-radius:8px; border:2px solid var(--champ-color); text-align:center;" title="Clicca qui per cambiare la durata (5-30 min)">
+                    <span style="font-size:0.68em; color:var(--champ-color); display:block; text-transform:uppercase; font-weight:bold;">⏱️ DURATA (CLICCA PER CAMBIARE)</span>
                     <b id="cacciaQsoTimerDisplay" style="font-family:'Courier New', monospace; font-size:1.35em; color:var(--champ-color);">10:00</b>
                 </div>
             </div>
@@ -2943,35 +2943,26 @@
                 </div>
             </div>
 
-            <!-- TASTI SINTONIA FINE -->
-            <div style="display:flex; justify-content:center; gap:6px; margin-bottom:12px;">
-                <button onclick="window.tuneCacciaQsoVfoBy(-1000)" class="btn-secondary" style="padding:4px 8px; font-size:0.78em;">-1 kHz</button>
-                <button onclick="window.tuneCacciaQsoVfoBy(-100)" class="btn-secondary" style="padding:4px 8px; font-size:0.78em;">-100 Hz</button>
-                <button onclick="window.tuneCacciaQsoVfoBy(100)" class="btn-secondary" style="padding:4px 8px; font-size:0.78em;">+100 Hz</button>
-                <button onclick="window.tuneCacciaQsoVfoBy(1000)" class="btn-secondary" style="padding:4px 8px; font-size:0.78em;">+1 kHz</button>
+            <!-- TASTI SINTONIA FINE (RESPONSIVE NO OVERFLOW) -->
+            <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:4px; margin-bottom:10px; width:100%; box-sizing:border-box;">
+                <button onclick="window.tuneCacciaQsoVfoBy(-1000)" class="btn-secondary" style="flex:1 1 22%; min-width:65px; padding:6px 2px; font-size:0.78em; font-weight:bold;">-1 kHz</button>
+                <button onclick="window.tuneCacciaQsoVfoBy(-100)" class="btn-secondary" style="flex:1 1 22%; min-width:65px; padding:6px 2px; font-size:0.78em; font-weight:bold;">-100 Hz</button>
+                <button onclick="window.tuneCacciaQsoVfoBy(100)" class="btn-secondary" style="flex:1 1 22%; min-width:65px; padding:6px 2px; font-size:0.78em; font-weight:bold;">+100 Hz</button>
+                <button onclick="window.tuneCacciaQsoVfoBy(1000)" class="btn-secondary" style="padding:4px 8px; font-size:0.78em; flex:1 1 22%; min-width:65px;">+1 kHz</button>
             </div>
 
-            <!-- CONTROLLI VELOCITÀ WPM & DURATA CONTEST -->
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:10px; background:rgba(255,255,255,0.04); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
-                <div style="text-align:center;">
-                    <label for="cacciaQsoWpmInput" style="font-size:0.72em; color:var(--champ-color); display:block; font-weight:bold; margin-bottom:4px;">⚡ VELOCITÀ WPM CONTEST:</label>
-                    <div style="display:flex; justify-content:center; align-items:center; gap:4px;">
-                        <button onclick="window.changeCacciaQsoWpm(-2)" class="btn-secondary" style="padding:4px 10px; font-weight:bold; font-size:0.9em;">-2</button>
-                        <input type="number" id="cacciaQsoWpmInput" value="20" min="10" max="50" style="width:60px; height:34px; padding:2px; font-size:1.05em; background:#ffffff !important; color:#000000 !important; border-radius:6px; font-weight:bold; text-align:center; border:2px solid var(--champ-color); box-sizing:border-box;" onchange="window.updateCacciaQsoWpmSpeed()">
-                        <button onclick="window.changeCacciaQsoWpm(2)" class="btn-secondary" style="padding:4px 10px; font-weight:bold; font-size:0.9em;">+2</button>
-                    </div>
-                </div>
-                <div style="text-align:center;">
-                    <label for="cacciaQsoDurationSelect" style="font-size:0.72em; color:var(--hint-color); display:block; font-weight:bold; margin-bottom:4px;">⏱️ DURATA CONTEST:</label>
-                    <select id="cacciaQsoDurationSelect" style="width:100%; height:34px; padding:4px; background:#fff; color:#000; border-radius:6px; font-weight:bold; border:1px solid var(--hint-color);">
-                        <option value="5">5 min</option>
-                        <option value="10" selected>10 min</option>
-                        <option value="15">15 min</option>
-                        <option value="20">20 min</option>
-                        <option value="25">25 min</option>
-                        <option value="30">30 min</option>
-                    </select>
-                </div>
+            <!-- CONTROLLI VELOCITÀ WPM (MENU A TENDINA 15 - 60 WPM) -->
+            <div style="margin-bottom:10px; background:rgba(255,255,255,0.04); padding:8px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); text-align:center;">
+                <label for="cacciaQsoWpmInput" style="font-size:0.75em; color:var(--champ-color); display:block; font-weight:bold; margin-bottom:4px;">⚡ VELOCITÀ WPM CONTEST (15 - 60 WPM):</label>
+                <select id="cacciaQsoWpmInput" onchange="window.updateCacciaQsoWpmSpeed()" style="width:100%; height:36px; padding:4px 8px; font-size:0.95em; background:#ffffff !important; color:#000000 !important; border-radius:6px; font-weight:bold; text-align:center; border:2px solid var(--champ-color); box-sizing:border-box;">
+                    <option value="15">15 WPM</option><option value="16">16 WPM</option><option value="17">17 WPM</option>
+                    <option value="18">18 WPM</option><option value="19">19 WPM</option><option value="20" selected>20 WPM</option>
+                    <option value="21">21 WPM</option><option value="22">22 WPM</option><option value="23">23 WPM</option>
+                    <option value="24">24 WPM</option><option value="25">25 WPM</option><option value="26">26 WPM</option>
+                    <option value="27">27 WPM</option><option value="28">28 WPM</option><option value="30">30 WPM</option>
+                    <option value="32">32 WPM</option><option value="35">35 WPM</option><option value="40">40 WPM</option>
+                    <option value="45">45 WPM</option><option value="50">50 WPM</option><option value="60">60 WPM</option>
+                </select>
             </div>
 
             <div style="margin-bottom:10px;">
@@ -3000,15 +2991,15 @@
             <div style="display:grid; grid-template-columns: 2fr 1fr 1fr; gap:6px; margin-bottom:10px; box-sizing:border-box;">
                 <div>
                     <label for="cacciaQsoCallInput" style="font-size:0.75em; color:#00bcd4; font-weight:bold; display:block; margin-bottom:4px; text-align:left;">1. Stazione (Call)</label>
-                    <input type="text" id="cacciaQsoCallInput" aria-label="Nominativo Stazione" placeholder="es. IS0SSS" style="width:100%; height:42px; padding:6px 8px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#ffffff !important; color:#000000 !important; border-radius:6px; border:2px solid #00bcd4; box-sizing:border-box;" onkeydown="if(event.key==='Enter') window.handleCacciaQsoCallEnter(event)">
+                    <input type="text" id="cacciaQsoCallInput" aria-label="Nominativo Stazione" placeholder="es. IS0SSS" style="width:100%; height:42px; padding:6px 8px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#ffffff !important; color:#000000 !important; border-radius:6px; border:2px solid #00bcd4; box-sizing:border-box;" onkeydown="if(event.key==='Enter'||event.key==='Tab') window.handleCacciaQsoCallEnter(event)">
                 </div>
                 <div>
                     <label for="cacciaQsoRstInput" style="font-size:0.75em; color:#00bcd4; font-weight:bold; display:block; margin-bottom:4px; text-align:left;">2. RST Rx</label>
-                    <input type="text" id="cacciaQsoRstInput" aria-label="RST Ricevuto" value="5NN" placeholder="5NN" style="width:100%; height:42px; padding:6px 8px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#ffffff !important; color:#000000 !important; border-radius:6px; border:2px solid #00bcd4; box-sizing:border-box; text-align:center;" onkeydown="if(event.key==='Enter') window.handleCacciaQsoRstEnter(event)">
+                    <input type="text" id="cacciaQsoRstInput" aria-label="RST Ricevuto" value="5NN" placeholder="5NN" style="width:100%; height:42px; padding:6px 8px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#ffffff !important; color:#000000 !important; border-radius:6px; border:2px solid #00bcd4; box-sizing:border-box; text-align:center;" onkeydown="if(event.key==='Enter'||event.key==='Tab') window.handleCacciaQsoRstEnter(event)">
                 </div>
                 <div>
                     <label for="cacciaQsoNrInput" style="font-size:0.75em; color:#00bcd4; font-weight:bold; display:block; margin-bottom:4px; text-align:left;">3. NR Ricevuto</label>
-                    <input type="text" id="cacciaQsoNrInput" aria-label="Numero Progressivo Ricevuto" placeholder="es. 201" style="width:100%; height:42px; padding:6px 8px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#ffffff !important; color:#000000 !important; border-radius:6px; border:2px solid #00bcd4; box-sizing:border-box; text-align:center;" onkeydown="if(event.key==='Enter') window.handleCacciaQsoNrEnter(event)">
+                    <input type="text" id="cacciaQsoNrInput" aria-label="Numero Progressivo Ricevuto" placeholder="es. 201" style="width:100%; height:42px; padding:6px 8px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#ffffff !important; color:#000000 !important; border-radius:6px; border:2px solid #00bcd4; box-sizing:border-box; text-align:center;" onkeydown="if(event.key==='Enter'||event.key==='Tab') window.handleCacciaQsoNrEnter(event)">
                 </div>
             </div>
             <div style="display:flex; gap:6px;">
