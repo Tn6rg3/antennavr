@@ -22,8 +22,8 @@
         noiseGain: null,
         activeToneOscillators: {},
         isVfoDragging: false,
-        vfoStartAngle: 0,
-        vfoStartFreq: 7034000,
+        vfoKnobAngle: 0, // Angolo accumulato della manopola VFO
+        vfoLastTouchAngle: 0, // Ultimo angolo touch registrato
         mySerialNum: 1
     };
 
@@ -47,6 +47,7 @@
         window.cacciaQsoState.currentQsoStep = 'IDLE';
         window.cacciaQsoState.activeStation = null;
         window.cacciaQsoState.vfoFreqHz = 7034000;
+        window.cacciaQsoState.vfoKnobAngle = 0;
 
         window.generateCacciaQsoStations();
         window.initCacciaQsoUI();
@@ -59,11 +60,11 @@
     };
 
     /**
-     * GENERATORE PROCEDURALE DI STAZIONI RADIO 40M
+     * GENERATORE PROCEDURALE DI STAZIONI RADIO 40M (7.000 MHz - 7.200 MHz)
      * (Sfrutta window.generateRealisticCallsign di dictionary_manager.js con Pile-Up e refresh ogni 4 QSO)
      */
     window.generateCacciaQsoStations = function() {
-        const count = 18; // 18 stazioni sparse in 40 metri (7000 - 7040 kHz)
+        const count = 22; // 22 stazioni sparse nell'intera banda 40 metri (7000 - 7200 kHz)
         let newStations = [];
 
         for (let i = 0; i < count; i++) {
@@ -75,23 +76,23 @@
             // Puliamo eventuali modificatori tipo /P o /QRP per brevita nei contest
             callsign = callsign.split('/')[0];
 
-            // Frequenza casuale tra 7.002.000 Hz e 7.038.000 Hz
-            let freqHz = Math.floor(7002000 + Math.random() * 36000);
+            // Frequenza casuale tra 7.002.000 Hz e 7.198.000 Hz (Banda estesa 7.000 - 7.200 MHz)
+            let freqHz = Math.floor(7002000 + Math.random() * 196000);
 
-            // SIMULATORE PILE-UP: Il 25% delle stazioni si genera a soli 100-250 Hz da un'altra stazione!
-            if (i > 0 && Math.random() < 0.25) {
+            // SIMULATORE PILE-UP: Il 30% delle stazioni si genera a soli 100-250 Hz da un'altra stazione!
+            if (i > 0 && Math.random() < 0.30) {
                 const partnerFreq = newStations[Math.floor(Math.random() * newStations.length)].freqHz;
-                const offset = (Math.random() < 0.5 ? 1 : -1) * Math.floor(120 + Math.random() * 180);
+                const offset = (Math.random() < 0.5 ? 1 : -1) * Math.floor(110 + Math.random() * 180);
                 freqHz = partnerFreq + offset;
             }
 
             const wpm = Math.floor(18 + Math.random() * 11); // 18 - 28 WPM
             const toneHz = Math.floor(550 + Math.random() * 250); // 550 - 800 Hz
-            const sMeterBase = Math.floor(3 + Math.random() * 7); // S3 - S9
+            const sMeterBase = Math.floor(2 + Math.random() * 8); // S2 - S9+
             const qsbSpeedSec = (3 + Math.random() * 5).toFixed(1); // Fading period 3-8 sec
             const rstReports = ['599', '589', '579', '559', '599', '599', '479'];
             const rst = rstReports[Math.floor(Math.random() * rstReports.length)];
-            const serialNum = String(Math.floor(1 + Math.random() * 45)).padStart(3, '0');
+            const serialNum = String(Math.floor(1 + Math.random() * 55)).padStart(3, '0');
 
             newStations.push({
                 id: `st_${Date.now()}_${i}`,
@@ -109,7 +110,7 @@
         }
 
         window.cacciaQsoState.stations = newStations;
-        console.log("Caccia QSO: Generated 40m Band Stations using generateRealisticCallsign() ->", newStations);
+        console.log("Caccia QSO: Generated 40m Extended Band Stations (7.000-7.200 MHz) ->", newStations);
     };
 
     /**
@@ -121,7 +122,7 @@
 
         const powerBtn = document.getElementById('cacciaQsoPowerBtn');
         const displayEl = document.getElementById('cacciaQsoFreqDisplay');
-        const dialEl = document.getElementById('cacciaQsoVfoDial');
+        const dialEl = document.getElementById('cacciaQsoVfoCanvas');
 
         if (state.radioOn) {
             if (powerBtn) {
@@ -150,7 +151,7 @@
     };
 
     /**
-     * AUDIO ENGINE - RUMORE DI FONDO RADIO (QRN) + FILTRO PASSABANDA
+     * AUDIO ENGINE - RUMORE DI FONDO RADIO (QRN) VARIABILE & FILTRO PASSABANDA
      */
     window.initCacciaQsoAudioEngine = function() {
         const state = window.cacciaQsoState;
@@ -169,21 +170,21 @@
             const noiseBuffer = state.audioCtx.createBuffer(1, bufferSize, state.audioCtx.sampleRate);
             const output = noiseBuffer.getChannelData(0);
             for (let i = 0; i < bufferSize; i++) {
-                output[i] = (Math.random() * 2 - 1) * 0.15;
+                output[i] = (Math.random() * 2 - 1) * 0.20;
             }
 
             state.noiseNode = state.audioCtx.createBufferSource();
             state.noiseNode.buffer = noiseBuffer;
             state.noiseNode.loop = true;
 
-            // Filtro Passabanda CW (300Hz - 800Hz)
+            // Filtro Passabanda CW Selettivo (300Hz - 800Hz)
             state.noiseFilter = state.audioCtx.createBiquadFilter();
             state.noiseFilter.type = 'bandpass';
             state.noiseFilter.frequency.value = 600;
-            state.noiseFilter.Q.value = 2.5;
+            state.noiseFilter.Q.value = 3.0;
 
             state.noiseGain = state.audioCtx.createGain();
-            state.noiseGain.gain.value = 0.08; // Fruscio soffice e realistico
+            state.noiseGain.gain.value = 0.10; // Fruscio di partenza
 
             state.noiseNode.connect(state.noiseFilter);
             state.noiseFilter.connect(state.noiseGain);
@@ -216,8 +217,8 @@
     };
 
     /**
-     * AUDIO LOOP & MONITOR S-METER
-     * (Riproduce le stazioni nel raggio di sintonia del VFO)
+     * AUDIO LOOP & MONITOR S-METER REALISTICO
+     * (Fluttuazione QRN variabile + Attenuazione selettiva della frequenza VFO)
      */
     window.startCacciaQsoAudioLoop = function() {
         if (window.cacciaQsoAudioInterval) clearInterval(window.cacciaQsoAudioInterval);
@@ -227,34 +228,52 @@
             if (!state.radioOn || !state.audioCtx) return;
 
             const vfo = state.vfoFreqHz;
-            let totalSignalVal = 1; // S1 Rumore di fondo minimo
+
+            // FLUTTUAZIONE DINAMICA RUMORE DI FONDO (QRN / MASCHERAMENTO MASCHERANTE)
+            const timeSec = Date.now() / 1000;
+            const qrnFluctuation = 0.06 + 0.08 * Math.sin(timeSec * 0.4) + 0.04 * Math.random();
+            if (state.noiseGain) {
+                state.noiseGain.gain.value = qrnFluctuation;
+            }
+
+            // Rumore di fondo minimo espresso in scala S (tra S1 e S3)
+            let qrnSValue = Math.round(1 + (qrnFluctuation * 15));
+            let totalSignalVal = qrnSValue;
             let currentSintonizedStation = null;
 
             state.stations.forEach(st => {
                 if (st.completed) return;
 
-                // Calcolo della nota eterodina (differenza tra frequenza VFO e frequenza Stazione)
+                // Calcolo dello spostamento di frequenza (offset VFO vs Stazione)
                 const freqDiffHz = Math.abs(st.freqHz - vfo);
 
-                // Se la stazione è nel raggio di ascolto del filtro CW (± 900 Hz)
-                if (freqDiffHz <= 900) {
-                    // Calcolo della vicinanza e del volume
-                    const proximityFactor = Math.max(0, 1 - (freqDiffHz / 900));
+                // CURVA DI SELETTIVITÀ FILTRO CW RICEVITORE REALISTICO:
+                // entro ± 120 Hz -> Segnale al 100%
+                // tra 120 Hz e 400 Hz -> Il segnale crolla vertiginosamente fino a 0
+                // oltre 400 Hz -> Segnale completamente tagliato (0%)
+                let proximityFactor = 0;
+                if (freqDiffHz <= 120) {
+                    proximityFactor = 1.0;
+                } else if (freqDiffHz <= 400) {
+                    const normOff = (freqDiffHz - 120) / 280;
+                    proximityFactor = Math.max(0, 1 - (normOff * normOff)); // Crollo quadratico rapido del volume
+                }
 
+                if (proximityFactor > 0) {
                     // Fading QSB sinusoidale nel tempo
-                    const qsbPhase = (Date.now() / 1000) * (2 * Math.PI / st.qsbSpeedSec);
-                    const qsbFactor = 0.5 + 0.5 * Math.sin(qsbPhase); // Tra 0.5 e 1.0
+                    const qsbPhase = timeSec * (2 * Math.PI / st.qsbSpeedSec);
+                    const qsbFactor = 0.4 + 0.6 * Math.sin(qsbPhase); // Tra 0.4 e 1.0
 
                     const effectiveS = Math.round(st.sMeterBase * proximityFactor * qsbFactor);
                     totalSignalVal = Math.max(totalSignalVal, effectiveS);
 
-                    // Se siamo molto vicini alla sintonia ottimale (entro ± 350 Hz)
-                    if (freqDiffHz <= 350) {
+                    // Se siamo ben centrati sulla sintonia (entro ± 180 Hz)
+                    if (freqDiffHz <= 180) {
                         currentSintonizedStation = st;
                     }
 
-                    // Riproduce la trasmissione Morse della stazione se in CQ o risposta
-                    if (st.isCallingCq && proximityFactor > 0.15) {
+                    // Riproduce la trasmissione Morse della stazione se visibile nel filtro
+                    if (st.isCallingCq && proximityFactor > 0.05) {
                         window.playCacciaQsoStationMorse(st, freqDiffHz, proximityFactor * qsbFactor);
                     }
                 }
@@ -270,12 +289,11 @@
                     state.currentQsoStep = 'LISTENING';
                 }
             }
-        }, 150);
+        }, 120);
     };
 
     /**
      * SINTESI SUONO MORSE DEDICATA PER LA STAZIONE SINTONIZZATA
-     * (Sfrutta window.morseDict gia presente in audio_engine.js)
      */
     window.playCacciaQsoStationMorse = function(station, freqDiffHz, volumeFactor) {
         const state = window.cacciaQsoState;
@@ -309,7 +327,6 @@
                 continue;
             }
 
-            // Sfruttiamo il dizionario Morse globale window.morseDict
             const code = morseDict[char] || morseDict[char.toUpperCase()];
             if (!code) continue;
 
@@ -347,16 +364,16 @@
     };
 
     /**
-     * SINTONIA VFO & GESTIONE DIAL (TOUCH / MOUSE / WHEEL)
+     * SINTONIA VFO & GESTIONE DIAL FLUIDA (TOUCH / MOUSE / WHEEL SENZA SALTI)
      */
     window.initCacciaQsoUI = function() {
         const dialCanvas = document.getElementById('cacciaQsoVfoCanvas');
         if (!dialCanvas) return;
 
         const ctx = dialCanvas.getContext('2d');
-        window.drawCacciaQsoDial(ctx, 0);
+        window.drawCacciaQsoDial(ctx, window.cacciaQsoState.vfoKnobAngle);
 
-        // Eventi Drag e Rotation VFO
+        // Eventi Drag e Rotation VFO fluida
         dialCanvas.onmousedown = dialCanvas.ontouchstart = (e) => {
             window.cacciaQsoState.isVfoDragging = true;
             const rect = dialCanvas.getBoundingClientRect();
@@ -365,8 +382,7 @@
             const x = clientX - (rect.left + rect.width / 2);
             const y = clientY - (rect.top + rect.height / 2);
 
-            window.cacciaQsoState.vfoStartAngle = Math.atan2(y, x);
-            window.cacciaQsoState.vfoStartFreq = window.cacciaQsoState.vfoFreqHz;
+            window.cacciaQsoState.vfoLastTouchAngle = Math.atan2(y, x);
         };
 
         window.onmousemove = window.ontouchmove = (e) => {
@@ -377,18 +393,21 @@
             const x = clientX - (rect.left + rect.width / 2);
             const y = clientY - (rect.top + rect.height / 2);
 
-            const currentAngle = Math.atan2(y, x);
-            let angleDiff = currentAngle - window.cacciaQsoState.vfoStartAngle;
+            const currentTouchAngle = Math.atan2(y, x);
+            let angleDelta = currentTouchAngle - window.cacciaQsoState.vfoLastTouchAngle;
 
             // Correzione salto -PI / +PI
-            if (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-            if (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+            if (angleDelta > Math.PI) angleDelta -= 2 * Math.PI;
+            if (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
 
-            // 1 Giro completo (2*PI) = 5.000 Hz di cambio frequenza
-            const freqChange = Math.round((angleDiff / (2 * Math.PI)) * 5000);
-            window.tuneCacciaQsoVfoTo(window.cacciaQsoState.vfoStartFreq + freqChange);
+            window.cacciaQsoState.vfoLastTouchAngle = currentTouchAngle;
+            window.cacciaQsoState.vfoKnobAngle += angleDelta;
 
-            window.drawCacciaQsoDial(ctx, currentAngle);
+            // 1 Giro completo (2*PI) = 10.000 Hz di cambio frequenza
+            const freqStep = Math.round((angleDelta / (2 * Math.PI)) * 10000);
+            window.tuneCacciaQsoVfoBy(freqStep);
+
+            window.drawCacciaQsoDial(ctx, window.cacciaQsoState.vfoKnobAngle);
         };
 
         window.onmouseup = window.ontouchend = () => {
@@ -400,6 +419,8 @@
             e.preventDefault();
             const step = e.deltaY < 0 ? 50 : -50;
             window.tuneCacciaQsoVfoBy(step);
+            window.cacciaQsoState.vfoKnobAngle += (step > 0 ? 0.1 : -0.1);
+            window.drawCacciaQsoDial(ctx, window.cacciaQsoState.vfoKnobAngle);
         };
 
         window.updateCacciaQsoFreqDisplay();
@@ -450,8 +471,8 @@
     };
 
     window.tuneCacciaQsoVfoTo = function(targetFreqHz) {
-        // Limiti Banda 40m CW: 7.000.000 Hz - 7.040.000 Hz
-        const clamped = Math.max(7000000, Math.min(7040000, targetFreqHz));
+        // Limiti Banda 40m CW Estesa: 7.000.000 Hz - 7.200.000 Hz
+        const clamped = Math.max(7000000, Math.min(7200000, targetFreqHz));
         window.cacciaQsoState.vfoFreqHz = clamped;
         window.updateCacciaQsoFreqDisplay();
     };
@@ -461,7 +482,7 @@
         if (!freqEl) return;
 
         const hz = window.cacciaQsoState.vfoFreqHz;
-        const mhz = (hz / 1000000).toFixed(5); // es. 7.03400
+        const mhz = (hz / 1000000).toFixed(5); // es. 07.034.00 MHz
         const parts = mhz.split('.');
         const formatted = `0${parts[0]}.${parts[1].substring(0,3)}.${parts[1].substring(3,5)} MHz`;
         freqEl.textContent = formatted;
