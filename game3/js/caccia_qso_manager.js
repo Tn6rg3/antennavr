@@ -24,6 +24,7 @@
         isVfoDragging: false,
         vfoKnobAngle: 0,
         vfoLastTouchAngle: 0,
+        isUserTransmitting: false, // Flag di trasmissione locale operatore
         mySerialNum: 1
     };
 
@@ -66,6 +67,7 @@
         window.cacciaQsoState.activeStation = null;
         window.cacciaQsoState.vfoFreqHz = 7034000;
         window.cacciaQsoState.vfoKnobAngle = 0;
+        window.cacciaQsoState.isUserTransmitting = false;
 
         window.generateCacciaQsoStations();
         window.initCacciaQsoUI();
@@ -252,14 +254,18 @@
             let totalSignalVal = qrnSValue;
             let currentSintonizedStation = null;
 
+            // SE L'UTENTE STA TRASMETTENDO IN LOCAL, SILENZIA LE CHIAMATE CQ DELLE STAZIONI!
+            if (state.isUserTransmitting) {
+                window.updateCacciaQsoSMeter(10);
+                return;
+            }
+
             state.stations.forEach(st => {
                 if (st.completed) return;
 
                 const freqDiffHz = Math.abs(st.freqHz - vfo);
 
                 // SELETTIVITÀ FILTRO CW RICEVITORE:
-                // entro ± 100 Hz -> Segnale al 100%
-                // tra 100 Hz e 320 Hz -> Il segnale crolla bruscamente a 0
                 let proximityFactor = 0;
                 if (freqDiffHz <= 100) {
                     proximityFactor = 1.0;
@@ -269,7 +275,6 @@
                 }
 
                 if (proximityFactor > 0) {
-                    // FADING QSB EVIDENTE E MARCATO (0.15 - 1.0)
                     const qsbPhase = timeSec * (2 * Math.PI / st.qsbSpeedSec);
                     const qsbFactor = 0.15 + 0.85 * Math.abs(Math.sin(qsbPhase));
 
@@ -300,11 +305,11 @@
     };
 
     /**
-     * SINTESI SUONO MORSE STAZIONE (CON RAMPE LINEARI FLUIDE ANTI-SCOPPIETTIO)
+     * SINTESI SUONO MORSE STAZIONE
      */
     window.playCacciaQsoStationMorse = function(station, initialFreqDiffHz, initialVolume) {
         const state = window.cacciaQsoState;
-        if (!state.radioOn || !state.audioCtx || station.isPlayingMorse) return;
+        if (!state.radioOn || !state.audioCtx || station.isPlayingMorse || state.isUserTransmitting) return;
 
         station.isPlayingMorse = true;
         station.playToken = (station.playToken || 0) + 1;
@@ -343,7 +348,7 @@
                 const durMs = (symbol === '-') ? (unitSec * 3 * 1000) : (unitSec * 1000);
 
                 setTimeout(() => {
-                    if (currentToken !== station.playToken || !state.radioOn || !state.audioCtx) return;
+                    if (currentToken !== station.playToken || !state.radioOn || !state.audioCtx || state.isUserTransmitting) return;
 
                     const realTimeFreqDiff = Math.abs(station.freqHz - state.vfoFreqHz);
                     let realTimeProximity = 0;
@@ -374,7 +379,6 @@
                         const durSec = durMs / 1000;
                         const end = start + durSec;
 
-                        // RAMPE LINEARI MORBIDE FLUIDE ANTI-SCOPPIETTIO
                         gain.gain.setValueAtTime(0.001, start);
                         gain.gain.linearRampToValueAtTime(targetVol, start + 0.005);
                         gain.gain.setValueAtTime(targetVol, Math.max(start + 0.006, end - 0.005));
@@ -407,7 +411,10 @@
         const state = window.cacciaQsoState;
         const inputEl = document.getElementById('cacciaQsoCallInput');
 
+        state.isUserTransmitting = true; // SILENZIA LE ALTRE STAZIONI DURANTE L'INVIO!
+
         if (!state.radioOn || !state.audioCtx) {
+            state.isUserTransmitting = false;
             if (onCompleteCallback) onCompleteCallback();
             return;
         }
@@ -449,7 +456,6 @@
                             const durSec = durMs / 1000;
                             const end = start + durSec;
 
-                            // RAMPE LINEARI FLUIDE ANTI-SCOPPIETTIO
                             gain.gain.setValueAtTime(0.001, start);
                             gain.gain.linearRampToValueAtTime(targetVol, start + 0.005);
                             gain.gain.setValueAtTime(targetVol, Math.max(start + 0.006, end - 0.005));
@@ -472,6 +478,7 @@
         }
 
         setTimeout(() => {
+            state.isUserTransmitting = false; // SBLOCCA LA RICEZIONE PER LA RISPOSTA DELLA STAZIONE
             if (inputEl) inputEl.disabled = false;
             if (onCompleteCallback) onCompleteCallback();
         }, delayMs + 300);
@@ -497,11 +504,11 @@
 
         const st = state.activeStation;
 
-        // Interruzione chiamata CQ in corso della stazione
+        // INTERRUZIONE ISTANTANEA E TASSATIVA DI QUALSIASI TRASMISSIONE IN CORSO DELLA STAZIONE!
         st.playToken++;
         st.isPlayingMorse = false;
 
-        // 1. Suona la chiamata dell'utente (sidetone locale)
+        // 1. L'UTENTE SUONA LA PROPRIA RISPOSTA IN MORSE (SIDETONE LOCALE)
         window.playCacciaQsoUserSidetone(val, () => {
             if (val === st.callsign) {
                 state.currentQsoStep = 'CALL_MATCHED';
@@ -514,7 +521,7 @@
                 // La stazione risponde in Morse: [MY_CALL] DE [STATION_CALL] UR [RST] [SERIAL] BK
                 setTimeout(() => {
                     window.playCacciaQsoStationMorse(st, 0, 1.0);
-                }, 350);
+                }, 400);
             } else {
                 if (typeof showToast === 'function') showToast(`❌ Nominativo Errato (Sintonizzato su ${st.callsign})`);
             }
@@ -557,7 +564,7 @@
 
         const st = state.activeStation;
 
-        // Se siamo ancora nello stato iniziale e l'utente clicca direttamente il pulsante grande
+        // Se siamo ancora nello stato iniziale e l'utente clicca direttamente il pulsante grande "Invia"
         if (state.currentQsoStep === 'LISTENING' || state.currentQsoStep === 'IDLE') {
             window.handleCacciaQsoCallEnter(null);
             return;
