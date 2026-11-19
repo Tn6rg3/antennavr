@@ -2951,18 +2951,22 @@
                 <button onclick="window.tuneCacciaQsoVfoBy(1000)" class="btn-secondary" style="padding:4px 8px; font-size:0.78em;">+1 kHz</button>
             </div>
 
-            <!-- CONTROLLI RADIO, MODALITÀ & TEMPO -->
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:8px;">
+            <!-- CONTROLLI RADIO, MODALITÀ, WPM & TEMPO -->
+            <div style="display:grid; grid-template-columns: 2fr 1fr 1fr; gap:6px; margin-bottom:8px;">
                 <div>
                     <label for="cacciaQsoSubModeSelect" style="font-size:0.7em; color:#00bcd4; display:block; font-weight:bold;">Modalità Operativa:</label>
-                    <select id="cacciaQsoSubModeSelect" style="width:100%; padding:7px 6px; background:#fff; color:#000; border-radius:6px; font-weight:bold; border:1px solid #00bcd4;" onchange="window.switchCacciaQsoSubMode(this.value)">
+                    <select id="cacciaQsoSubModeSelect" style="width:100%; padding:7px 4px; background:#fff; color:#000; border-radius:6px; font-weight:bold; border:1px solid #00bcd4;" onchange="window.switchCacciaQsoSubMode(this.value)">
                         <option value="search_pounce" selected>🔍 S&P (Rispondo ai CQ)</option>
                         <option value="run">📢 RUN (Chiamo CQ io)</option>
                     </select>
                 </div>
                 <div>
-                    <label for="cacciaQsoDurationSelect" style="font-size:0.7em; color:var(--hint-color); display:block; font-weight:bold;">Durata Contest:</label>
-                    <select id="cacciaQsoDurationSelect" style="width:100%; padding:7px 6px; background:#fff; color:#000; border-radius:6px; font-weight:bold;">
+                    <label for="cacciaQsoWpmInput" style="font-size:0.7em; color:var(--champ-color); display:block; font-weight:bold;">WPM:</label>
+                    <input type="number" id="cacciaQsoWpmInput" value="20" min="10" max="45" style="width:100%; padding:6px 4px; background:#fff; color:#000; border-radius:6px; font-weight:bold; text-align:center; border:1px solid var(--champ-color);" onchange="window.updateCacciaQsoWpmSpeed()">
+                </div>
+                <div>
+                    <label for="cacciaQsoDurationSelect" style="font-size:0.7em; color:var(--hint-color); display:block; font-weight:bold;">Durata:</label>
+                    <select id="cacciaQsoDurationSelect" style="width:100%; padding:7px 4px; background:#fff; color:#000; border-radius:6px; font-weight:bold;">
                         <option value="5">5 min</option>
                         <option value="10" selected>10 min</option>
                         <option value="15">15 min</option>
