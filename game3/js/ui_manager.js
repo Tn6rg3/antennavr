@@ -29,10 +29,10 @@ window.populateGameModesUI = function() {
         } else if (isCoop) {
             if (mode.id !== 'conquest') return;
         } else if (isTx) {
-            // Mostriamo Standard, Gruppi 5 Chars, Gruppi Tx e Ricezione Audio
-            if (mode.id !== 'standard' && mode.id !== 'code_groups' && mode.id !== 'groups_tx' && mode.id !== 'real_tx') return;
+            // Mostriamo Standard, Gruppi 5 Chars, Gruppi Tx, Ricezione Audio e Caccia QSO
+            if (mode.id !== 'standard' && mode.id !== 'code_groups' && mode.id !== 'groups_tx' && mode.id !== 'real_tx' && mode.id !== 'caccia_qso') return;
         } else {
-            if (mode.id === 'code_groups' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'addestra_ia') return;
+            if (mode.id === 'code_groups' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'caccia_qso' || mode.id === 'addestra_ia') return;
             if (typeInput.value === 'arcade' && mode.id !== 'arcade' && mode.id !== 'la_torre') return;
             if (typeInput.value === 'tournament') return; // Gestito da optgroup
         }
@@ -47,6 +47,7 @@ window.populateGameModesUI = function() {
             else if (mode.id === 'code_groups') opt.textContent = lang === 'it' ? "Esercizio Gruppi (5 Chars)" : "Code Groups Exercise (5 Chars)";
             else if (mode.id === 'groups_tx') opt.textContent = lang === 'it' ? "Trasmissione Gruppi" : "Groups Transmission";
             else if (mode.id === 'real_tx') opt.textContent = lang === 'it' ? "Ricezione Audio (Tasto Reale)" : "Audio Reception (Real Key)";
+            else if (mode.id === 'caccia_qso') opt.textContent = lang === 'it' ? "Caccia QSO (Simulatore Radio HF 40m) 📻" : "QSO Hunt (HF Radio Simulator 40m) 📻";
             else return;
         } else {
             opt.textContent = lang === 'it' ? mode.titleIt : mode.titleEn;

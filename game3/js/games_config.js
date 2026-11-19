@@ -547,6 +547,19 @@ window.GAME_MODES = {
         spacingConfigurable: false,
         generateWords: function(num, dicts) { return []; }
     },
+    "caccia_qso": {
+        id: "caccia_qso",
+        titleIt: "Caccia QSO (Simulatore Radio HF 40m)",
+        titleEn: "QSO Hunt (HF Radio Simulator)",
+        icon: "📻",
+        defaultWpm: 20,
+        defaultWordCount: 0,
+        wpmConfigurable: true,
+        wordCountConfigurable: false,
+        fixedSpeedAllowed: false,
+        spacingConfigurable: false,
+        generateWords: function(num, dicts) { return []; }
+    },
     "qso": {
         id: "qso",
         titleIt: "QSO Telegrafico (P2P)",

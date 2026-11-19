@@ -80,6 +80,13 @@ window.showScreen = function(screenId) {
         window.stopAudioAnalyzer();
     }
 
+    // Sicurezza: se usciamo dalla schermata Caccia QSO, spegniamo la radio
+    if (screenId !== 'cacciaQsoScreen' && window.cacciaQsoState && window.cacciaQsoState.radioOn) {
+        if (typeof window.toggleCacciaQsoPower === 'function') {
+            window.toggleCacciaQsoPower(false);
+        }
+    }
+
 
 
     if (document.activeElement && typeof document.activeElement.blur === 'function') {
