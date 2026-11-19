@@ -143,6 +143,12 @@
 
         if (selectEl) selectEl.value = newSubMode;
 
+        // In RUN mode le stazioni NON devono chiamare CQ da sole!
+        window.cacciaQsoState.stations.forEach(st => {
+            if (newSubMode === 'run') st.isCallingCq = false;
+            else st.isCallingCq = true;
+        });
+
         if (newSubMode === 'run') {
             if (cqBtn) cqBtn.style.display = 'block';
             if (btnRUN) {
@@ -189,7 +195,7 @@
         window.playCacciaQsoUserSidetone(cqText, () => {
             // Dopo la chiamata CQ in RUN mode, si genera un PILE-UP di 2 - 4 stazioni che trasmettono SOLO il proprio nominativo!
             setTimeout(() => {
-                if (!state.radioOn) return;
+                if (!state.radioOn || state.subMode !== 'run') return;
 
                 const numCallers = Math.floor(2 + Math.random() * 3); // 2, 3 o 4 chiamanti
                 let pileUpCallers = [];
@@ -207,12 +213,12 @@
                         callsign: callsign,
                         freqHz: state.vfoFreqHz + randomOffsetHz,
                         wpm: userWpm, // STESSA VELOCITÀ WPM IMPOSTATA DALL'UTENTE!
-                        toneHz: Math.floor(550 + Math.random() * 250), // Tono audio 550-800Hz
-                        sMeterBase: Math.floor(4 + Math.random() * 6), // S4 - S9
+                        toneHz: Math.floor(550 + Math.random() * 250),
+                        sMeterBase: Math.floor(4 + Math.random() * 6),
                         qsbSpeedSec: parseFloat((3 + Math.random() * 4).toFixed(1)),
                         rst: '5NN',
                         serialNum: String(Math.floor(1 + Math.random() * 75)).padStart(3, '0'),
-                        isCallingCq: false, // In RUN mode le stazioni NON chiamano mai CQ!
+                        isCallingCq: false, // In RUN mode le stazioni NON chiamano MAI CQ!
                         isPlayingMorse: false,
                         playToken: 0,
                         completed: false
@@ -240,6 +246,7 @@
         const count = 22; // 22 stazioni sparse in 40m
         let newStations = [];
         const userWpm = window.getCacciaQsoWpm();
+        const isRunMode = window.cacciaQsoState.subMode === 'run';
 
         for (let i = 0; i < count; i++) {
             let callsign = (typeof window.generateRealisticCallsign === 'function')
@@ -257,9 +264,9 @@
                 freqHz = partnerFreq + offset;
             }
 
-            const toneHz = Math.floor(550 + Math.random() * 250); // 550 - 800 Hz
-            const sMeterBase = Math.floor(3 + Math.random() * 7); // S3 - S9+
-            const qsbSpeedSec = (3 + Math.random() * 5).toFixed(1); // Fading period 3-8 sec
+            const toneHz = Math.floor(550 + Math.random() * 250);
+            const sMeterBase = Math.floor(3 + Math.random() * 7);
+            const qsbSpeedSec = (3 + Math.random() * 5).toFixed(1);
             const rstReports = ['5NN', '58N', '57N', '55N', '5NN', '5NN', '47N'];
             const rst = rstReports[Math.floor(Math.random() * rstReports.length)];
             const serialNum = String(Math.floor(1 + Math.random() * 85)).padStart(3, '0');
@@ -268,13 +275,13 @@
                 id: `st_${Date.now()}_${i}`,
                 callsign: callsign,
                 freqHz: freqHz,
-                wpm: userWpm, // STESSA VELOCITÀ WPM DELL'UTENTE!
+                wpm: userWpm,
                 toneHz: toneHz,
                 sMeterBase: sMeterBase,
                 qsbSpeedSec: parseFloat(qsbSpeedSec),
                 rst: rst,
                 serialNum: serialNum,
-                isCallingCq: true,
+                isCallingCq: !isRunMode, // In RUN mode le stazioni NON chiamano mai CQ!
                 isPlayingMorse: false,
                 playToken: 0,
                 completed: false
@@ -501,7 +508,7 @@
             textToPlay = `${myCall} ${station.rst} ${station.serialNum}`;
         } else if (state.currentQsoStep === 'COMPLETED' && state.activeStation === station) {
             if (state.subMode === 'run') {
-                // IN RUN MODE: La stazione NON ripete [CALL] K alla fine, tace per sempre!
+                // IN RUN MODE: La stazione NON ripete nulla, si tace per sempre!
                 textToPlay = "";
             } else {
                 // STEP 5 MORSE RUNNER S&P: TU [STATION_CALL] K
@@ -834,7 +841,7 @@
                 window.renderCacciaQsoLogbook();
                 window.updateCacciaQsoScoreUI();
 
-                // In S&P mode la stazione invia un breve "TU [CALL] K", in RUN mode tace e lascia lo spazio per il prossimo CQ
+                // In S&P mode la stazione invia un breve "TU [CALL] K", in RUN mode l'utente riprende il CQ in automatico!
                 if (state.subMode !== 'run') {
                     setTimeout(() => {
                         window.playCacciaQsoStationMorse(st, 0, 1.0);
@@ -842,6 +849,13 @@
                 } else {
                     state.currentQsoStep = 'IDLE';
                     state.activeStation = null;
+
+                    // --- AUTO-RUN LOOP CONTEST: IL GIOCATORE RIPRENDE IN AUTOMATICO LA PROPRIA CHIAMATA CQ ---
+                    setTimeout(() => {
+                        if (state.radioOn && state.subMode === 'run') {
+                            window.triggerCacciaQsoRunCq();
+                        }
+                    }, 1200);
                 }
 
                 // RIGENERAZIONE AUTOMATICA BANDA OGNI 4 QSO
