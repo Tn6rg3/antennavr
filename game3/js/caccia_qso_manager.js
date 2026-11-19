@@ -30,6 +30,21 @@
     };
 
     /**
+     * RECUPERO E AGGIORNAMENTO VELOCITÀ WPM DINAMICA
+     */
+    window.getCacciaQsoWpm = function() {
+        const inputEl = document.getElementById('cacciaQsoWpmInput');
+        return inputEl ? (parseInt(inputEl.value) || 20) : (window.currentWpm || 20);
+    };
+
+    window.updateCacciaQsoWpmSpeed = function() {
+        const newWpm = window.getCacciaQsoWpm();
+        window.cacciaQsoState.stations.forEach(st => {
+            st.wpm = newWpm;
+        });
+    };
+
+    /**
      * INIZIALIZZAZIONE & AVVIO MODALITÀ
      */
     window.startCacciaQsoGame = function() {
@@ -111,7 +126,6 @@
                 btnSP.style.color = '#aaaaaa';
                 btnSP.style.border = '1px solid rgba(255,255,255,0.2)';
             }
-            if (typeof showToast === 'function') showToast("📢 Modalità RUN Attiva: premi [CHIAMA CQ] per trasmettere!");
         } else {
             if (cqBtn) cqBtn.style.display = 'none';
             if (btnSP) {
@@ -124,12 +138,12 @@
                 btnRUN.style.color = '#aaaaaa';
                 btnRUN.style.border = '1px solid rgba(255,255,255,0.2)';
             }
-            if (typeof showToast === 'function') showToast("🔍 Modalità S&P Attiva: sintonizza il VFO per cacciare i CQ!");
         }
     };
 
     /**
      * TRASMISSIONE CQ DELL'UTENTE IN MODALITÀ RUN MODE
+     * (Simula Pile-Up con 2 - 4 stazioni chiamanti simultanee su frequenze vicine)
      */
     window.triggerCacciaQsoRunCq = function() {
         const state = window.cacciaQsoState;
@@ -144,45 +158,49 @@
         state.activeStation = null;
 
         window.playCacciaQsoUserSidetone(cqText, () => {
-            // Dopo la chiamata CQ in RUN mode, 1 o 2 stazioni rispondono sulla frequenza dell'utente!
+            // Dopo la chiamata CQ in RUN mode, si genera un PILE-UP di 2 - 4 stazioni che rispondono in frequenza!
             setTimeout(() => {
                 if (!state.radioOn) return;
 
-                let candidateCallers = state.stations.filter(st => !st.completed && Math.abs(st.freqHz - state.vfoFreqHz) <= 300);
+                // Numero di chiamanti simultanei in pile-up (2, 3 o 4 stazioni)
+                const numCallers = Math.floor(2 + Math.random() * 3);
+                let pileUpCallers = [];
 
-                if (candidateCallers.length === 0) {
+                for (let k = 0; k < numCallers; k++) {
                     const callsign = (typeof window.generateRealisticCallsign === 'function')
                         ? window.generateRealisticCallsign().split('/')[0]
-                        : `DL3ABC`;
+                        : `CALL_${k}`;
 
-                    const newSt = {
-                        id: `run_st_${Date.now()}`,
+                    // Sfalsamento frequenza tra -180 Hz e +180 Hz rispetto al VFO per eterodina reale
+                    const offsetHz = Math.floor(-180 + Math.random() * 360);
+                    const callerSt = {
+                        id: `run_st_${Date.now()}_${k}`,
                         callsign: callsign,
-                        freqHz: state.vfoFreqHz + Math.floor(-80 + Math.random() * 160),
-                        wpm: Math.floor(18 + Math.random() * 10),
-                        toneHz: Math.floor(580 + Math.random() * 150),
-                        sMeterBase: Math.floor(5 + Math.random() * 5),
-                        qsbSpeedSec: 4.5,
+                        freqHz: state.vfoFreqHz + offsetHz,
+                        wpm: window.getCacciaQsoWpm(),
+                        toneHz: Math.floor(550 + Math.random() * 250), // Tono autonomo 550-800Hz
+                        sMeterBase: Math.floor(4 + Math.random() * 6), // S4 - S9
+                        qsbSpeedSec: (3 + Math.random() * 4).toFixed(1),
                         rst: '5NN',
-                        serialNum: String(Math.floor(1 + Math.random() * 70)).padStart(3, '0'),
+                        serialNum: String(Math.floor(1 + Math.random() * 75)).padStart(3, '0'),
                         isCallingCq: false,
                         isPlayingMorse: false,
                         playToken: 0,
                         completed: false
                     };
-                    state.stations.push(newSt);
-                    candidateCallers.push(newSt);
+                    state.stations.push(callerSt);
+                    pileUpCallers.push(callerSt);
                 }
 
-                const callerSt = candidateCallers[0];
-                state.activeStation = callerSt;
+                state.activeStation = pileUpCallers[0];
                 state.currentQsoStep = 'LISTENING';
 
-                if (typeof showToast === 'function') showToast(`📻 Stazione in ascolto: ${callerSt.callsign} ti risponde!`);
-
-                // La stazione rispondente trasmette il proprio nominativo in Morse
-                window.playCacciaQsoStationMorse(callerSt, 0, 1.0);
-            }, 600);
+                // Fa trasmettere simultaneamente tutte le stazioni del pile-up su frequenze vicine!
+                pileUpCallers.forEach(st => {
+                    const freqDiff = Math.abs(st.freqHz - state.vfoFreqHz);
+                    window.playCacciaQsoStationMorse(st, freqDiff, 1.0);
+                });
+            }, 500);
         });
     };
 
@@ -192,6 +210,7 @@
     window.generateCacciaQsoStations = function() {
         const count = 22; // 22 stazioni sparse in 40m
         let newStations = [];
+        const baseWpm = window.getCacciaQsoWpm();
 
         for (let i = 0; i < count; i++) {
             let callsign = (typeof window.generateRealisticCallsign === 'function')
@@ -209,7 +228,6 @@
                 freqHz = partnerFreq + offset;
             }
 
-            const wpm = Math.floor(18 + Math.random() * 11); // 18 - 28 WPM
             const toneHz = Math.floor(550 + Math.random() * 250); // 550 - 800 Hz
             const sMeterBase = Math.floor(3 + Math.random() * 7); // S3 - S9+
             const qsbSpeedSec = (3 + Math.random() * 5).toFixed(1); // Fading period 3-8 sec
@@ -221,7 +239,7 @@
                 id: `st_${Date.now()}_${i}`,
                 callsign: callsign,
                 freqHz: freqHz,
-                wpm: wpm,
+                wpm: baseWpm,
                 toneHz: toneHz,
                 sMeterBase: sMeterBase,
                 qsbSpeedSec: parseFloat(qsbSpeedSec),
@@ -260,7 +278,6 @@
 
             window.initCacciaQsoAudioEngine();
             window.startCacciaQsoAudioLoop();
-            if (typeof window.showToast === 'function') window.showToast("📻 Ricevitore 40m Acceso");
         } else {
             if (powerBtn) {
                 powerBtn.classList.remove('btn-success');
@@ -271,7 +288,6 @@
             if (dialEl) dialEl.style.opacity = '0.3';
 
             window.stopCacciaQsoAudioEngine();
-            if (typeof window.showToast === 'function') window.showToast("Radio Spenta");
         }
     };
 
@@ -445,8 +461,13 @@
             // STEP 3 MORSE RUNNER: [MY_CALL] 5NN [SERIAL_STAZIONE]
             textToPlay = `${myCall} ${station.rst} ${station.serialNum}`;
         } else if (state.currentQsoStep === 'COMPLETED' && state.activeStation === station) {
-            // STEP 5 MORSE RUNNER: TU [STATION_CALL] K
-            textToPlay = `TU ${station.callsign} K`;
+            if (state.subMode === 'run') {
+                // RUN MODE: La stazione in RUN non ripete [CALL] K, si tace dopo la conferma dell'utente
+                textToPlay = "";
+            } else {
+                // STEP 5 MORSE RUNNER S&P: TU [STATION_CALL] K
+                textToPlay = `TU ${station.callsign} K`;
+            }
         } else if (state.subMode === 'run' && state.activeStation === station) {
             // RUN MODE: La stazione risponde al CQ dell'utente trasmettendo il proprio nominativo
             textToPlay = `${station.callsign}`;
@@ -455,7 +476,13 @@
             textToPlay = `CQ CQ CQ TEST ${station.callsign} ${station.callsign} K`;
         }
 
-        const unitSec = 1.2 / station.wpm;
+        if (!textToPlay) {
+            station.isPlayingMorse = false;
+            return;
+        }
+
+        const currentWpm = window.getCacciaQsoWpm();
+        const unitSec = 1.2 / currentWpm;
         let delayMs = 0;
 
         const cleanText = textToPlay.toUpperCase();
@@ -528,9 +555,9 @@
         setTimeout(() => {
             if (currentToken === station.playToken) {
                 station.isPlayingMorse = false;
-                // Se abbiamo appena completato il salutino TU, la stazione e ufficialmente completata e viene RIMOSTA dalla frequenza!
+                // Se abbiamo appena completato il QSO, la stazione e ufficialmente completata e viene RIMOSTA dalla frequenza!
                 if (state.currentQsoStep === 'COMPLETED' && state.activeStation === station) {
-                    station.completed = true; // Rimuove definitivamente la stazione sintonizzata
+                    station.completed = true; // Rimuove definitivamente la stazione collegata
                     state.currentQsoStep = 'IDLE';
                     state.activeStation = null;
                 }
@@ -557,7 +584,7 @@
 
         const cleanText = String(text || "").toUpperCase();
         const morseDict = window.morseDict || {};
-        const wpm = 22;
+        const wpm = window.getCacciaQsoWpm();
         const unitSec = 1.2 / wpm;
         const sidetoneFreq = 650;
         let delayMs = 0;
@@ -643,7 +670,6 @@
         }
 
         if (!targetSt) {
-            if (typeof showToast === 'function') showToast(`❌ Nessuna stazione corrispondente a '${val}' in frequenza!`);
             return;
         }
 
@@ -660,7 +686,6 @@
             if (val === targetSt.callsign) {
                 state.currentQsoStep = 'CALL_MATCHED';
                 targetSt.isPlayingMorse = false;
-                if (typeof showToast === 'function') showToast(`✅ ${targetSt.callsign} ti risponde!`);
 
                 // Svuota i campi 2 e 3 per far compilare all'utente a orecchio
                 if (rstInput) rstInput.value = '5NN';
@@ -701,14 +726,12 @@
         const nrRcvdVal = nrInput ? nrInput.value.trim().toUpperCase() : '';
 
         if (!callVal) {
-            if (typeof showToast === 'function') showToast("⚠️ Inserisci prima il nominativo della stazione!");
             callInput.focus();
             return;
         }
 
         const state = window.cacciaQsoState;
         if (!state.activeStation) {
-            if (typeof showToast === 'function') showToast("⚠️ Nessuna stazione sintonizzata sul VFO!");
             return;
         }
 
@@ -729,6 +752,7 @@
 
             window.playCacciaQsoUserSidetone(exchangeText, () => {
                 state.currentQsoStep = 'COMPLETED';
+                st.completed = true; // Segna immediatamente la stazione come completata!
                 st.isPlayingMorse = false;
 
                 // VERIFICA CORRISPONDENZA EXCHANGE INSERITO DALL'UTENTE
@@ -771,22 +795,20 @@
                 window.renderCacciaQsoLogbook();
                 window.updateCacciaQsoScoreUI();
 
-                if (isExchangeCorrect) {
-                    if (typeof showToast === 'function') showToast(`🏆 QSO Concluso con ${st.callsign}! +${ptsGain} pt`);
+                // In S&P mode la stazione invia un breve "TU [CALL] K", in RUN mode tace e lascia lo spazio per il prossimo CQ
+                if (state.subMode !== 'run') {
+                    setTimeout(() => {
+                        window.playCacciaQsoStationMorse(st, 0, 1.0);
+                    }, 350);
                 } else {
-                    if (typeof showToast === 'function') showToast(`⚠️ QSO Errato con ${st.callsign}! (NR/RST non corrispondono: 0 pt)`);
+                    state.currentQsoStep = 'IDLE';
+                    state.activeStation = null;
                 }
-
-                // STEP 5 MORSE RUNNER: LA STAZIONE CONFERMA CON "TU [CALL] K" E SI TOGLIE DEFINITIVAMENTE DALLA FREQUENZA!
-                setTimeout(() => {
-                    window.playCacciaQsoStationMorse(st, 0, 1.0);
-                }, 350);
 
                 // RIGENERAZIONE AUTOMATICA BANDA OGNI 4 QSO
                 if (state.qsoCompletedCount % 4 === 0) {
                     setTimeout(() => {
                         window.generateCacciaQsoStations();
-                        if (typeof showToast === 'function') showToast("🔄 Banda 40m Rigenerata con Nuove Stazioni!");
                     }, 2500);
                 }
             });
@@ -944,7 +966,7 @@
                 <td>${row.freqKhz} kHz</td>
                 <td>${row.rstSent} / ${row.serialSent}</td>
                 <td>${row.rstRcvd} / ${row.serialRcvd}</td>
-                <td><b style="color:#4caf50;">+${row.pts}</b></td>
+                <td><b style="color:${row.pts > 0 ? '#4caf50' : '#f44336'};">${row.pts > 0 ? '+' + row.pts : '0 (ERR)'}</b></td>
             `;
             bodyEl.appendChild(tr);
         });
