@@ -30,6 +30,19 @@
     };
 
     /**
+     * UTILITY: CONTA CARATTERI CORRISPONDENTI TRA DUE NOMINATIVI
+     */
+    function countMatchingChars(str1, str2) {
+        if (!str1 || !str2) return 0;
+        let matches = 0;
+        const minLen = Math.min(str1.length, str2.length);
+        for (let i = 0; i < minLen; i++) {
+            if (str1[i] === str2[i]) matches++;
+        }
+        return matches;
+    }
+
+    /**
      * RECUPERO E AGGIORNAMENTO VELOCITÀ WPM DINAMICA (15 - 60 WPM)
      */
     window.getCacciaQsoWpm = function() {
@@ -213,8 +226,8 @@
                         callsign: callsign,
                         freqHz: state.vfoFreqHz + randomOffsetHz,
                         wpm: userWpm, // STESSA VELOCITÀ WPM IMPOSTATA DALL'UTENTE!
-                        toneHz: Math.floor(550 + Math.random() * 250), // Tono audio 550-800Hz
-                        sMeterBase: Math.floor(4 + Math.random() * 6), // S4 - S9
+                        toneHz: Math.floor(550 + Math.random() * 250),
+                        sMeterBase: Math.floor(4 + Math.random() * 6),
                         qsbSpeedSec: parseFloat((3 + Math.random() * 4).toFixed(1)),
                         rst: '5NN',
                         serialNum: String(Math.floor(1 + Math.random() * 75)).padStart(3, '0'),
@@ -515,8 +528,13 @@
                 textToPlay = `TU ${station.callsign} K`;
             }
         } else if (state.subMode === 'run' && state.activeStation === station) {
-            // IN RUN MODE: La stazione risponde al CQ dell'utente trasmettendo SOLO ED ESCLUSIVAMENTE il proprio nominativo!
-            textToPlay = `${station.callsign}`;
+            // IN RUN MODE: La stazione risponde al CQ dell'utente trasmettendo SOLO ED ESCLUSIVAMENTE il proprio nominativo (o nominativo + ? se parziale)!
+            if (station.isPartialPrompt) {
+                textToPlay = `${station.callsign} ?`;
+                station.isPartialPrompt = false;
+            } else {
+                textToPlay = `${station.callsign}`;
+            }
         } else {
             // STEP 1 MORSE RUNNER S&P: CQ CQ CQ TEST [STATION_CALL] [STATION_CALL] K
             textToPlay = `CQ CQ CQ TEST ${station.callsign} ${station.callsign} K`;
@@ -695,7 +713,19 @@
      * MORSE RUNNER STILE: AUTO-TAB & SUBMISSION PER I 3 CAMPI CONTEST (CALL - RST RX - NR RX)
      */
     window.handleCacciaQsoCallEnter = function(e) {
-        if (e && e.preventDefault) e.preventDefault();
+        if (e && (e.key === 'Enter' || e.key === 'Tab')) {
+            if (e.preventDefault) e.preventDefault();
+        }
+
+        const state = window.cacciaQsoState;
+
+        // Se l'utente e gia nello stato CALL_MATCHED (la stazione ha gia risposto col suo seriale),
+        // premere Enter o Tab trasmette immediatamente l'exchange e completa il QSO!
+        if (state.currentQsoStep === 'CALL_MATCHED') {
+            window.handleCacciaQsoSubmit();
+            return;
+        }
+
         const callInput = document.getElementById('cacciaQsoCallInput');
         const rstInput = document.getElementById('cacciaQsoRstInput');
         const nrInput = document.getElementById('cacciaQsoNrInput');
@@ -706,44 +736,64 @@
         const val = callInput.value.trim().toUpperCase();
         if (!val) return;
 
-        const state = window.cacciaQsoState;
-        const myCall = (myCallInput && myCallInput.value.trim()) ? myCallInput.value.trim().toUpperCase() : (window.myName || "OPERATOR");
+        const mySerialFormatted = String(state.mySerialNum).padStart(3, '0');
 
-        // Trova la stazione corrispondente al nominativo inserito vicina al VFO
-        let targetSt = state.activeStation;
-        if (!targetSt || targetSt.callsign !== val) {
-            targetSt = state.stations.find(st => !st.completed && st.callsign === val && Math.abs(st.freqHz - state.vfoFreqHz) <= 400);
-        }
+        // TROVA LA STAZIONE CON IL MIGLIOR MATCH DI CARATTERI TRA LE STAZIONI IN FREQUENZA
+        const candidateStations = state.stations.filter(st => !st.completed && Math.abs(st.freqHz - state.vfoFreqHz) <= 400);
+        let bestSt = null;
+        let maxMatchCount = 0;
 
-        if (!targetSt) {
-            return;
-        }
-
-        // SILENZIA ED INTERROMPE TUTTE LE ALTRE STAZIONI IN FREQUENZA!
-        state.stations.forEach(s => {
-            s.playToken++;
-            s.isPlayingMorse = false;
+        candidateStations.forEach(st => {
+            const mCount = countMatchingChars(val, st.callsign);
+            if (mCount > maxMatchCount) {
+                maxMatchCount = mCount;
+                bestSt = st;
+            }
         });
 
-        state.activeStation = targetSt;
+        // 1. IL TRASMETTITORE DELL'UTENTE TRASMETTE SEMPRE QUANTO DIGITATO IN SIDETONE MORSE!
+        const callResponseText = (state.subMode === 'run') ? `${val} 5NN ${mySerialFormatted}` : val;
 
-        // 1. STEP 2 MORSE RUNNER: L'UTENTE TRASMETTE IL NOMINATIVO BERSAGLIO IN MORSE (es. DL3ABC)
-        window.playCacciaQsoUserSidetone(val, () => {
-            if (val === targetSt.callsign) {
+        window.playCacciaQsoUserSidetone(callResponseText, () => {
+            // CASO A: NOMINATIVO ESATTO (MATCH 100%)
+            if (bestSt && val === bestSt.callsign) {
+                // Silenzia tutte le altre stazioni chiamanti
+                state.stations.forEach(s => {
+                    s.playToken++;
+                    s.isPlayingMorse = false;
+                });
+
+                state.activeStation = bestSt;
                 state.currentQsoStep = 'CALL_MATCHED';
-                targetSt.isPlayingMorse = false;
+                bestSt.isPlayingMorse = false;
 
-                // Svuota i campi 2 e 3 per far compilare all'utente a orecchio
                 if (rstInput) rstInput.value = '5NN';
                 if (nrInput) {
                     nrInput.value = '';
                     nrInput.focus();
                 }
 
-                // STEP 3 MORSE RUNNER: LA STAZIONE BERSAGLIO RISPONDE IN MORSE -> [MY_CALL] 5NN [STATION_SERIAL]
+                // LA STAZIONE RISPONDE CON IL SUO EXCHANGE IN MORSE -> [MY_CALL] 5NN [SERIAL]
                 setTimeout(() => {
-                    window.playCacciaQsoStationMorse(targetSt, 0, 1.0);
+                    window.playCacciaQsoStationMorse(bestSt, 0, 1.0);
                 }, 400);
+            }
+            // CASO B: NOMINATIVO PARZIALMENTE CORRETTO (ALMENO 3 CARATTERI CORRISPONDENTI)
+            else if (bestSt && maxMatchCount >= 3) {
+                state.activeStation = bestSt;
+                state.currentQsoStep = 'LISTENING';
+                bestSt.isPlayingMorse = false;
+                bestSt.isPartialPrompt = true; // Invia "[BEST_CALL] ?" per far correggere l'utente!
+
+                setTimeout(() => {
+                    window.playCacciaQsoStationMorse(bestSt, 0, 1.0);
+                }, 400);
+            }
+            // CASO C: NOMINATIVO COMPLETAMENTE ERRATO (< 3 CARATTERI)
+            else {
+                // Nessuna stazione risponde! Silenzio completo.
+                state.activeStation = null;
+                state.currentQsoStep = 'IDLE';
             }
         });
     };
@@ -799,12 +849,11 @@
             return;
         }
 
-        // STEP 4 MORSE RUNNER: L'UTENTE TRASMETTE IL PROPRIO EXCHANGE (5NN + MIO SERIALE PROGRESSIVO AUTOMATICO)
+        // STEP 4 MORSE RUNNER: L'UTENTE TRASMETTE IL PROPRIO EXCHANGE (IN RUN MODE: "[MY_CALL] TU", IN S&P MODE: "5NN [MY_SERIAL]")
         if (state.currentQsoStep === 'CALL_MATCHED') {
             const mySerialFormatted = String(state.mySerialNum).padStart(3, '0');
             const myCall = (myCallInput && myCallInput.value.trim()) ? myCallInput.value.trim().toUpperCase() : (window.myName || "IU2XYZ");
 
-            // IN RUN MODE L'UTENTE TRASMETTE "[MY_CALL] TU", IN S&P MODE TRASMETTE "5NN [MY_SERIAL]"
             const exchangeText = (state.subMode === 'run') ? `${myCall} TU` : `5NN ${mySerialFormatted}`;
             st.playToken++;
             st.isPlayingMorse = false;
