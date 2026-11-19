@@ -2967,10 +2967,10 @@
                 <b id="cacciaQsoCountDisplay" style="color:#00bcd4;">QSO: 0</b>
             </div>
 
-            <!-- INPUT EXCHANGE CONTEST -->
-            <div style="display:flex; gap:6px;">
-                <input type="text" id="cacciaQsoInput" aria-label="Inserisci Nominativo o Rapporto" placeholder="Sintonizza e inserisci Nominativo o Rapporto (es. IS0SSS)..." style="flex:1; padding:10px; font-size:0.9em; text-transform:uppercase; font-weight:bold; background:#fff; color:#000; border-radius:6px; border:2px solid #00bcd4;" onkeydown="if(event.key==='Enter') window.handleCacciaQsoSubmit()">
-                <button onclick="window.handleCacciaQsoSubmit()" class="btn-champ" style="padding:10px 14px; font-weight:bold; font-size:0.85em;">INVIA 💬</button>
+            <!-- INPUT EXCHANGE CONTEST (LARGHEZZA SCHERMO SOPRA IL BOTTONE) -->
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <input type="text" id="cacciaQsoInput" aria-label="Inserisci Nominativo o Rapporto" placeholder="Sintonizza e inserisci Nominativo o Rapporto (es. IS0SSS)..." style="width:100%; padding:12px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#fff; color:#000; border-radius:8px; border:2px solid #00bcd4; box-sizing:border-box;" onkeydown="if(event.key==='Enter') window.handleCacciaQsoSubmit()">
+                <button onclick="window.handleCacciaQsoSubmit()" class="btn-champ" style="width:100%; padding:12px; font-weight:bold; font-size:0.95em; border-radius:8px;">INVIA / RISPONDI 💬</button>
             </div>
         </div>
 
