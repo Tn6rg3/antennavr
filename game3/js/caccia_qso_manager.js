@@ -93,12 +93,37 @@
     window.switchCacciaQsoSubMode = function(newSubMode) {
         window.cacciaQsoState.subMode = newSubMode;
         const cqBtn = document.getElementById('btnCacciaQsoCallCq');
-        if (cqBtn) {
-            cqBtn.style.display = (newSubMode === 'run') ? 'block' : 'none';
-        }
+        const btnSP = document.getElementById('btnSubModeSP');
+        const btnRUN = document.getElementById('btnSubModeRUN');
+        const selectEl = document.getElementById('cacciaQsoSubModeSelect');
+
+        if (selectEl) selectEl.value = newSubMode;
+
         if (newSubMode === 'run') {
+            if (cqBtn) cqBtn.style.display = 'block';
+            if (btnRUN) {
+                btnRUN.style.background = '#9575cd';
+                btnRUN.style.color = '#ffffff';
+                btnRUN.style.border = '2px solid #9575cd';
+            }
+            if (btnSP) {
+                btnSP.style.background = 'rgba(255,255,255,0.05)';
+                btnSP.style.color = '#aaaaaa';
+                btnSP.style.border = '1px solid rgba(255,255,255,0.2)';
+            }
             if (typeof showToast === 'function') showToast("📢 Modalità RUN Attiva: premi [CHIAMA CQ] per trasmettere!");
         } else {
+            if (cqBtn) cqBtn.style.display = 'none';
+            if (btnSP) {
+                btnSP.style.background = '#4caf50';
+                btnSP.style.color = '#ffffff';
+                btnSP.style.border = '2px solid #4caf50';
+            }
+            if (btnRUN) {
+                btnRUN.style.background = 'rgba(255,255,255,0.05)';
+                btnRUN.style.color = '#aaaaaa';
+                btnRUN.style.border = '1px solid rgba(255,255,255,0.2)';
+            }
             if (typeof showToast === 'function') showToast("🔍 Modalità S&P Attiva: sintonizza il VFO per cacciare i CQ!");
         }
     };
@@ -123,19 +148,17 @@
             setTimeout(() => {
                 if (!state.radioOn) return;
 
-                // Trova o genera una stazione rispondente sintonizzata sulla frequenza del VFO dell'utente
-                let callerSt = state.stations.find(st => !st.completed && Math.abs(st.freqHz - state.vfoFreqHz) <= 250);
+                let candidateCallers = state.stations.filter(st => !st.completed && Math.abs(st.freqHz - state.vfoFreqHz) <= 300);
 
-                if (!callerSt) {
-                    // Genera una nuova stazione rispondente in frequenza VFO
+                if (candidateCallers.length === 0) {
                     const callsign = (typeof window.generateRealisticCallsign === 'function')
                         ? window.generateRealisticCallsign().split('/')[0]
                         : `DL3ABC`;
 
-                    callerSt = {
+                    const newSt = {
                         id: `run_st_${Date.now()}`,
                         callsign: callsign,
-                        freqHz: state.vfoFreqHz + Math.floor(-100 + Math.random() * 200),
+                        freqHz: state.vfoFreqHz + Math.floor(-80 + Math.random() * 160),
                         wpm: Math.floor(18 + Math.random() * 10),
                         toneHz: Math.floor(580 + Math.random() * 150),
                         sMeterBase: Math.floor(5 + Math.random() * 5),
@@ -147,9 +170,11 @@
                         playToken: 0,
                         completed: false
                     };
-                    state.stations.push(callerSt);
+                    state.stations.push(newSt);
+                    candidateCallers.push(newSt);
                 }
 
+                const callerSt = candidateCallers[0];
                 state.activeStation = callerSt;
                 state.currentQsoStep = 'LISTENING';
 
@@ -346,7 +371,7 @@
             const isQsoActive = (state.activeStation && (state.currentQsoStep === 'CALL_MATCHED' || state.currentQsoStep === 'COMPLETED'));
 
             state.stations.forEach(st => {
-                // LA STAZIONE GIA' COLLEGATA COMPLETA VIENE RIMOSTA E TACITATA DALLA FREQUENZA!
+                // LA STAZIONE GIA' COLLEGATA COMPLETA VIENE RIMOSTA E TACITATA DEFINITIVAMENTE DALLA FREQUENZA!
                 if (st.completed) return;
 
                 // Se c'e un QSO attivo con la stazione bersaglio, silenzi le altre stazioni adiacenti
@@ -609,38 +634,45 @@
         if (!val) return;
 
         const state = window.cacciaQsoState;
-        if (!state.activeStation) {
-            if (typeof showToast === 'function') showToast("⚠️ Nessuna stazione sintonizzata sul VFO!");
+        const myCall = (myCallInput && myCallInput.value.trim()) ? myCallInput.value.trim().toUpperCase() : (window.myName || "OPERATOR");
+
+        // Trova la stazione corrispondente al nominativo inserito vicina al VFO
+        let targetSt = state.activeStation;
+        if (!targetSt || targetSt.callsign !== val) {
+            targetSt = state.stations.find(st => !st.completed && st.callsign === val && Math.abs(st.freqHz - state.vfoFreqHz) <= 400);
+        }
+
+        if (!targetSt) {
+            if (typeof showToast === 'function') showToast(`❌ Nessuna stazione corrispondente a '${val}' in frequenza!`);
             return;
         }
 
-        const st = state.activeStation;
-        const myCall = (myCallInput && myCallInput.value.trim()) ? myCallInput.value.trim().toUpperCase() : (window.myName || "OPERATOR");
+        // SILENZIA ED INTERROMPE TUTTE LE ALTRE STAZIONI IN FREQUENZA!
+        state.stations.forEach(s => {
+            s.playToken++;
+            s.isPlayingMorse = false;
+        });
 
-        // INTERRUZIONE ISTANTANEA E TASSATIVA DELLA CHIAMATA CQ DELLA STAZIONE!
-        st.playToken++;
-        st.isPlayingMorse = false;
+        state.activeStation = targetSt;
 
-        // 1. STEP 2 MORSE RUNNER: L'UTENTE TRASMETTE SOLO IL PROPRIO NOMINATIVO IN MORSE
-        window.playCacciaQsoUserSidetone(myCall, () => {
-            if (val === st.callsign) {
+        // 1. STEP 2 MORSE RUNNER: L'UTENTE TRASMETTE IL NOMINATIVO BERSAGLIO IN MORSE (es. DL3ABC)
+        window.playCacciaQsoUserSidetone(val, () => {
+            if (val === targetSt.callsign) {
                 state.currentQsoStep = 'CALL_MATCHED';
-                st.isPlayingMorse = false;
-                if (typeof showToast === 'function') showToast(`✅ ${st.callsign} ti risponde!`);
+                targetSt.isPlayingMorse = false;
+                if (typeof showToast === 'function') showToast(`✅ ${targetSt.callsign} ti risponde!`);
 
-                // SVUOTA I CAMPI 2 E 3 PER FAR COMPILARE MANUALMENTE ALL'UTENTE (NO AUTO-FILL!)
+                // Svuota i campi 2 e 3 per far compilare all'utente a orecchio
                 if (rstInput) rstInput.value = '5NN';
                 if (nrInput) {
                     nrInput.value = '';
                     nrInput.focus();
                 }
 
-                // STEP 3 MORSE RUNNER: LA STAZIONE RISPONDE IN MORSE -> [MY_CALL] 5NN [STATION_SERIAL]
+                // STEP 3 MORSE RUNNER: LA STAZIONE BERSAGLIO RISPONDE IN MORSE -> [MY_CALL] 5NN [STATION_SERIAL]
                 setTimeout(() => {
-                    window.playCacciaQsoStationMorse(st, 0, 1.0);
+                    window.playCacciaQsoStationMorse(targetSt, 0, 1.0);
                 }, 400);
-            } else {
-                if (typeof showToast === 'function') showToast(`❌ Nominativo Errato (Sintonizzato su ${st.callsign})`);
             }
         });
     };
@@ -745,7 +777,7 @@
                     if (typeof showToast === 'function') showToast(`⚠️ QSO Errato con ${st.callsign}! (NR/RST non corrispondono: 0 pt)`);
                 }
 
-                // STEP 5 MORSE RUNNER: LA STAZIONE CONFERMA CON "TU [CALL] K" E SI TOGLIE DALLA FREQUENZA!
+                // STEP 5 MORSE RUNNER: LA STAZIONE CONFERMA CON "TU [CALL] K" E SI TOGLIE DEFINITIVAMENTE DALLA FREQUENZA!
                 setTimeout(() => {
                     window.playCacciaQsoStationMorse(st, 0, 1.0);
                 }, 350);
