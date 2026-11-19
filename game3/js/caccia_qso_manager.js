@@ -63,7 +63,7 @@
      * GENERATORE PROCEDURALE DI STAZIONI RADIO 40M (7.000 MHz - 7.200 MHz)
      */
     window.generateCacciaQsoStations = function() {
-        const count = 22; // 22 stazioni sparse nell'intera banda 40 metri (7000 - 7200 kHz)
+        const count = 22; // 22 stazioni sparse in 40m
         let newStations = [];
 
         for (let i = 0; i < count; i++) {
@@ -84,7 +84,7 @@
 
             const wpm = Math.floor(18 + Math.random() * 11); // 18 - 28 WPM
             const toneHz = Math.floor(550 + Math.random() * 250); // 550 - 800 Hz
-            const sMeterBase = Math.floor(3 + Math.random() * 7); // S3 - S9+
+            const sMeterBase = Math.floor(2 + Math.random() * 8); // S2 - S9+
             const qsbSpeedSec = (3 + Math.random() * 5).toFixed(1); // Fading period 3-8 sec
             const rstReports = ['599', '589', '579', '559', '599', '599', '479'];
             const rst = rstReports[Math.floor(Math.random() * rstReports.length)];
@@ -102,6 +102,7 @@
                 serialNum: serialNum,
                 isCallingCq: true,
                 isPlayingMorse: false,
+                playToken: 0,
                 completed: false
             });
         }
@@ -148,7 +149,7 @@
     };
 
     /**
-     * AUDIO ENGINE - RUMORE DI FONDO RADIO (QRN) VARIABILE
+     * AUDIO ENGINE - RUMORE DI FONDO RADIO (QRN) CONTINUO E INDIPENDENTE
      */
     window.initCacciaQsoAudioEngine = function() {
         const state = window.cacciaQsoState;
@@ -166,7 +167,7 @@
             const noiseBuffer = state.audioCtx.createBuffer(1, bufferSize, state.audioCtx.sampleRate);
             const output = noiseBuffer.getChannelData(0);
             for (let i = 0; i < bufferSize; i++) {
-                output[i] = (Math.random() * 2 - 1) * 0.20;
+                output[i] = (Math.random() * 2 - 1) * 0.18;
             }
 
             state.noiseNode = state.audioCtx.createBufferSource();
@@ -176,7 +177,7 @@
             state.noiseFilter = state.audioCtx.createBiquadFilter();
             state.noiseFilter.type = 'bandpass';
             state.noiseFilter.frequency.value = 600;
-            state.noiseFilter.Q.value = 3.0;
+            state.noiseFilter.Q.value = 2.8;
 
             state.noiseGain = state.audioCtx.createGain();
             state.noiseGain.gain.value = 0.08;
@@ -202,18 +203,14 @@
 
     window.clearCacciaQsoStationAudio = function() {
         const state = window.cacciaQsoState;
-        Object.keys(state.activeToneOscillators).forEach(key => {
-            try {
-                const osc = state.activeToneOscillators[key];
-                if (osc && osc.stop) osc.stop();
-            } catch(e){}
+        state.stations.forEach(st => {
+            st.playToken++;
+            st.isPlayingMorse = false;
         });
-        state.activeToneOscillators = {};
     };
 
     /**
-     * AUDIO LOOP & MONITOR S-METER REALISTICO
-     * (Attenuazione selettiva dinamica del VFO)
+     * AUDIO LOOP & MONITOR S-METER REALISTICO CON FADING QSB MARCATO
      */
     window.startCacciaQsoAudioLoop = function() {
         if (window.cacciaQsoAudioInterval) clearInterval(window.cacciaQsoAudioInterval);
@@ -223,15 +220,15 @@
             if (!state.radioOn || !state.audioCtx) return;
 
             const vfo = state.vfoFreqHz;
-
-            // FLUTTUAZIONE DINAMICA RUMORE DI FONDO (QRN)
             const timeSec = Date.now() / 1000;
-            const qrnFluctuation = 0.06 + 0.08 * Math.sin(timeSec * 0.4) + 0.04 * Math.random();
+
+            // FLUTTUAZIONE RUMORE DI FONDO QRN (SENZA MAI INTERROMPERLO)
+            const qrnFluctuation = 0.05 + 0.06 * Math.sin(timeSec * 0.3) + 0.03 * Math.random();
             if (state.noiseGain) {
-                state.noiseGain.gain.value = qrnFluctuation;
+                state.noiseGain.gain.setValueAtTime(qrnFluctuation, state.audioCtx.currentTime);
             }
 
-            let qrnSValue = Math.round(1 + (qrnFluctuation * 15));
+            let qrnSValue = Math.round(1 + (qrnFluctuation * 12));
             let totalSignalVal = qrnSValue;
             let currentSintonizedStation = null;
 
@@ -240,26 +237,26 @@
 
                 const freqDiffHz = Math.abs(st.freqHz - vfo);
 
-                // SELETTIVITÀ FILTRO CW:
+                // SELETTIVITÀ FILTRO CW RICEVITORE:
                 // entro ± 100 Hz -> Segnale al 100%
-                // tra 100 Hz e 350 Hz -> Il segnale crolla bruscamente
-                // oltre 350 Hz -> 0% (silenzio completo)
+                // tra 100 Hz e 320 Hz -> Il segnale crolla bruscamente a 0
                 let proximityFactor = 0;
                 if (freqDiffHz <= 100) {
                     proximityFactor = 1.0;
-                } else if (freqDiffHz <= 350) {
-                    const normOff = (freqDiffHz - 100) / 250;
+                } else if (freqDiffHz <= 320) {
+                    const normOff = (freqDiffHz - 100) / 220;
                     proximityFactor = Math.max(0, 1 - (normOff * normOff));
                 }
 
                 if (proximityFactor > 0) {
+                    // FADING QSB EVIDENTE E MARCATO (0.15 - 1.0)
                     const qsbPhase = timeSec * (2 * Math.PI / st.qsbSpeedSec);
-                    const qsbFactor = 0.4 + 0.6 * Math.sin(qsbPhase);
+                    const qsbFactor = 0.15 + 0.85 * Math.abs(Math.sin(qsbPhase));
 
                     const effectiveS = Math.round(st.sMeterBase * proximityFactor * qsbFactor);
                     totalSignalVal = Math.max(totalSignalVal, effectiveS);
 
-                    if (freqDiffHz <= 180) {
+                    if (freqDiffHz <= 160) {
                         currentSintonizedStation = st;
                     }
 
@@ -283,13 +280,15 @@
     };
 
     /**
-     * SINTESI SUONO MORSE DEDICATA (VERIFICA IL VFO IN TEMPO REALE AD OGNI BIP)
+     * SINTESI SUONO MORSE STAZIONE (CON RAMPE ANTI-SCOPPIETTIO & ANNULLAMENTO ISTANTANEO CQ)
      */
     window.playCacciaQsoStationMorse = function(station, initialFreqDiffHz, initialVolume) {
         const state = window.cacciaQsoState;
         if (!state.radioOn || !state.audioCtx || station.isPlayingMorse) return;
 
         station.isPlayingMorse = true;
+        station.playToken = (station.playToken || 0) + 1;
+        const currentToken = station.playToken;
 
         let textToPlay = "";
         if (state.currentQsoStep === 'CALL_MATCHED' && state.activeStation === station) {
@@ -322,37 +321,48 @@
                 const durMs = (symbol === '-') ? (unitSec * 3 * 1000) : (unitSec * 1000);
 
                 setTimeout(() => {
-                    if (state.radioOn && state.audioCtx) {
-                        // VERIFICA DINAMICA DELLA FREQUENZA VFO AD OGNI SINGOLO BIP!
-                        const realTimeFreqDiff = Math.abs(station.freqHz - state.vfoFreqHz);
-                        let realTimeProximity = 0;
+                    // SE LA CHIAMATA CQ È STATA INTERROTTA DALL'UTENTE (TOKEN CAMBIATO), INTERROMPE SUBITO L'AUDIO!
+                    if (currentToken !== station.playToken || !state.radioOn || !state.audioCtx) return;
 
-                        if (realTimeFreqDiff <= 100) {
-                            realTimeProximity = 1.0;
-                        } else if (realTimeFreqDiff <= 350) {
-                            const normOff = (realTimeFreqDiff - 100) / 250;
-                            realTimeProximity = Math.max(0, 1 - (normOff * normOff));
-                        }
+                    const realTimeFreqDiff = Math.abs(station.freqHz - state.vfoFreqHz);
+                    let realTimeProximity = 0;
 
-                        // Se l'utente si e spostato col VFO (> 350 Hz), il bip non viene emesso (silenzio)!
-                        if (realTimeProximity <= 0) return;
-
-                        try {
-                            const beatTone = Math.max(300, Math.min(1200, 600 + (station.freqHz - state.vfoFreqHz)));
-                            const osc = state.audioCtx.createOscillator();
-                            const gain = state.audioCtx.createGain();
-                            osc.type = 'sine';
-                            osc.frequency.value = beatTone;
-
-                            gain.gain.value = 0.15 * realTimeProximity;
-
-                            osc.connect(gain);
-                            gain.connect(state.audioCtx.destination);
-
-                            osc.start();
-                            osc.stop(state.audioCtx.currentTime + (durMs / 1000));
-                        } catch(e){}
+                    if (realTimeFreqDiff <= 100) {
+                        realTimeProximity = 1.0;
+                    } else if (realTimeFreqDiff <= 320) {
+                        const normOff = (realTimeFreqDiff - 100) / 220;
+                        realTimeProximity = Math.max(0, 1 - (normOff * normOff));
                     }
+
+                    if (realTimeProximity <= 0) return;
+
+                    try {
+                        const timeSec = Date.now() / 1000;
+                        const qsbPhase = timeSec * (2 * Math.PI / station.qsbSpeedSec);
+                        const qsbFactor = 0.15 + 0.85 * Math.abs(Math.sin(qsbPhase));
+
+                        const beatTone = Math.max(300, Math.min(1200, 600 + (station.freqHz - state.vfoFreqHz)));
+                        const osc = state.audioCtx.createOscillator();
+                        const gain = state.audioCtx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.value = beatTone;
+
+                        const targetVol = 0.14 * realTimeProximity * qsbFactor;
+                        const now = state.audioCtx.currentTime;
+                        const durSec = durMs / 1000;
+
+                        // RAMPE SOFT ANTI-SCOPPIETTIO (ATTACK 5ms, RELEASE 8ms)
+                        gain.gain.setValueAtTime(0.0001, now);
+                        gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, targetVol), now + 0.005);
+                        gain.gain.setValueAtTime(Math.max(0.0001, targetVol), now + durSec - 0.008);
+                        gain.gain.exponentialRampToValueAtTime(0.0001, now + durSec);
+
+                        osc.connect(gain);
+                        gain.connect(state.audioCtx.destination);
+
+                        osc.start(now);
+                        osc.stop(now + durSec);
+                    } catch(e){}
                 }, delayMs);
 
                 delayMs += durMs + (unitSec * 1000);
@@ -361,12 +371,14 @@
         }
 
         setTimeout(() => {
-            station.isPlayingMorse = false;
-        }, delayMs + 1200);
+            if (currentToken === station.playToken) {
+                station.isPlayingMorse = false;
+            }
+        }, delayMs + 1000);
     };
 
     /**
-     * SINTESI MORSE TRASMISSIONE LOCALE OPERATORE (SIDETONE TASTO UTENTE)
+     * SINTESI MORSE TRASMISSIONE LOCALE OPERATORE (SIDETONE CON RAMPE ANTI-SCOPPIETTIO)
      */
     window.playCacciaQsoUserSidetone = function(text, onCompleteCallback) {
         const state = window.cacciaQsoState;
@@ -407,13 +419,22 @@
                             const gain = state.audioCtx.createGain();
                             osc.type = 'sine';
                             osc.frequency.value = sidetoneFreq;
-                            gain.gain.value = 0.22;
+
+                            const targetVol = 0.22;
+                            const now = state.audioCtx.currentTime;
+                            const durSec = durMs / 1000;
+
+                            // RAMPE SOFT ANTI-SCOPPIETTIO (5ms Attack / 8ms Release)
+                            gain.gain.setValueAtTime(0.0001, now);
+                            gain.gain.exponentialRampToValueAtTime(targetVol, now + 0.005);
+                            gain.gain.setValueAtTime(targetVol, now + durSec - 0.008);
+                            gain.gain.exponentialRampToValueAtTime(0.0001, now + durSec);
 
                             osc.connect(gain);
                             gain.connect(state.audioCtx.destination);
 
-                            osc.start();
-                            osc.stop(state.audioCtx.currentTime + (durMs / 1000));
+                            osc.start(now);
+                            osc.stop(now + durSec);
 
                             window.updateCacciaQsoSMeter(10);
                         } catch(e){}
@@ -451,19 +472,22 @@
 
         const st = state.activeStation;
 
-        // 1. L'UTENTE SUONA PRIMA LA PROPRIA TRASMISSIONE IN CODICE MORSE (SIDETONE LOCALE)
+        // INTERRUZIONE ISTANTANEA DELLA CHIAMATA CQ IN CORSO DELLA STAZIONE!
+        st.playToken++;
+        st.isPlayingMorse = false;
+
+        // 1. L'UTENTE SUONA LA PROPRIA TRASMISSIONE IN CODICE MORSE (SIDETONE LOCALE)
         window.playCacciaQsoUserSidetone(val, () => {
-            // 2. DOPO CHE L'UTENTE HA FINITO DI TRASMETTERE, LA STAZIONE RICEVENTE RISPONDE!
+            // 2. DOPO LA TRASMISSIONE DELL'UTENTE, LA STAZIONE RISPONDE IN MORSE!
             if (state.currentQsoStep === 'LISTENING' || state.currentQsoStep === 'IDLE') {
                 if (val === st.callsign) {
                     state.currentQsoStep = 'CALL_MATCHED';
-                    st.isPlayingMorse = false; // Sblocca la stazione per permetterle di rispondere subito!
-                    if (typeof showToast === 'function') showToast(`✅ Nominativo ${st.callsign} Corretto! La stazione ti risponde...`);
+                    st.isPlayingMorse = false;
+                    if (typeof showToast === 'function') showToast(`✅ ${st.callsign} ti ha ascoltato e ti risponde!`);
 
-                    // Avvia subito la risposta della stazione in Morse
                     setTimeout(() => {
                         window.playCacciaQsoStationMorse(st, 0, 1.0);
-                    }, 400);
+                    }, 350);
                 } else {
                     if (typeof showToast === 'function') showToast(`❌ Nominativo Errato (Sintonizzato su ${st.callsign})`);
                 }
@@ -475,14 +499,14 @@
                 const mySerialFormatted = String(state.mySerialNum).padStart(3, '0');
                 state.currentQsoStep = 'COMPLETED';
                 st.completed = true;
-                st.isPlayingMorse = false; // Sblocca per la conferma finale
+                st.isPlayingMorse = false;
 
                 // Assegnazione Punti Contest
                 const ptsGain = Math.round(100 + (st.wpm * 2) + (st.sMeterBase * 5));
                 state.totalPoints += ptsGain;
                 state.qsoCompletedCount++;
 
-                // Inserimento nel Logbook di Stazione
+                // Inserimento nel Logbook
                 const logEntry = {
                     num: state.qsoCompletedCount,
                     time: new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}),
@@ -506,7 +530,7 @@
                 // Risposta di saluto finale della stazione (73 SK)
                 setTimeout(() => {
                     window.playCacciaQsoStationMorse(st, 0, 1.0);
-                }, 400);
+                }, 350);
 
                 // RIGENERAZIONE AUTOMATICA BANDA OGNI 4 QSO
                 if (state.qsoCompletedCount % 4 === 0) {
@@ -525,7 +549,7 @@
     };
 
     /**
-     * SINTONIA VFO & GESTIONE DIAL FLUIDA (TOUCH / MOUSE / WHEEL SENZA SALTI)
+     * SINTONIA VFO & GESTIONE DIAL FLUIDA (TOUCH / MOUSE / WHEEL)
      */
     window.initCacciaQsoUI = function() {
         const dialCanvas = document.getElementById('cacciaQsoVfoCanvas');
