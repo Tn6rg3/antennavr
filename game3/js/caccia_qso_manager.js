@@ -45,7 +45,10 @@
         if (rstInput) rstInput.value = '5NN';
 
         const nrInput = document.getElementById('cacciaQsoNrInput');
-        if (nrInput) nrInput.value = '001';
+        if (nrInput) nrInput.value = '';
+
+        const badgeEl = document.getElementById('cacciaQsoMySerialBadge');
+        if (badgeEl) badgeEl.textContent = '001';
 
         const callInput = document.getElementById('cacciaQsoCallInput');
         if (callInput) {
@@ -230,7 +233,7 @@
     };
 
     /**
-     * AUDIO LOOP & MONITOR S-METER REALISTICO CON FADING QSB MARCATO
+     * AUDIO LOOP & MONITOR S-METER REALISTICO CON SILENZIAMENTO ISOLATO DURANTE QSO
      */
     window.startCacciaQsoAudioLoop = function() {
         if (window.cacciaQsoAudioInterval) clearInterval(window.cacciaQsoAudioInterval);
@@ -260,8 +263,14 @@
                 return;
             }
 
+            // SE SIAMO IN UN QSO ATTIVO CON UNA STAZIONE BERSAGLIO, ISOLIAMO L'AUDIO ED IGNORIAMO LE ALTRE STAZIONI!
+            const isQsoActive = (state.activeStation && (state.currentQsoStep === 'CALL_MATCHED' || state.currentQsoStep === 'COMPLETED'));
+
             state.stations.forEach(st => {
                 if (st.completed) return;
+
+                // Se c'e un QSO attivo con la stazione bersaglio, silenzi le altre stazioni adiacenti
+                if (isQsoActive && st !== state.activeStation) return;
 
                 const freqDiffHz = Math.abs(st.freqHz - vfo);
 
@@ -408,7 +417,6 @@
                     setTimeout(() => {
                         state.currentQsoStep = 'IDLE';
                         state.activeStation = null;
-                        station.completed = false; // Permette alla stazione di riprendere le chiamate CQ in frequenza
                     }, 1500);
                 }
             }
@@ -496,12 +504,13 @@
     };
 
     /**
-     * MORSE RUNNER STILE: AUTO-TAB & SUBMISSION PER I 3 CAMPI CONTEST (CALL - RST - NR)
+     * MORSE RUNNER STILE: AUTO-TAB & SUBMISSION PER I 3 CAMPI CONTEST (CALL - RST RX - NR RX)
      */
     window.handleCacciaQsoCallEnter = function(e) {
         if (e && e.preventDefault) e.preventDefault();
         const callInput = document.getElementById('cacciaQsoCallInput');
         const rstInput = document.getElementById('cacciaQsoRstInput');
+        const nrInput = document.getElementById('cacciaQsoNrInput');
         const myCallInput = document.getElementById('cacciaQsoMyCallInput');
 
         if (!callInput) return;
@@ -529,8 +538,12 @@
                 st.isPlayingMorse = false;
                 if (typeof showToast === 'function') showToast(`✅ ${st.callsign} ti risponde!`);
 
-                // Passa il focus al secondo campo (RST Sent)
-                if (rstInput) rstInput.focus();
+                // Auto-compila RST ed NR ricevuti dalla stazione
+                if (rstInput) rstInput.value = st.rst;
+                if (nrInput) {
+                    nrInput.value = st.serialNum;
+                    nrInput.focus();
+                }
 
                 // STEP 3 MORSE RUNNER: LA STAZIONE RISPONDE IN MORSE -> [MY_CALL] 5NN [STATION_SERIAL]
                 setTimeout(() => {
@@ -557,12 +570,13 @@
         const callInput = document.getElementById('cacciaQsoCallInput');
         const rstInput = document.getElementById('cacciaQsoRstInput');
         const nrInput = document.getElementById('cacciaQsoNrInput');
+        const badgeEl = document.getElementById('cacciaQsoMySerialBadge');
 
         if (!callInput) return;
 
         const callVal = callInput.value.trim().toUpperCase();
-        const rstVal = rstInput ? rstInput.value.trim().toUpperCase() : '5NN';
-        const nrVal = nrInput ? nrInput.value.trim().toUpperCase() : String(window.cacciaQsoState.mySerialNum).padStart(3, '0');
+        const rstRcvdVal = rstInput ? rstInput.value.trim().toUpperCase() : '5NN';
+        const nrRcvdVal = nrInput ? nrInput.value.trim().toUpperCase() : '001';
 
         if (!callVal) {
             if (typeof showToast === 'function') showToast("⚠️ Inserisci prima il nominativo della stazione!");
@@ -578,15 +592,16 @@
 
         const st = state.activeStation;
 
-        // Se siamo ancora nello stato iniziale e l'utente clicca direttamente il pulsante grande "Invia"
+        // Se siamo ancora nello stato iniziale e l'utente clicca direttamente il pulsante grande
         if (state.currentQsoStep === 'LISTENING' || state.currentQsoStep === 'IDLE') {
             window.handleCacciaQsoCallEnter(null);
             return;
         }
 
-        // STEP 4 MORSE RUNNER: L'UTENTE TRASMETTE IL PROPRIO EXCHANGE (5NN 001)
+        // STEP 4 MORSE RUNNER: L'UTENTE TRASMETTE IL PROPRIO EXCHANGE (5NN + MIO SERIALE PROGRESSIVO AUTOMATICO)
         if (state.currentQsoStep === 'CALL_MATCHED') {
-            const exchangeText = `${rstVal} ${nrVal}`;
+            const mySerialFormatted = String(state.mySerialNum).padStart(3, '0');
+            const exchangeText = `5NN ${mySerialFormatted}`;
             st.playToken++;
             st.isPlayingMorse = false;
 
@@ -600,26 +615,25 @@
                 state.totalPoints += ptsGain;
                 state.qsoCompletedCount++;
 
-                // Inserimento nel Logbook
+                // Inserimento nel Logbook (RST Sent = 599, Serial Sent = Mio progressivo; RST Rcvd & Serial Rcvd = Quelli inseriti/ricevuti!)
                 const logEntry = {
                     num: state.qsoCompletedCount,
                     time: new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}),
                     callsign: st.callsign,
                     freqKhz: (st.freqHz / 1000).toFixed(1),
-                    rstSent: rstVal,
-                    serialSent: nrVal,
-                    rstRcvd: st.rst,
-                    serialRcvd: st.serialNum,
+                    rstSent: '599',
+                    serialSent: mySerialFormatted,
+                    rstRcvd: rstRcvdVal || st.rst,
+                    serialRcvd: nrRcvdVal || st.serialNum,
                     pts: ptsGain
                 };
 
                 state.logbook.unshift(logEntry);
                 state.mySerialNum++;
 
-                // Aggiorna campo NR con il prossimo numero progressivo (es. 001 -> 002)
-                if (nrInput) {
-                    nrInput.value = String(state.mySerialNum).padStart(3, '0');
-                }
+                // Aggiorna Badge del mio progressivo e svuota i campi per il prossimo QSO
+                if (badgeEl) badgeEl.textContent = String(state.mySerialNum).padStart(3, '0');
+                if (nrInput) nrInput.value = '';
                 if (callInput) {
                     callInput.value = '';
                     callInput.focus();
@@ -630,7 +644,7 @@
 
                 if (typeof showToast === 'function') showToast(`🏆 QSO Concluso con ${st.callsign}! +${ptsGain} pt`);
 
-                // STEP 5 MORSE RUNNER: LA STAZIONE CONFERMA CON "TU [CALL] K" E RIPRENDE IL CQ IN BANDA!
+                // STEP 5 MORSE RUNNER: LA STAZIONE CONFERMA CON "TU [CALL] K" E RIPRENDE IL CQ!
                 setTimeout(() => {
                     window.playCacciaQsoStationMorse(st, 0, 1.0);
                 }, 350);
