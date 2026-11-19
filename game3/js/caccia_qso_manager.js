@@ -42,7 +42,7 @@
         }
 
         const rstInput = document.getElementById('cacciaQsoRstInput');
-        if (rstInput) rstInput.value = '599';
+        if (rstInput) rstInput.value = '5NN';
 
         const nrInput = document.getElementById('cacciaQsoNrInput');
         if (nrInput) nrInput.value = '001';
@@ -106,9 +106,9 @@
             const toneHz = Math.floor(550 + Math.random() * 250); // 550 - 800 Hz
             const sMeterBase = Math.floor(3 + Math.random() * 7); // S3 - S9+
             const qsbSpeedSec = (3 + Math.random() * 5).toFixed(1); // Fading period 3-8 sec
-            const rstReports = ['599', '589', '579', '559', '599', '599', '479'];
+            const rstReports = ['5NN', '58N', '57N', '55N', '5NN', '5NN', '47N'];
             const rst = rstReports[Math.floor(Math.random() * rstReports.length)];
-            const serialNum = String(Math.floor(1 + Math.random() * 55)).padStart(3, '0');
+            const serialNum = String(Math.floor(1 + Math.random() * 85)).padStart(3, '0');
 
             newStations.push({
                 id: `st_${Date.now()}_${i}`,
@@ -305,7 +305,7 @@
     };
 
     /**
-     * SINTESI SUONO MORSE STAZIONE
+     * SINTESI SUONO MORSE STAZIONE (MORSE RUNNER CONTEST PROTOCOL)
      */
     window.playCacciaQsoStationMorse = function(station, initialFreqDiffHz, initialVolume) {
         const state = window.cacciaQsoState;
@@ -320,11 +320,14 @@
 
         let textToPlay = "";
         if (state.currentQsoStep === 'CALL_MATCHED' && state.activeStation === station) {
-            textToPlay = `${myCall} DE ${station.callsign} UR ${station.rst} ${station.serialNum} BK`;
+            // STEP 3 MORSE RUNNER: [MY_CALL] 5NN [SERIAL_STAZIONE]
+            textToPlay = `${myCall} ${station.rst} ${station.serialNum}`;
         } else if (state.currentQsoStep === 'COMPLETED' && state.activeStation === station) {
-            textToPlay = `TU 73 ${station.callsign} SK`;
+            // STEP 5 MORSE RUNNER: TU [STATION_CALL] K
+            textToPlay = `TU ${station.callsign} K`;
         } else {
-            textToPlay = `CQ CQ DE ${station.callsign} PSE K`;
+            // STEP 1 MORSE RUNNER: CQ CQ CQ TEST [STATION_CALL] [STATION_CALL] K
+            textToPlay = `CQ CQ CQ TEST ${station.callsign} ${station.callsign} K`;
         }
 
         const unitSec = 1.2 / station.wpm;
@@ -400,6 +403,14 @@
         setTimeout(() => {
             if (currentToken === station.playToken) {
                 station.isPlayingMorse = false;
+                // Se abbiamo appena completato il salutino TU, ripristiniamo lo stato IDLE e la stazione torna in CQ!
+                if (state.currentQsoStep === 'COMPLETED' && state.activeStation === station) {
+                    setTimeout(() => {
+                        state.currentQsoStep = 'IDLE';
+                        state.activeStation = null;
+                        station.completed = false; // Permette alla stazione di riprendere le chiamate CQ in frequenza
+                    }, 1500);
+                }
             }
         }, delayMs + 1000);
     };
@@ -491,6 +502,8 @@
         if (e && e.preventDefault) e.preventDefault();
         const callInput = document.getElementById('cacciaQsoCallInput');
         const rstInput = document.getElementById('cacciaQsoRstInput');
+        const myCallInput = document.getElementById('cacciaQsoMyCallInput');
+
         if (!callInput) return;
 
         const val = callInput.value.trim().toUpperCase();
@@ -503,13 +516,14 @@
         }
 
         const st = state.activeStation;
+        const myCall = (myCallInput && myCallInput.value.trim()) ? myCallInput.value.trim().toUpperCase() : (window.myName || "OPERATOR");
 
-        // INTERRUZIONE ISTANTANEA E TASSATIVA DI QUALSIASI TRASMISSIONE IN CORSO DELLA STAZIONE!
+        // INTERRUZIONE ISTANTANEA E TASSATIVA DELLA CHIAMATA CQ DELLA STAZIONE!
         st.playToken++;
         st.isPlayingMorse = false;
 
-        // 1. L'UTENTE SUONA LA PROPRIA RISPOSTA IN MORSE (SIDETONE LOCALE)
-        window.playCacciaQsoUserSidetone(val, () => {
+        // 1. STEP 2 MORSE RUNNER: L'UTENTE TRASMETTE SOLO IL PROPRIO NOMINATIVO IN MORSE
+        window.playCacciaQsoUserSidetone(myCall, () => {
             if (val === st.callsign) {
                 state.currentQsoStep = 'CALL_MATCHED';
                 st.isPlayingMorse = false;
@@ -518,7 +532,7 @@
                 // Passa il focus al secondo campo (RST Sent)
                 if (rstInput) rstInput.focus();
 
-                // La stazione risponde in Morse: [MY_CALL] DE [STATION_CALL] UR [RST] [SERIAL] BK
+                // STEP 3 MORSE RUNNER: LA STAZIONE RISPONDE IN MORSE -> [MY_CALL] 5NN [STATION_SERIAL]
                 setTimeout(() => {
                     window.playCacciaQsoStationMorse(st, 0, 1.0);
                 }, 400);
@@ -547,7 +561,7 @@
         if (!callInput) return;
 
         const callVal = callInput.value.trim().toUpperCase();
-        const rstVal = rstInput ? rstInput.value.trim().toUpperCase() : '599';
+        const rstVal = rstInput ? rstInput.value.trim().toUpperCase() : '5NN';
         const nrVal = nrInput ? nrInput.value.trim().toUpperCase() : String(window.cacciaQsoState.mySerialNum).padStart(3, '0');
 
         if (!callVal) {
@@ -570,7 +584,7 @@
             return;
         }
 
-        // FASE 2: Trasmissione Exchange (RST + NR, es. 599 001)
+        // STEP 4 MORSE RUNNER: L'UTENTE TRASMETTE IL PROPRIO EXCHANGE (5NN 001)
         if (state.currentQsoStep === 'CALL_MATCHED') {
             const exchangeText = `${rstVal} ${nrVal}`;
             st.playToken++;
@@ -616,7 +630,7 @@
 
                 if (typeof showToast === 'function') showToast(`🏆 QSO Concluso con ${st.callsign}! +${ptsGain} pt`);
 
-                // Risposta di saluto finale della stazione (TU 73 SK)
+                // STEP 5 MORSE RUNNER: LA STAZIONE CONFERMA CON "TU [CALL] K" E RIPRENDE IL CQ IN BANDA!
                 setTimeout(() => {
                     window.playCacciaQsoStationMorse(st, 0, 1.0);
                 }, 350);
@@ -628,11 +642,6 @@
                         if (typeof showToast === 'function') showToast("🔄 Banda 40m Rigenerata con Nuove Stazioni!");
                     }, 2500);
                 }
-
-                setTimeout(() => {
-                    state.currentQsoStep = 'IDLE';
-                    state.activeStation = null;
-                }, 4000);
             });
         }
     };
