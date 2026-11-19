@@ -2967,10 +2967,11 @@
                 <b id="cacciaQsoCountDisplay" style="color:#00bcd4;">QSO: 0</b>
             </div>
 
-            <!-- INPUT EXCHANGE CONTEST (LARGHEZZA SCHERMO SOPRA IL BOTTONE) -->
-            <div style="display:flex; flex-direction:column; gap:8px;">
-                <input type="text" id="cacciaQsoInput" aria-label="Inserisci Nominativo o Rapporto" placeholder="Sintonizza e inserisci Nominativo o Rapporto (es. IS0SSS)..." style="width:100%; padding:12px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#fff; color:#000; border-radius:8px; border:2px solid #00bcd4; box-sizing:border-box;" onkeydown="if(event.key==='Enter') window.handleCacciaQsoSubmit()">
-                <button onclick="window.handleCacciaQsoSubmit()" class="btn-champ" style="width:100%; padding:12px; font-weight:bold; font-size:0.95em; border-radius:8px;">INVIA / RISPONDI 💬</button>
+            <!-- INPUT EXCHANGE CONTEST (SOPRA IL BOTTONE - LARGHEZZA TOTALE SCHERMO) -->
+            <div style="width:100%; box-sizing:border-box; margin-bottom:8px;">
+                <label for="cacciaQsoInput" style="font-size:0.8em; color:#00bcd4; font-weight:bold; display:block; margin-bottom:4px; text-align:left;">✍️ Risposta / Trasmissione Operatore:</label>
+                <input type="text" id="cacciaQsoInput" aria-label="Inserisci Nominativo o Rapporto" placeholder="Inserisci Nominativo o Rapporto (es. IS0SSS o 599 001)..." style="width:100% !important; height:48px; padding:10px 12px; font-size:1.05em; text-transform:uppercase; font-weight:bold; background:#ffffff !important; color:#000000 !important; border-radius:8px; border:3px solid #00bcd4; box-sizing:border-box; display:block; margin-bottom:8px;" onkeydown="if(event.key==='Enter') window.handleCacciaQsoSubmit()">
+                <button onclick="window.handleCacciaQsoSubmit()" class="btn-champ" style="width:100% !important; height:46px; font-weight:bold; font-size:1em; border-radius:8px; display:block;">INVIA / TRASMETTI IN CW 💬</button>
             </div>
         </div>
 
