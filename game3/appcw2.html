@@ -2897,6 +2897,112 @@
     </div>
 </div>
 
+<!-- SCHERMATA: CACCIA QSO (SIMULATORE HF 40M) -->
+<div id="cacciaQsoScreen" class="screen">
+    <div class="screen-content" style="padding-bottom:80px;">
+        <h2 style="color: var(--champ-color); margin-bottom: 10px; display:flex; align-items:center; justify-content:center; gap:8px;">
+            📻 Caccia QSO <span style="font-size:0.6em; opacity:0.8; background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:10px;">Banda 40m</span>
+        </h2>
+
+        <!-- FRONT PANEL RICEVITORE RADIO -->
+        <div class="box-panel" style="background:#111; border:2px solid #00bcd4; padding:15px; border-radius:12px; margin-bottom:12px;">
+
+            <!-- RIGA DISPLAY FREQUENZA E TIMER -->
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px;">
+                <div style="background:#000; padding:8px; border-radius:8px; border:1px solid #00ff41; text-align:center;">
+                    <span style="font-size:0.7em; color:#00ff41; display:block; text-transform:uppercase; font-weight:bold;">FREQUENZA VFO</span>
+                    <b id="cacciaQsoFreqDisplay" style="font-family:'Courier New', monospace; font-size:1.35em; color:#00ff41;">07.034.00 MHz</b>
+                </div>
+                <div style="background:#000; padding:8px; border-radius:8px; border:1px solid var(--champ-color); text-align:center;">
+                    <span style="font-size:0.7em; color:var(--champ-color); display:block; text-transform:uppercase; font-weight:bold;">TIMER SESSIONE</span>
+                    <b id="cacciaQsoTimerDisplay" style="font-family:'Courier New', monospace; font-size:1.35em; color:var(--champ-color);">10:00</b>
+                </div>
+            </div>
+
+            <!-- RIGA S-METER & VFO DIAL -->
+            <div style="display:flex; justify-content:space-around; align-items:center; gap:10px; margin-bottom:12px; background:rgba(0,0,0,0.4); padding:10px; border-radius:10px;">
+                <!-- S-METER ANALOGICO -->
+                <div style="text-align:center; flex:1;">
+                    <span style="font-size:0.72em; color:var(--hint-color); display:block; margin-bottom:4px; font-weight:bold;">SIGNAL STRENGTH (S-METER)</span>
+                    <div style="width:100px; height:50px; background:#222; border:2px solid #444; border-radius:30px 30px 0 0; margin:0 auto; position:relative; overflow:hidden;">
+                        <div id="cacciaQsoSMeterNeedle" style="width:2px; height:42px; background:#f44336; position:absolute; bottom:0; left:50%; transform-origin:bottom center; transform:rotate(-45deg); transition:transform 0.1s ease-out;"></div>
+                    </div>
+                    <b id="cacciaQsoSMeterText" style="font-size:0.9em; color:#00bcd4; display:block; margin-top:4px;">S3</b>
+                </div>
+
+                <!-- MANOPOLA VFO -->
+                <div style="text-align:center; flex:1;">
+                    <span style="font-size:0.72em; color:var(--hint-color); display:block; margin-bottom:4px; font-weight:bold;">MANOPOLA VFO (RUOTA)</span>
+                    <canvas id="cacciaQsoVfoCanvas" width="160" height="160" style="width:110px; height:110px; cursor:grab; touch-action:none;"></canvas>
+                </div>
+            </div>
+
+            <!-- TASTI SINTONIA FINE -->
+            <div style="display:flex; justify-content:center; gap:6px; margin-bottom:12px;">
+                <button onclick="window.tuneCacciaQsoVfoBy(-1000)" class="btn-secondary" style="padding:4px 8px; font-size:0.78em;">-1 kHz</button>
+                <button onclick="window.tuneCacciaQsoVfoBy(-100)" class="btn-secondary" style="padding:4px 8px; font-size:0.78em;">-100 Hz</button>
+                <button onclick="window.tuneCacciaQsoVfoBy(100)" class="btn-secondary" style="padding:4px 8px; font-size:0.78em;">+100 Hz</button>
+                <button onclick="window.tuneCacciaQsoVfoBy(1000)" class="btn-secondary" style="padding:4px 8px; font-size:0.78em;">+1 kHz</button>
+            </div>
+
+            <!-- CONTROLLI RADIO & TEMPO -->
+            <div style="display:grid; grid-template-columns: 2fr 1fr; gap:8px; margin-bottom:10px;">
+                <button id="cacciaQsoPowerBtn" onclick="window.toggleCacciaQsoPower()" class="btn-success" style="padding:10px; font-weight:bold; font-size:0.85em;">📻 RADIO ACCESA [ON]</button>
+                <div>
+                    <label for="cacciaQsoDurationSelect" style="font-size:0.7em; color:var(--hint-color); display:block;">Durata:</label>
+                    <select id="cacciaQsoDurationSelect" style="width:100%; padding:6px; background:#fff; color:#000; border-radius:6px; font-weight:bold;">
+                        <option value="5">5 min</option>
+                        <option value="10" selected>10 min</option>
+                        <option value="15">15 min</option>
+                        <option value="20">20 min</option>
+                        <option value="25">25 min</option>
+                        <option value="30">30 min</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- RIGA PUNTEGGIO CONTEST -->
+            <div style="display:flex; justify-content:space-between; font-size:0.88em; padding:6px 10px; background:rgba(255,255,255,0.05); border-radius:6px; margin-bottom:12px;">
+                <b id="cacciaQsoPointsDisplay" style="color:var(--champ-color);">Punti Contest: 0</b>
+                <b id="cacciaQsoCountDisplay" style="color:#00bcd4;">QSO: 0</b>
+            </div>
+
+            <!-- INPUT EXCHANGE CONTEST -->
+            <div style="display:flex; gap:6px;">
+                <input type="text" id="cacciaQsoInput" aria-label="Inserisci Nominativo o Rapporto" placeholder="Sintonizza e inserisci Nominativo o Rapporto (es. IS0SSS)..." style="flex:1; padding:10px; font-size:0.9em; text-transform:uppercase; font-weight:bold; background:#fff; color:#000; border-radius:6px; border:2px solid #00bcd4;" onkeydown="if(event.key==='Enter') window.handleCacciaQsoSubmit()">
+                <button onclick="window.handleCacciaQsoSubmit()" class="btn-champ" style="padding:10px 14px; font-weight:bold; font-size:0.85em;">INVIA 💬</button>
+            </div>
+        </div>
+
+        <!-- DIARIO DI STAZIONE (LOGBOOK CONTEST) -->
+        <div class="box-panel" style="padding:10px;">
+            <h4 style="margin:0 0 8px 0; color:var(--link-color); font-size:0.9em; text-align:left;">📜 Diario di Stazione (QSO Logbook)</h4>
+            <div class="table-wrapper" style="max-height:180px; overflow-y:auto;">
+                <table style="width:100%; font-size:0.78em; text-align:center;">
+                    <thead>
+                        <tr style="color:var(--hint-color);">
+                            <th>#</th>
+                            <th>Ora</th>
+                            <th>Nominativo</th>
+                            <th>Freq.</th>
+                            <th>RST Tx</th>
+                            <th>RST Rx</th>
+                            <th>Pt</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cacciaQsoLogTableBody">
+                        <!-- Popolato via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="fixed-bottom-btns">
+        <button onclick="goBackToMenu()" class="btn-secondary">Torna al Menu Principale</button>
+    </div>
+</div>
+
 <!-- MODAL: REPORT ANALISI TX REALE (NEW) -->
 <div id="realTxReportModal" style="display: none; position: fixed; top: 50%; left: 50%; width: 92%; transform: translate(-50%, -50%); background: #1a1a1a; z-index: 9500; border: 3px solid var(--champ-color); border-radius: 16px; padding: 20px; flex-direction: column; box-sizing: border-box; box-shadow: 0 15px 50px rgba(0,0,0,0.9); max-height: 90vh; overflow-y: auto; color: white;">
     <h2 style="color: var(--champ-color); margin: 0 0 15px 0; text-align: center; text-transform: uppercase; letter-spacing: 1px;">📊 Report Manipolazione</h2>
@@ -3278,6 +3384,7 @@
             "js/qso_manager.js",
             "js/rating_manager.js",
             "js/analisipartite.js",
+            "js/caccia_qso_manager.js",
             "js/game_core.js"
         ];
         scripts.forEach(function(src) {
