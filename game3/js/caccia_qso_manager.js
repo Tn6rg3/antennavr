@@ -34,6 +34,12 @@
         console.log("Caccia QSO: Starting game mode...");
         window.showScreen('cacciaQsoScreen');
 
+        // Pre-compila la casella "Tuo Nominativo" con il nome dell'utente
+        const myCallInput = document.getElementById('cacciaQsoMyCallInput');
+        if (myCallInput) {
+            myCallInput.value = (window.myName && window.myName !== 'Telegrafista') ? window.myName.toUpperCase() : 'IU2XYZ';
+        }
+
         // Legge la durata scelta dall'utente (5 - 30 min)
         const durSelect = document.getElementById('cacciaQsoDurationSelect');
         const minutes = durSelect ? (parseInt(durSelect.value) || 10) : 10;
@@ -84,7 +90,7 @@
 
             const wpm = Math.floor(18 + Math.random() * 11); // 18 - 28 WPM
             const toneHz = Math.floor(550 + Math.random() * 250); // 550 - 800 Hz
-            const sMeterBase = Math.floor(2 + Math.random() * 8); // S2 - S9+
+            const sMeterBase = Math.floor(3 + Math.random() * 7); // S3 - S9+
             const qsbSpeedSec = (3 + Math.random() * 5).toFixed(1); // Fading period 3-8 sec
             const rstReports = ['599', '589', '579', '559', '599', '599', '479'];
             const rst = rstReports[Math.floor(Math.random() * rstReports.length)];
@@ -222,10 +228,12 @@
             const vfo = state.vfoFreqHz;
             const timeSec = Date.now() / 1000;
 
-            // FLUTTUAZIONE RUMORE DI FONDO QRN (SENZA MAI INTERROMPERLO)
+            // FLUTTUAZIONE RUMORE DI FONDO QRN (ININTERROTTO SUL CANALE DEDICATO)
             const qrnFluctuation = 0.05 + 0.06 * Math.sin(timeSec * 0.3) + 0.03 * Math.random();
             if (state.noiseGain) {
-                state.noiseGain.gain.setValueAtTime(qrnFluctuation, state.audioCtx.currentTime);
+                try {
+                    state.noiseGain.gain.setValueAtTime(qrnFluctuation, state.audioCtx.currentTime);
+                } catch(e){}
             }
 
             let qrnSValue = Math.round(1 + (qrnFluctuation * 12));
@@ -280,7 +288,7 @@
     };
 
     /**
-     * SINTESI SUONO MORSE STAZIONE (CON RAMPE ANTI-SCOPPIETTIO & ANNULLAMENTO ISTANTANEO CQ)
+     * SINTESI SUONO MORSE STAZIONE (CON RAMPE LINEARI FLUIDE ANTI-SCOPPIETTIO)
      */
     window.playCacciaQsoStationMorse = function(station, initialFreqDiffHz, initialVolume) {
         const state = window.cacciaQsoState;
@@ -290,10 +298,12 @@
         station.playToken = (station.playToken || 0) + 1;
         const currentToken = station.playToken;
 
+        const myCallInput = document.getElementById('cacciaQsoMyCallInput');
+        const myCall = (myCallInput && myCallInput.value.trim()) ? myCallInput.value.trim().toUpperCase() : (window.myName || "OPERATOR");
+
         let textToPlay = "";
         if (state.currentQsoStep === 'CALL_MATCHED' && state.activeStation === station) {
-            const playerCall = window.myName || "OPERATOR";
-            textToPlay = `${playerCall} DE ${station.callsign} UR ${station.rst} ${station.serialNum} BK`;
+            textToPlay = `${myCall} DE ${station.callsign} UR ${station.rst} ${station.serialNum} BK`;
         } else if (state.currentQsoStep === 'COMPLETED' && state.activeStation === station) {
             textToPlay = `TU 73 ${station.callsign} SK`;
         } else {
@@ -321,7 +331,6 @@
                 const durMs = (symbol === '-') ? (unitSec * 3 * 1000) : (unitSec * 1000);
 
                 setTimeout(() => {
-                    // SE LA CHIAMATA CQ È STATA INTERROTTA DALL'UTENTE (TOKEN CAMBIATO), INTERROMPE SUBITO L'AUDIO!
                     if (currentToken !== station.playToken || !state.radioOn || !state.audioCtx) return;
 
                     const realTimeFreqDiff = Math.abs(station.freqHz - state.vfoFreqHz);
@@ -347,21 +356,23 @@
                         osc.type = 'sine';
                         osc.frequency.value = beatTone;
 
-                        const targetVol = 0.14 * realTimeProximity * qsbFactor;
+                        const targetVol = 0.15 * realTimeProximity * qsbFactor;
                         const now = state.audioCtx.currentTime;
+                        const start = now + 0.005;
                         const durSec = durMs / 1000;
+                        const end = start + durSec;
 
-                        // RAMPE SOFT ANTI-SCOPPIETTIO (ATTACK 5ms, RELEASE 8ms)
-                        gain.gain.setValueAtTime(0.0001, now);
-                        gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, targetVol), now + 0.005);
-                        gain.gain.setValueAtTime(Math.max(0.0001, targetVol), now + durSec - 0.008);
-                        gain.gain.exponentialRampToValueAtTime(0.0001, now + durSec);
+                        // RAMPE LINEARI MORBIDE FLUIDE ANTI-SCOPPIETTIO
+                        gain.gain.setValueAtTime(0.001, start);
+                        gain.gain.linearRampToValueAtTime(targetVol, start + 0.005);
+                        gain.gain.setValueAtTime(targetVol, Math.max(start + 0.006, end - 0.005));
+                        gain.gain.linearRampToValueAtTime(0.001, end);
 
                         osc.connect(gain);
                         gain.connect(state.audioCtx.destination);
 
-                        osc.start(now);
-                        osc.stop(now + durSec);
+                        osc.start(start);
+                        osc.stop(end);
                     } catch(e){}
                 }, delayMs);
 
@@ -378,7 +389,7 @@
     };
 
     /**
-     * SINTESI MORSE TRASMISSIONE LOCALE OPERATORE (SIDETONE CON RAMPE ANTI-SCOPPIETTIO)
+     * SINTESI MORSE TRASMISSIONE LOCALE OPERATORE (SIDETONE TASTO UTENTE)
      */
     window.playCacciaQsoUserSidetone = function(text, onCompleteCallback) {
         const state = window.cacciaQsoState;
@@ -422,19 +433,21 @@
 
                             const targetVol = 0.22;
                             const now = state.audioCtx.currentTime;
+                            const start = now + 0.005;
                             const durSec = durMs / 1000;
+                            const end = start + durSec;
 
-                            // RAMPE SOFT ANTI-SCOPPIETTIO (5ms Attack / 8ms Release)
-                            gain.gain.setValueAtTime(0.0001, now);
-                            gain.gain.exponentialRampToValueAtTime(targetVol, now + 0.005);
-                            gain.gain.setValueAtTime(targetVol, now + durSec - 0.008);
-                            gain.gain.exponentialRampToValueAtTime(0.0001, now + durSec);
+                            // RAMPE LINEARI FLUIDE ANTI-SCOPPIETTIO
+                            gain.gain.setValueAtTime(0.001, start);
+                            gain.gain.linearRampToValueAtTime(targetVol, start + 0.005);
+                            gain.gain.setValueAtTime(targetVol, Math.max(start + 0.006, end - 0.005));
+                            gain.gain.linearRampToValueAtTime(0.001, end);
 
                             osc.connect(gain);
                             gain.connect(state.audioCtx.destination);
 
-                            osc.start(now);
-                            osc.stop(now + durSec);
+                            osc.start(start);
+                            osc.stop(end);
 
                             window.updateCacciaQsoSMeter(10);
                         } catch(e){}
