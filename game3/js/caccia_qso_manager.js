@@ -37,11 +37,21 @@
         return inputEl ? (parseInt(inputEl.value) || 20) : (window.currentWpm || 20);
     };
 
+    window.changeCacciaQsoWpm = function(delta) {
+        const inputEl = document.getElementById('cacciaQsoWpmInput');
+        if (!inputEl) return;
+        let current = parseInt(inputEl.value) || 20;
+        let newVal = Math.max(10, Math.min(50, current + delta));
+        inputEl.value = newVal;
+        window.updateCacciaQsoWpmSpeed();
+    };
+
     window.updateCacciaQsoWpmSpeed = function() {
         const newWpm = window.getCacciaQsoWpm();
         window.cacciaQsoState.stations.forEach(st => {
             st.wpm = newWpm;
         });
+        console.log("Caccia QSO: All stations updated to WPM ->", newWpm);
     };
 
     /**
@@ -143,7 +153,7 @@
 
     /**
      * TRASMISSIONE CQ DELL'UTENTE IN MODALITÀ RUN MODE
-     * (Simula Pile-Up con 2 - 4 stazioni chiamanti simultanee su frequenze vicine)
+     * (Simula Pile-Up con 2 - 4 stazioni chiamanti su frequenze CASUALI attorno al VFO)
      */
     window.triggerCacciaQsoRunCq = function() {
         const state = window.cacciaQsoState;
@@ -158,32 +168,32 @@
         state.activeStation = null;
 
         window.playCacciaQsoUserSidetone(cqText, () => {
-            // Dopo la chiamata CQ in RUN mode, si genera un PILE-UP di 2 - 4 stazioni che rispondono in frequenza!
+            // Dopo la chiamata CQ in RUN mode, si genera un PILE-UP di 2 - 4 stazioni su frequenze CASUALI vicine!
             setTimeout(() => {
                 if (!state.radioOn) return;
 
-                // Numero di chiamanti simultanei in pile-up (2, 3 o 4 stazioni)
-                const numCallers = Math.floor(2 + Math.random() * 3);
+                const numCallers = Math.floor(2 + Math.random() * 3); // 2, 3 o 4 chiamanti
                 let pileUpCallers = [];
+                const userWpm = window.getCacciaQsoWpm();
 
                 for (let k = 0; k < numCallers; k++) {
                     const callsign = (typeof window.generateRealisticCallsign === 'function')
                         ? window.generateRealisticCallsign().split('/')[0]
                         : `CALL_${k}`;
 
-                    // Sfalsamento frequenza tra -180 Hz e +180 Hz rispetto al VFO per eterodina reale
-                    const offsetHz = Math.floor(-180 + Math.random() * 360);
+                    // Frequenza CASUALE sfalsata tra -280 Hz e +280 Hz rispetto al VFO
+                    const randomOffsetHz = Math.floor(-280 + Math.random() * 560);
                     const callerSt = {
-                        id: `run_st_${Date.now()}_${k}`,
+                        id: `run_st_${Date.now()}_${k}_${Math.random()}`,
                         callsign: callsign,
-                        freqHz: state.vfoFreqHz + offsetHz,
-                        wpm: window.getCacciaQsoWpm(),
-                        toneHz: Math.floor(550 + Math.random() * 250), // Tono autonomo 550-800Hz
+                        freqHz: state.vfoFreqHz + randomOffsetHz,
+                        wpm: userWpm, // STESSA VELOCITÀ WPM IMPOSTATA DALL'UTENTE!
+                        toneHz: Math.floor(550 + Math.random() * 250), // Tono audio 550-800Hz
                         sMeterBase: Math.floor(4 + Math.random() * 6), // S4 - S9
-                        qsbSpeedSec: (3 + Math.random() * 4).toFixed(1),
+                        qsbSpeedSec: parseFloat((3 + Math.random() * 4).toFixed(1)),
                         rst: '5NN',
                         serialNum: String(Math.floor(1 + Math.random() * 75)).padStart(3, '0'),
-                        isCallingCq: false,
+                        isCallingCq: false, // In RUN mode le stazioni NON chiamano CQ!
                         isPlayingMorse: false,
                         playToken: 0,
                         completed: false
@@ -195,7 +205,7 @@
                 state.activeStation = pileUpCallers[0];
                 state.currentQsoStep = 'LISTENING';
 
-                // Fa trasmettere simultaneamente tutte le stazioni del pile-up su frequenze vicine!
+                // Le stazioni del pile-up trasmettono SIMULTANEAMENTE il proprio nominativo alla velocita WPM dell'utente!
                 pileUpCallers.forEach(st => {
                     const freqDiff = Math.abs(st.freqHz - state.vfoFreqHz);
                     window.playCacciaQsoStationMorse(st, freqDiff, 1.0);
@@ -210,7 +220,7 @@
     window.generateCacciaQsoStations = function() {
         const count = 22; // 22 stazioni sparse in 40m
         let newStations = [];
-        const baseWpm = window.getCacciaQsoWpm();
+        const userWpm = window.getCacciaQsoWpm();
 
         for (let i = 0; i < count; i++) {
             let callsign = (typeof window.generateRealisticCallsign === 'function')
@@ -239,7 +249,7 @@
                 id: `st_${Date.now()}_${i}`,
                 callsign: callsign,
                 freqHz: freqHz,
-                wpm: baseWpm,
+                wpm: userWpm, // STESSA VELOCITÀ WPM DELL'UTENTE!
                 toneHz: toneHz,
                 sMeterBase: sMeterBase,
                 qsbSpeedSec: parseFloat(qsbSpeedSec),
@@ -253,7 +263,7 @@
         }
 
         window.cacciaQsoState.stations = newStations;
-        console.log("Caccia QSO: Generated 40m Band Stations ->", newStations);
+        console.log("Caccia QSO: Generated 40m Band Stations (WPM: " + userWpm + ") ->", newStations);
     };
 
     /**
@@ -377,7 +387,7 @@
             let totalSignalVal = qrnSValue;
             let currentSintonizedStation = null;
 
-            // SE L'UTENTE STA TRASMETTENDO IN LOCAL, SILENZIA LE CHIAMATE CQ DELLE STAZIONI!
+            // SE L'UTENTE STA TRASMETTENDO IN LOCAL, SILENZIA LE CHIAMATE DELLE STAZIONI!
             if (state.isUserTransmitting) {
                 window.updateCacciaQsoSMeter(10);
                 return;
@@ -415,7 +425,7 @@
                         currentSintonizedStation = st;
                     }
 
-                    // In RUN mode, la stazione trasmette la sua chiamata solo se e la stazione attiva chiamante
+                    // In RUN mode, la stazione trasmette la sua chiamata SOLO quando risponde alla chiamata dell'utente
                     if (state.subMode === 'run') {
                         if (st === state.activeStation && !st.isPlayingMorse) {
                             window.playCacciaQsoStationMorse(st, freqDiffHz, proximityFactor * qsbFactor);
@@ -462,14 +472,14 @@
             textToPlay = `${myCall} ${station.rst} ${station.serialNum}`;
         } else if (state.currentQsoStep === 'COMPLETED' && state.activeStation === station) {
             if (state.subMode === 'run') {
-                // RUN MODE: La stazione in RUN non ripete [CALL] K, si tace dopo la conferma dell'utente
+                // IN RUN MODE: La stazione NON ripete [CALL] K alla fine, tace per sempre!
                 textToPlay = "";
             } else {
                 // STEP 5 MORSE RUNNER S&P: TU [STATION_CALL] K
                 textToPlay = `TU ${station.callsign} K`;
             }
         } else if (state.subMode === 'run' && state.activeStation === station) {
-            // RUN MODE: La stazione risponde al CQ dell'utente trasmettendo il proprio nominativo
+            // IN RUN MODE: La stazione risponde al CQ dell'utente trasmettendo SOLO ED ESCLUSIVAMENTE il proprio nominativo!
             textToPlay = `${station.callsign}`;
         } else {
             // STEP 1 MORSE RUNNER S&P: CQ CQ CQ TEST [STATION_CALL] [STATION_CALL] K
@@ -481,7 +491,7 @@
             return;
         }
 
-        const currentWpm = window.getCacciaQsoWpm();
+        const currentWpm = window.getCacciaQsoWpm(); // UGUALE ALLA VELOCITÀ IMPOSTATA DALL'UTENTE!
         const unitSec = 1.2 / currentWpm;
         let delayMs = 0;
 
