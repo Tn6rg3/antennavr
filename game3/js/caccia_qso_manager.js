@@ -213,8 +213,8 @@
                         callsign: callsign,
                         freqHz: state.vfoFreqHz + randomOffsetHz,
                         wpm: userWpm, // STESSA VELOCITÀ WPM IMPOSTATA DALL'UTENTE!
-                        toneHz: Math.floor(550 + Math.random() * 250),
-                        sMeterBase: Math.floor(4 + Math.random() * 6),
+                        toneHz: Math.floor(550 + Math.random() * 250), // Tono audio 550-800Hz
+                        sMeterBase: Math.floor(4 + Math.random() * 6), // S4 - S9
                         qsbSpeedSec: parseFloat((3 + Math.random() * 4).toFixed(1)),
                         rst: '5NN',
                         serialNum: String(Math.floor(1 + Math.random() * 75)).padStart(3, '0'),
@@ -264,9 +264,9 @@
                 freqHz = partnerFreq + offset;
             }
 
-            const toneHz = Math.floor(550 + Math.random() * 250);
-            const sMeterBase = Math.floor(3 + Math.random() * 7);
-            const qsbSpeedSec = (3 + Math.random() * 5).toFixed(1);
+            const toneHz = Math.floor(550 + Math.random() * 250); // 550 - 800 Hz
+            const sMeterBase = Math.floor(3 + Math.random() * 7); // S3 - S9+
+            const qsbSpeedSec = (3 + Math.random() * 5).toFixed(1); // Fading period 3-8 sec
             const rstReports = ['5NN', '58N', '57N', '55N', '5NN', '5NN', '47N'];
             const rst = rstReports[Math.floor(Math.random() * rstReports.length)];
             const serialNum = String(Math.floor(1 + Math.random() * 85)).padStart(3, '0');
@@ -275,7 +275,7 @@
                 id: `st_${Date.now()}_${i}`,
                 callsign: callsign,
                 freqHz: freqHz,
-                wpm: userWpm,
+                wpm: userWpm, // STESSA VELOCITÀ WPM DELL'UTENTE!
                 toneHz: toneHz,
                 sMeterBase: sMeterBase,
                 qsbSpeedSec: parseFloat(qsbSpeedSec),
@@ -749,13 +749,22 @@
     };
 
     window.handleCacciaQsoRstEnter = function(e) {
-        if (e && e.preventDefault) e.preventDefault();
-        const nrInput = document.getElementById('cacciaQsoNrInput');
-        if (nrInput) nrInput.focus();
+        if (e && (e.key === 'Enter' || e.key === 'Tab')) {
+            if (e.preventDefault) e.preventDefault();
+        }
+        const state = window.cacciaQsoState;
+        if (state.currentQsoStep === 'CALL_MATCHED') {
+            window.handleCacciaQsoSubmit();
+        } else {
+            const nrInput = document.getElementById('cacciaQsoNrInput');
+            if (nrInput) nrInput.focus();
+        }
     };
 
     window.handleCacciaQsoNrEnter = function(e) {
-        if (e && e.preventDefault) e.preventDefault();
+        if (e && (e.key === 'Enter' || e.key === 'Tab')) {
+            if (e.preventDefault) e.preventDefault();
+        }
         window.handleCacciaQsoSubmit();
     };
 
@@ -764,6 +773,7 @@
         const rstInput = document.getElementById('cacciaQsoRstInput');
         const nrInput = document.getElementById('cacciaQsoNrInput');
         const badgeEl = document.getElementById('cacciaQsoMySerialBadge');
+        const myCallInput = document.getElementById('cacciaQsoMyCallInput');
 
         if (!callInput) return;
 
@@ -792,7 +802,10 @@
         // STEP 4 MORSE RUNNER: L'UTENTE TRASMETTE IL PROPRIO EXCHANGE (5NN + MIO SERIALE PROGRESSIVO AUTOMATICO)
         if (state.currentQsoStep === 'CALL_MATCHED') {
             const mySerialFormatted = String(state.mySerialNum).padStart(3, '0');
-            const exchangeText = `5NN ${mySerialFormatted}`;
+            const myCall = (myCallInput && myCallInput.value.trim()) ? myCallInput.value.trim().toUpperCase() : (window.myName || "IU2XYZ");
+
+            // IN RUN MODE L'UTENTE TRASMETTE "[MY_CALL] TU", IN S&P MODE TRASMETTE "5NN [MY_SERIAL]"
+            const exchangeText = (state.subMode === 'run') ? `${myCall} TU` : `5NN ${mySerialFormatted}`;
             st.playToken++;
             st.isPlayingMorse = false;
 
