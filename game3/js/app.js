@@ -5062,6 +5062,14 @@ if (els.createRoomBtn) {
             if (typeof window.startMemoryCwGame === 'function') window.startMemoryCwGame();
             return;
         }
+        if (gMode === 'caccia_qso') {
+            if (typeof window.startCacciaQsoGame === 'function') {
+                window.startCacciaQsoGame();
+            } else {
+                console.error("Caccia QSO: window.startCacciaQsoGame is not defined!");
+            }
+            return;
+        }
 
         window.resetGameState();
 
@@ -5079,12 +5087,6 @@ if (els.createRoomBtn) {
         window.wordsPerGroup = (window.currentMode === 'standard_plus') ? (parseInt(document.getElementById('wordsPerGroupInput')?.value) || 2) : 1;
 
         if (gType === 'transmission') {
-            if (gMode === 'caccia_qso') {
-                if (typeof window.startCacciaQsoGame === 'function') {
-                    window.startCacciaQsoGame();
-                }
-                return;
-            }
             if (gMode === 'groups_tx' || gMode === 'real_tx') {
                 window.startTransmissionFree(gMode);
                 return;
