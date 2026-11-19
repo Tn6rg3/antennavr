@@ -22,8 +22,8 @@
         noiseGain: null,
         activeToneOscillators: {},
         isVfoDragging: false,
-        vfoKnobAngle: 0, // Angolo accumulato della manopola VFO
-        vfoLastTouchAngle: 0, // Ultimo angolo touch registrato
+        vfoKnobAngle: 0,
+        vfoLastTouchAngle: 0,
         mySerialNum: 1
     };
 
@@ -61,22 +61,18 @@
 
     /**
      * GENERATORE PROCEDURALE DI STAZIONI RADIO 40M (7.000 MHz - 7.200 MHz)
-     * (Sfrutta window.generateRealisticCallsign di dictionary_manager.js con Pile-Up e refresh ogni 4 QSO)
      */
     window.generateCacciaQsoStations = function() {
         const count = 22; // 22 stazioni sparse nell'intera banda 40 metri (7000 - 7200 kHz)
         let newStations = [];
 
         for (let i = 0; i < count; i++) {
-            // Sfruttiamo il generatore di nominativi gia esistente nel progetto (dictionary_manager.js)
             let callsign = (typeof window.generateRealisticCallsign === 'function')
                 ? window.generateRealisticCallsign()
                 : `IU2XYZ_${i}`;
 
-            // Puliamo eventuali modificatori tipo /P o /QRP per brevita nei contest
             callsign = callsign.split('/')[0];
 
-            // Frequenza casuale tra 7.002.000 Hz e 7.198.000 Hz (Banda estesa 7.000 - 7.200 MHz)
             let freqHz = Math.floor(7002000 + Math.random() * 196000);
 
             // SIMULATORE PILE-UP: Il 30% delle stazioni si genera a soli 100-250 Hz da un'altra stazione!
@@ -88,7 +84,7 @@
 
             const wpm = Math.floor(18 + Math.random() * 11); // 18 - 28 WPM
             const toneHz = Math.floor(550 + Math.random() * 250); // 550 - 800 Hz
-            const sMeterBase = Math.floor(2 + Math.random() * 8); // S2 - S9+
+            const sMeterBase = Math.floor(3 + Math.random() * 7); // S3 - S9+
             const qsbSpeedSec = (3 + Math.random() * 5).toFixed(1); // Fading period 3-8 sec
             const rstReports = ['599', '589', '579', '559', '599', '599', '479'];
             const rst = rstReports[Math.floor(Math.random() * rstReports.length)];
@@ -105,12 +101,13 @@
                 rst: rst,
                 serialNum: serialNum,
                 isCallingCq: true,
+                isPlayingMorse: false,
                 completed: false
             });
         }
 
         window.cacciaQsoState.stations = newStations;
-        console.log("Caccia QSO: Generated 40m Extended Band Stations (7.000-7.200 MHz) ->", newStations);
+        console.log("Caccia QSO: Generated 40m Band Stations ->", newStations);
     };
 
     /**
@@ -151,7 +148,7 @@
     };
 
     /**
-     * AUDIO ENGINE - RUMORE DI FONDO RADIO (QRN) VARIABILE & FILTRO PASSABANDA
+     * AUDIO ENGINE - RUMORE DI FONDO RADIO (QRN) VARIABILE
      */
     window.initCacciaQsoAudioEngine = function() {
         const state = window.cacciaQsoState;
@@ -165,7 +162,6 @@
         if (state.noiseNode) return;
 
         try {
-            // Buffer rumore bianco per il fruscio di banda HF
             const bufferSize = state.audioCtx.sampleRate * 2;
             const noiseBuffer = state.audioCtx.createBuffer(1, bufferSize, state.audioCtx.sampleRate);
             const output = noiseBuffer.getChannelData(0);
@@ -177,14 +173,13 @@
             state.noiseNode.buffer = noiseBuffer;
             state.noiseNode.loop = true;
 
-            // Filtro Passabanda CW Selettivo (300Hz - 800Hz)
             state.noiseFilter = state.audioCtx.createBiquadFilter();
             state.noiseFilter.type = 'bandpass';
             state.noiseFilter.frequency.value = 600;
             state.noiseFilter.Q.value = 3.0;
 
             state.noiseGain = state.audioCtx.createGain();
-            state.noiseGain.gain.value = 0.10; // Fruscio di partenza
+            state.noiseGain.gain.value = 0.08;
 
             state.noiseNode.connect(state.noiseFilter);
             state.noiseFilter.connect(state.noiseGain);
@@ -218,7 +213,7 @@
 
     /**
      * AUDIO LOOP & MONITOR S-METER REALISTICO
-     * (Fluttuazione QRN variabile + Attenuazione selettiva della frequenza VFO)
+     * (Attenuazione selettiva dinamica del VFO)
      */
     window.startCacciaQsoAudioLoop = function() {
         if (window.cacciaQsoAudioInterval) clearInterval(window.cacciaQsoAudioInterval);
@@ -229,14 +224,13 @@
 
             const vfo = state.vfoFreqHz;
 
-            // FLUTTUAZIONE DINAMICA RUMORE DI FONDO (QRN / MASCHERAMENTO MASCHERANTE)
+            // FLUTTUAZIONE DINAMICA RUMORE DI FONDO (QRN)
             const timeSec = Date.now() / 1000;
             const qrnFluctuation = 0.06 + 0.08 * Math.sin(timeSec * 0.4) + 0.04 * Math.random();
             if (state.noiseGain) {
                 state.noiseGain.gain.value = qrnFluctuation;
             }
 
-            // Rumore di fondo minimo espresso in scala S (tra S1 e S3)
             let qrnSValue = Math.round(1 + (qrnFluctuation * 15));
             let totalSignalVal = qrnSValue;
             let currentSintonizedStation = null;
@@ -244,45 +238,41 @@
             state.stations.forEach(st => {
                 if (st.completed) return;
 
-                // Calcolo dello spostamento di frequenza (offset VFO vs Stazione)
                 const freqDiffHz = Math.abs(st.freqHz - vfo);
 
-                // CURVA DI SELETTIVITÀ FILTRO CW RICEVITORE REALISTICO:
-                // entro ± 120 Hz -> Segnale al 100%
-                // tra 120 Hz e 400 Hz -> Il segnale crolla vertiginosamente fino a 0
-                // oltre 400 Hz -> Segnale completamente tagliato (0%)
+                // SELETTIVITÀ FILTRO CW:
+                // entro ± 100 Hz -> Segnale al 100%
+                // tra 100 Hz e 350 Hz -> Il segnale crolla bruscamente
+                // oltre 350 Hz -> 0% (silenzio completo)
                 let proximityFactor = 0;
-                if (freqDiffHz <= 120) {
+                if (freqDiffHz <= 100) {
                     proximityFactor = 1.0;
-                } else if (freqDiffHz <= 400) {
-                    const normOff = (freqDiffHz - 120) / 280;
-                    proximityFactor = Math.max(0, 1 - (normOff * normOff)); // Crollo quadratico rapido del volume
+                } else if (freqDiffHz <= 350) {
+                    const normOff = (freqDiffHz - 100) / 250;
+                    proximityFactor = Math.max(0, 1 - (normOff * normOff));
                 }
 
                 if (proximityFactor > 0) {
-                    // Fading QSB sinusoidale nel tempo
                     const qsbPhase = timeSec * (2 * Math.PI / st.qsbSpeedSec);
-                    const qsbFactor = 0.4 + 0.6 * Math.sin(qsbPhase); // Tra 0.4 e 1.0
+                    const qsbFactor = 0.4 + 0.6 * Math.sin(qsbPhase);
 
                     const effectiveS = Math.round(st.sMeterBase * proximityFactor * qsbFactor);
                     totalSignalVal = Math.max(totalSignalVal, effectiveS);
 
-                    // Se siamo ben centrati sulla sintonia (entro ± 180 Hz)
                     if (freqDiffHz <= 180) {
                         currentSintonizedStation = st;
                     }
 
-                    // Riproduce la trasmissione Morse della stazione se visibile nel filtro
-                    if (st.isCallingCq && proximityFactor > 0.05) {
+                    if (st.isCallingCq && proximityFactor > 0.05 && !st.isPlayingMorse) {
                         window.playCacciaQsoStationMorse(st, freqDiffHz, proximityFactor * qsbFactor);
                     }
                 }
             });
 
-            // Aggiorna la lancetta dell'S-Meter
+            // Aggiorna l'S-Meter
             window.updateCacciaQsoSMeter(totalSignalVal);
 
-            // Aggiorna lo stato della stazione sintonizzata
+            // Aggiorna la stazione attiva sintonizzata
             if (currentSintonizedStation !== state.activeStation) {
                 state.activeStation = currentSintonizedStation;
                 if (currentSintonizedStation && state.currentQsoStep === 'IDLE') {
@@ -293,15 +283,14 @@
     };
 
     /**
-     * SINTESI SUONO MORSE DEDICATA PER LA STAZIONE SINTONIZZATA
+     * SINTESI SUONO MORSE DEDICATA (VERIFICA IL VFO IN TEMPO REALE AD OGNI BIP)
      */
-    window.playCacciaQsoStationMorse = function(station, freqDiffHz, volumeFactor) {
+    window.playCacciaQsoStationMorse = function(station, initialFreqDiffHz, initialVolume) {
         const state = window.cacciaQsoState;
         if (!state.radioOn || !state.audioCtx || station.isPlayingMorse) return;
 
         station.isPlayingMorse = true;
 
-        // Testo da trasmettere a seconda dello stato
         let textToPlay = "";
         if (state.currentQsoStep === 'CALL_MATCHED' && state.activeStation === station) {
             const playerCall = window.myName || "OPERATOR";
@@ -312,8 +301,6 @@
             textToPlay = `CQ CQ DE ${station.callsign} PSE K`;
         }
 
-        // Tono audio udibile (frequenza eterodina regolata su 600Hz in centro sintonia)
-        const beatTone = Math.max(300, Math.min(1200, 600 + (station.freqHz - state.vfoFreqHz)));
         const unitSec = 1.2 / station.wpm;
         let delayMs = 0;
 
@@ -336,13 +323,28 @@
 
                 setTimeout(() => {
                     if (state.radioOn && state.audioCtx) {
+                        // VERIFICA DINAMICA DELLA FREQUENZA VFO AD OGNI SINGOLO BIP!
+                        const realTimeFreqDiff = Math.abs(station.freqHz - state.vfoFreqHz);
+                        let realTimeProximity = 0;
+
+                        if (realTimeFreqDiff <= 100) {
+                            realTimeProximity = 1.0;
+                        } else if (realTimeFreqDiff <= 350) {
+                            const normOff = (realTimeFreqDiff - 100) / 250;
+                            realTimeProximity = Math.max(0, 1 - (normOff * normOff));
+                        }
+
+                        // Se l'utente si e spostato col VFO (> 350 Hz), il bip non viene emesso (silenzio)!
+                        if (realTimeProximity <= 0) return;
+
                         try {
+                            const beatTone = Math.max(300, Math.min(1200, 600 + (station.freqHz - state.vfoFreqHz)));
                             const osc = state.audioCtx.createOscillator();
                             const gain = state.audioCtx.createGain();
                             osc.type = 'sine';
                             osc.frequency.value = beatTone;
 
-                            gain.gain.value = 0.12 * volumeFactor;
+                            gain.gain.value = 0.15 * realTimeProximity;
 
                             osc.connect(gain);
                             gain.connect(state.audioCtx.destination);
@@ -360,150 +362,7 @@
 
         setTimeout(() => {
             station.isPlayingMorse = false;
-        }, delayMs + 1500); // Pausa tra chiamate CQ
-    };
-
-    /**
-     * SINTONIA VFO & GESTIONE DIAL FLUIDA (TOUCH / MOUSE / WHEEL SENZA SALTI)
-     */
-    window.initCacciaQsoUI = function() {
-        const dialCanvas = document.getElementById('cacciaQsoVfoCanvas');
-        if (!dialCanvas) return;
-
-        const ctx = dialCanvas.getContext('2d');
-        window.drawCacciaQsoDial(ctx, window.cacciaQsoState.vfoKnobAngle);
-
-        // Eventi Drag e Rotation VFO fluida
-        dialCanvas.onmousedown = dialCanvas.ontouchstart = (e) => {
-            window.cacciaQsoState.isVfoDragging = true;
-            const rect = dialCanvas.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            const x = clientX - (rect.left + rect.width / 2);
-            const y = clientY - (rect.top + rect.height / 2);
-
-            window.cacciaQsoState.vfoLastTouchAngle = Math.atan2(y, x);
-        };
-
-        window.onmousemove = window.ontouchmove = (e) => {
-            if (!window.cacciaQsoState.isVfoDragging) return;
-            const rect = dialCanvas.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            const x = clientX - (rect.left + rect.width / 2);
-            const y = clientY - (rect.top + rect.height / 2);
-
-            const currentTouchAngle = Math.atan2(y, x);
-            let angleDelta = currentTouchAngle - window.cacciaQsoState.vfoLastTouchAngle;
-
-            // Correzione salto -PI / +PI
-            if (angleDelta > Math.PI) angleDelta -= 2 * Math.PI;
-            if (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
-
-            window.cacciaQsoState.vfoLastTouchAngle = currentTouchAngle;
-            window.cacciaQsoState.vfoKnobAngle += angleDelta;
-
-            // 1 Giro completo (2*PI) = 10.000 Hz di cambio frequenza
-            const freqStep = Math.round((angleDelta / (2 * Math.PI)) * 10000);
-            window.tuneCacciaQsoVfoBy(freqStep);
-
-            window.drawCacciaQsoDial(ctx, window.cacciaQsoState.vfoKnobAngle);
-        };
-
-        window.onmouseup = window.ontouchend = () => {
-            window.cacciaQsoState.isVfoDragging = false;
-        };
-
-        // Supporto Rotellina Mouse sul Dial
-        dialCanvas.onwheel = (e) => {
-            e.preventDefault();
-            const step = e.deltaY < 0 ? 50 : -50;
-            window.tuneCacciaQsoVfoBy(step);
-            window.cacciaQsoState.vfoKnobAngle += (step > 0 ? 0.1 : -0.1);
-            window.drawCacciaQsoDial(ctx, window.cacciaQsoState.vfoKnobAngle);
-        };
-
-        window.updateCacciaQsoFreqDisplay();
-    };
-
-    window.drawCacciaQsoDial = function(ctx, angle) {
-        if (!ctx) return;
-        const w = ctx.canvas.width = 160;
-        const h = ctx.canvas.height = 160;
-        const cx = w / 2, cy = h / 2, r = 70;
-
-        ctx.clearRect(0, 0, w, h);
-
-        // Corpo Dial VFO
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, 2 * Math.PI);
-        ctx.fillStyle = '#222';
-        ctx.fill();
-        ctx.strokeStyle = '#00bcd4';
-        ctx.lineWidth = 4;
-        ctx.stroke();
-
-        // Incavo/Tacche sulla Manopola
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(angle);
-
-        ctx.beginPath();
-        ctx.arc(0, -r + 18, 10, 0, 2 * Math.PI);
-        ctx.fillStyle = '#00bcd4';
-        ctx.fill();
-
-        for (let a = 0; a < 360; a += 30) {
-            const rad = a * Math.PI / 180;
-            ctx.beginPath();
-            ctx.moveTo(Math.cos(rad) * (r - 12), Math.sin(rad) * (r - 12));
-            ctx.lineTo(Math.cos(rad) * (r - 4), Math.sin(rad) * (r - 4));
-            ctx.strokeStyle = '#666';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        }
-
-        ctx.restore();
-    };
-
-    window.tuneCacciaQsoVfoBy = function(stepHz) {
-        window.tuneCacciaQsoVfoTo(window.cacciaQsoState.vfoFreqHz + stepHz);
-    };
-
-    window.tuneCacciaQsoVfoTo = function(targetFreqHz) {
-        // Limiti Banda 40m CW Estesa: 7.000.000 Hz - 7.200.000 Hz
-        const clamped = Math.max(7000000, Math.min(7200000, targetFreqHz));
-        window.cacciaQsoState.vfoFreqHz = clamped;
-        window.updateCacciaQsoFreqDisplay();
-    };
-
-    window.updateCacciaQsoFreqDisplay = function() {
-        const freqEl = document.getElementById('cacciaQsoFreqDisplay');
-        if (!freqEl) return;
-
-        const hz = window.cacciaQsoState.vfoFreqHz;
-        const mhz = (hz / 1000000).toFixed(5); // es. 07.034.00 MHz
-        const parts = mhz.split('.');
-        const formatted = `0${parts[0]}.${parts[1].substring(0,3)}.${parts[1].substring(3,5)} MHz`;
-        freqEl.textContent = formatted;
-    };
-
-    /**
-     * UPDATE LANCETTA S-METER
-     */
-    window.updateCacciaQsoSMeter = function(sVal) {
-        const needle = document.getElementById('cacciaQsoSMeterNeedle');
-        const valText = document.getElementById('cacciaQsoSMeterText');
-        if (!needle) return;
-
-        // Angolo da -45deg (S0) a +45deg (S9+)
-        const clampedS = Math.max(0, Math.min(10, sVal));
-        const angle = -45 + (clampedS * 9);
-        needle.style.transform = `rotate(${angle}deg)`;
-
-        if (valText) {
-            valText.textContent = clampedS >= 9 ? "S9+" : `S${clampedS}`;
-        }
+        }, delayMs + 1200);
     };
 
     /**
@@ -522,9 +381,9 @@
 
         const cleanText = String(text || "").toUpperCase();
         const morseDict = window.morseDict || {};
-        const wpm = 22; // Velocita trasmissione tasto utente
+        const wpm = 22;
         const unitSec = 1.2 / wpm;
-        const sidetoneFreq = 650; // Tono sidetone trasmettitore
+        const sidetoneFreq = 650;
         let delayMs = 0;
 
         for (let i = 0; i < cleanText.length; i++) {
@@ -548,7 +407,7 @@
                             const gain = state.audioCtx.createGain();
                             osc.type = 'sine';
                             osc.frequency.value = sidetoneFreq;
-                            gain.gain.value = 0.22; // Tono locale forte e chiaro
+                            gain.gain.value = 0.22;
 
                             osc.connect(gain);
                             gain.connect(state.audioCtx.destination);
@@ -556,7 +415,6 @@
                             osc.start();
                             osc.stop(state.audioCtx.currentTime + (durMs / 1000));
 
-                            // Lancetta S-Meter al massimo S9+ durante la trasmissione dell'operatore!
                             window.updateCacciaQsoSMeter(10);
                         } catch(e){}
                     }
@@ -599,7 +457,13 @@
             if (state.currentQsoStep === 'LISTENING' || state.currentQsoStep === 'IDLE') {
                 if (val === st.callsign) {
                     state.currentQsoStep = 'CALL_MATCHED';
+                    st.isPlayingMorse = false; // Sblocca la stazione per permetterle di rispondere subito!
                     if (typeof showToast === 'function') showToast(`✅ Nominativo ${st.callsign} Corretto! La stazione ti risponde...`);
+
+                    // Avvia subito la risposta della stazione in Morse
+                    setTimeout(() => {
+                        window.playCacciaQsoStationMorse(st, 0, 1.0);
+                    }, 400);
                 } else {
                     if (typeof showToast === 'function') showToast(`❌ Nominativo Errato (Sintonizzato su ${st.callsign})`);
                 }
@@ -611,6 +475,7 @@
                 const mySerialFormatted = String(state.mySerialNum).padStart(3, '0');
                 state.currentQsoStep = 'COMPLETED';
                 st.completed = true;
+                st.isPlayingMorse = false; // Sblocca per la conferma finale
 
                 // Assegnazione Punti Contest
                 const ptsGain = Math.round(100 + (st.wpm * 2) + (st.sMeterBase * 5));
@@ -638,20 +503,160 @@
 
                 if (typeof showToast === 'function') showToast(`🏆 QSO Concluso con ${st.callsign}! +${ptsGain} pt`);
 
+                // Risposta di saluto finale della stazione (73 SK)
+                setTimeout(() => {
+                    window.playCacciaQsoStationMorse(st, 0, 1.0);
+                }, 400);
+
                 // RIGENERAZIONE AUTOMATICA BANDA OGNI 4 QSO
                 if (state.qsoCompletedCount % 4 === 0) {
                     setTimeout(() => {
                         window.generateCacciaQsoStations();
                         if (typeof showToast === 'function') showToast("🔄 Banda 40m Rigenerata con Nuove Stazioni!");
-                    }, 2000);
+                    }, 2500);
                 }
 
                 setTimeout(() => {
                     state.currentQsoStep = 'IDLE';
                     state.activeStation = null;
-                }, 3000);
+                }, 4000);
             }
         });
+    };
+
+    /**
+     * SINTONIA VFO & GESTIONE DIAL FLUIDA (TOUCH / MOUSE / WHEEL SENZA SALTI)
+     */
+    window.initCacciaQsoUI = function() {
+        const dialCanvas = document.getElementById('cacciaQsoVfoCanvas');
+        if (!dialCanvas) return;
+
+        const ctx = dialCanvas.getContext('2d');
+        window.drawCacciaQsoDial(ctx, window.cacciaQsoState.vfoKnobAngle);
+
+        dialCanvas.onmousedown = dialCanvas.ontouchstart = (e) => {
+            window.cacciaQsoState.isVfoDragging = true;
+            const rect = dialCanvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const x = clientX - (rect.left + rect.width / 2);
+            const y = clientY - (rect.top + rect.height / 2);
+
+            window.cacciaQsoState.vfoLastTouchAngle = Math.atan2(y, x);
+        };
+
+        window.onmousemove = window.ontouchmove = (e) => {
+            if (!window.cacciaQsoState.isVfoDragging) return;
+            const rect = dialCanvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const x = clientX - (rect.left + rect.width / 2);
+            const y = clientY - (rect.top + rect.height / 2);
+
+            const currentTouchAngle = Math.atan2(y, x);
+            let angleDelta = currentTouchAngle - window.cacciaQsoState.vfoLastTouchAngle;
+
+            if (angleDelta > Math.PI) angleDelta -= 2 * Math.PI;
+            if (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
+
+            window.cacciaQsoState.vfoLastTouchAngle = currentTouchAngle;
+            window.cacciaQsoState.vfoKnobAngle += angleDelta;
+
+            const freqStep = Math.round((angleDelta / (2 * Math.PI)) * 10000);
+            window.tuneCacciaQsoVfoBy(freqStep);
+
+            window.drawCacciaQsoDial(ctx, window.cacciaQsoState.vfoKnobAngle);
+        };
+
+        window.onmouseup = window.ontouchend = () => {
+            window.cacciaQsoState.isVfoDragging = false;
+        };
+
+        dialCanvas.onwheel = (e) => {
+            e.preventDefault();
+            const step = e.deltaY < 0 ? 50 : -50;
+            window.tuneCacciaQsoVfoBy(step);
+            window.cacciaQsoState.vfoKnobAngle += (step > 0 ? 0.1 : -0.1);
+            window.drawCacciaQsoDial(ctx, window.cacciaQsoState.vfoKnobAngle);
+        };
+
+        window.updateCacciaQsoFreqDisplay();
+    };
+
+    window.drawCacciaQsoDial = function(ctx, angle) {
+        if (!ctx) return;
+        const w = ctx.canvas.width = 160;
+        const h = ctx.canvas.height = 160;
+        const cx = w / 2, cy = h / 2, r = 70;
+
+        ctx.clearRect(0, 0, w, h);
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+        ctx.fillStyle = '#222';
+        ctx.fill();
+        ctx.strokeStyle = '#00bcd4';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+
+        ctx.beginPath();
+        ctx.arc(0, -r + 18, 10, 0, 2 * Math.PI);
+        ctx.fillStyle = '#00bcd4';
+        ctx.fill();
+
+        for (let a = 0; a < 360; a += 30) {
+            const rad = a * Math.PI / 180;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(rad) * (r - 12), Math.sin(rad) * (r - 12));
+            ctx.lineTo(Math.cos(rad) * (r - 4), Math.sin(rad) * (r - 4));
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    };
+
+    window.tuneCacciaQsoVfoBy = function(stepHz) {
+        window.tuneCacciaQsoVfoTo(window.cacciaQsoState.vfoFreqHz + stepHz);
+    };
+
+    window.tuneCacciaQsoVfoTo = function(targetFreqHz) {
+        const clamped = Math.max(7000000, Math.min(7200000, targetFreqHz));
+        window.cacciaQsoState.vfoFreqHz = clamped;
+        window.updateCacciaQsoFreqDisplay();
+    };
+
+    window.updateCacciaQsoFreqDisplay = function() {
+        const freqEl = document.getElementById('cacciaQsoFreqDisplay');
+        if (!freqEl) return;
+
+        const hz = window.cacciaQsoState.vfoFreqHz;
+        const mhz = (hz / 1000000).toFixed(5);
+        const parts = mhz.split('.');
+        const formatted = `0${parts[0]}.${parts[1].substring(0,3)}.${parts[1].substring(3,5)} MHz`;
+        freqEl.textContent = formatted;
+    };
+
+    /**
+     * UPDATE LANCETTA S-METER
+     */
+    window.updateCacciaQsoSMeter = function(sVal) {
+        const needle = document.getElementById('cacciaQsoSMeterNeedle');
+        const valText = document.getElementById('cacciaQsoSMeterText');
+        if (!needle) return;
+
+        const clampedS = Math.max(0, Math.min(10, sVal));
+        const angle = -45 + (clampedS * 9);
+        needle.style.transform = `rotate(${angle}deg)`;
+
+        if (valText) {
+            valText.textContent = clampedS >= 9 ? "S9+" : `S${clampedS}`;
+        }
     };
 
     /**
