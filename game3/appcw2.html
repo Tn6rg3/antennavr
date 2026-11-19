@@ -2967,25 +2967,31 @@
                 <b id="cacciaQsoCountDisplay" style="color:#00bcd4;">QSO: 0</b>
             </div>
 
-            <!-- INPUT TUO NOMINATIVO -->
-            <div style="margin-bottom:8px;">
-                <label for="cacciaQsoMyCallInput" style="font-size:0.75em; color:var(--champ-color); font-weight:bold; display:block; margin-bottom:4px; text-align:left;">Tuo Nominativo (Station Call):</label>
-                <input type="text" id="cacciaQsoMyCallInput" aria-label="Tuo Nominativo Radioamatoriale" placeholder="es. IU2XYZ" style="width:100%; height:40px; padding:6px 10px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#ffffff !important; color:#000000 !important; border-radius:6px; border:2px solid var(--champ-color); box-sizing:border-box;">
+            <!-- INPUT TUO NOMINATIVO ED ECHIPAGGIO CONTEST -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div style="flex:1;">
+                    <label for="cacciaQsoMyCallInput" style="font-size:0.75em; color:var(--champ-color); font-weight:bold; display:block; margin-bottom:4px; text-align:left;">Tuo Nominativo (Station Call):</label>
+                    <input type="text" id="cacciaQsoMyCallInput" aria-label="Tuo Nominativo Radioamatoriale" placeholder="es. IU2XYZ" style="width:100%; height:40px; padding:6px 10px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#ffffff !important; color:#000000 !important; border-radius:6px; border:2px solid var(--champ-color); box-sizing:border-box;">
+                </div>
+                <div style="margin-left:12px; text-align:right;">
+                    <span style="font-size:0.72em; color:var(--hint-color); display:block;">Tuo Prog. Inviato:</span>
+                    <b id="cacciaQsoMySerialBadge" style="font-size:1.15em; color:#4caf50;">001</b>
+                </div>
             </div>
 
-            <!-- TRE TEXTBOX STILE MORSE RUNNER (1. CALLSIGN - 2. RST - 3. NR) -->
+            <!-- TRE TEXTBOX STILE MORSE RUNNER (1. STAZIONE - 2. RST RX - 3. NR RX) -->
             <div style="display:grid; grid-template-columns: 2fr 1fr 1fr; gap:6px; margin-bottom:10px; box-sizing:border-box;">
                 <div>
-                    <label for="cacciaQsoCallInput" style="font-size:0.75em; color:#00bcd4; font-weight:bold; display:block; margin-bottom:4px; text-align:left;">1. Stazione</label>
+                    <label for="cacciaQsoCallInput" style="font-size:0.75em; color:#00bcd4; font-weight:bold; display:block; margin-bottom:4px; text-align:left;">1. Stazione (Call)</label>
                     <input type="text" id="cacciaQsoCallInput" aria-label="Nominativo Stazione" placeholder="es. IS0SSS" style="width:100%; height:42px; padding:6px 8px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#ffffff !important; color:#000000 !important; border-radius:6px; border:2px solid #00bcd4; box-sizing:border-box;" onkeydown="if(event.key==='Enter') window.handleCacciaQsoCallEnter(event)">
                 </div>
                 <div>
-                    <label for="cacciaQsoRstInput" style="font-size:0.75em; color:#00bcd4; font-weight:bold; display:block; margin-bottom:4px; text-align:left;">2. RST Sent</label>
-                    <input type="text" id="cacciaQsoRstInput" aria-label="RST Inviato" value="599" placeholder="599" style="width:100%; height:42px; padding:6px 8px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#ffffff !important; color:#000000 !important; border-radius:6px; border:2px solid #00bcd4; box-sizing:border-box; text-align:center;" onkeydown="if(event.key==='Enter') window.handleCacciaQsoRstEnter(event)">
+                    <label for="cacciaQsoRstInput" style="font-size:0.75em; color:#00bcd4; font-weight:bold; display:block; margin-bottom:4px; text-align:left;">2. RST Rx</label>
+                    <input type="text" id="cacciaQsoRstInput" aria-label="RST Ricevuto" value="5NN" placeholder="5NN" style="width:100%; height:42px; padding:6px 8px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#ffffff !important; color:#000000 !important; border-radius:6px; border:2px solid #00bcd4; box-sizing:border-box; text-align:center;" onkeydown="if(event.key==='Enter') window.handleCacciaQsoRstEnter(event)">
                 </div>
                 <div>
-                    <label for="cacciaQsoNrInput" style="font-size:0.75em; color:#00bcd4; font-weight:bold; display:block; margin-bottom:4px; text-align:left;">3. NR Mio</label>
-                    <input type="text" id="cacciaQsoNrInput" aria-label="Numero Progressivo Mio" value="001" placeholder="001" style="width:100%; height:42px; padding:6px 8px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#ffffff !important; color:#000000 !important; border-radius:6px; border:2px solid #00bcd4; box-sizing:border-box; text-align:center;" onkeydown="if(event.key==='Enter') window.handleCacciaQsoNrEnter(event)">
+                    <label for="cacciaQsoNrInput" style="font-size:0.75em; color:#00bcd4; font-weight:bold; display:block; margin-bottom:4px; text-align:left;">3. NR Ricevuto</label>
+                    <input type="text" id="cacciaQsoNrInput" aria-label="Numero Progressivo Ricevuto" placeholder="es. 201" style="width:100%; height:42px; padding:6px 8px; font-size:0.95em; text-transform:uppercase; font-weight:bold; background:#ffffff !important; color:#000000 !important; border-radius:6px; border:2px solid #00bcd4; box-sizing:border-box; text-align:center;" onkeydown="if(event.key==='Enter') window.handleCacciaQsoNrEnter(event)">
                 </div>
             </div>
             <button onclick="window.handleCacciaQsoSubmit()" class="btn-champ" style="width:100% !important; height:46px; font-weight:bold; font-size:1em; border-radius:8px; display:block;">TRASMETTI EXCHANGE & COMPLETA QSO 💬</button>
