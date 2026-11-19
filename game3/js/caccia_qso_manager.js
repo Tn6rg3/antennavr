@@ -507,6 +507,73 @@
     };
 
     /**
+     * SINTESI MORSE TRASMISSIONE LOCALE OPERATORE (SIDETONE TASTO UTENTE)
+     */
+    window.playCacciaQsoUserSidetone = function(text, onCompleteCallback) {
+        const state = window.cacciaQsoState;
+        const inputEl = document.getElementById('cacciaQsoInput');
+
+        if (!state.radioOn || !state.audioCtx) {
+            if (onCompleteCallback) onCompleteCallback();
+            return;
+        }
+
+        if (inputEl) inputEl.disabled = true;
+
+        const cleanText = String(text || "").toUpperCase();
+        const morseDict = window.morseDict || {};
+        const wpm = 22; // Velocita trasmissione tasto utente
+        const unitSec = 1.2 / wpm;
+        const sidetoneFreq = 650; // Tono sidetone trasmettitore
+        let delayMs = 0;
+
+        for (let i = 0; i < cleanText.length; i++) {
+            const char = cleanText[i];
+            if (char === ' ') {
+                delayMs += unitSec * 4 * 1000;
+                continue;
+            }
+
+            const code = morseDict[char] || morseDict[char.toUpperCase()];
+            if (!code) continue;
+
+            for (let j = 0; j < code.length; j++) {
+                const symbol = code[j];
+                const durMs = (symbol === '-') ? (unitSec * 3 * 1000) : (unitSec * 1000);
+
+                setTimeout(() => {
+                    if (state.radioOn && state.audioCtx) {
+                        try {
+                            const osc = state.audioCtx.createOscillator();
+                            const gain = state.audioCtx.createGain();
+                            osc.type = 'sine';
+                            osc.frequency.value = sidetoneFreq;
+                            gain.gain.value = 0.22; // Tono locale forte e chiaro
+
+                            osc.connect(gain);
+                            gain.connect(state.audioCtx.destination);
+
+                            osc.start();
+                            osc.stop(state.audioCtx.currentTime + (durMs / 1000));
+
+                            // Lancetta S-Meter al massimo S9+ durante la trasmissione dell'operatore!
+                            window.updateCacciaQsoSMeter(10);
+                        } catch(e){}
+                    }
+                }, delayMs);
+
+                delayMs += durMs + (unitSec * 1000);
+            }
+            delayMs += unitSec * 2 * 1000;
+        }
+
+        setTimeout(() => {
+            if (inputEl) inputEl.disabled = false;
+            if (onCompleteCallback) onCompleteCallback();
+        }, delayMs + 300);
+    };
+
+    /**
      * GESTIONE SUBMISSION CONTEST EXCHANGE (TEXTBOX)
      */
     window.handleCacciaQsoSubmit = function() {
@@ -526,62 +593,65 @@
 
         const st = state.activeStation;
 
-        // FASE 1: Inserimento Nominativo Sentito
-        if (state.currentQsoStep === 'LISTENING' || state.currentQsoStep === 'IDLE') {
-            if (val === st.callsign) {
-                state.currentQsoStep = 'CALL_MATCHED';
-                if (typeof showToast === 'function') showToast(`✅ Nominativo ${st.callsign} Corretto! La stazione ti risponde...`);
-            } else {
-                if (typeof showToast === 'function') showToast(`❌ Nominativo Errato (Sintonizzato su ${st.callsign})`);
+        // 1. L'UTENTE SUONA PRIMA LA PROPRIA TRASMISSIONE IN CODICE MORSE (SIDETONE LOCALE)
+        window.playCacciaQsoUserSidetone(val, () => {
+            // 2. DOPO CHE L'UTENTE HA FINITO DI TRASMETTERE, LA STAZIONE RICEVENTE RISPONDE!
+            if (state.currentQsoStep === 'LISTENING' || state.currentQsoStep === 'IDLE') {
+                if (val === st.callsign) {
+                    state.currentQsoStep = 'CALL_MATCHED';
+                    if (typeof showToast === 'function') showToast(`✅ Nominativo ${st.callsign} Corretto! La stazione ti risponde...`);
+                } else {
+                    if (typeof showToast === 'function') showToast(`❌ Nominativo Errato (Sintonizzato su ${st.callsign})`);
+                }
+                return;
             }
-            return;
-        }
 
-        // FASE 2: Inserimento Tuo Rapporto e Progressivo (es. 599 001)
-        if (state.currentQsoStep === 'CALL_MATCHED') {
-            const mySerialFormatted = String(state.mySerialNum).padStart(3, '0');
-            state.currentQsoStep = 'COMPLETED';
-            st.completed = true;
+            // FASE 2: Inserimento Tuo Rapporto e Progressivo (es. 599 001)
+            if (state.currentQsoStep === 'CALL_MATCHED') {
+                const mySerialFormatted = String(state.mySerialNum).padStart(3, '0');
+                state.currentQsoStep = 'COMPLETED';
+                st.completed = true;
 
-            // Assegnazione Punti Contest
-            const ptsGain = Math.round(100 + (st.wpm * 2) + (st.sMeterBase * 5));
-            state.totalPoints += ptsGain;
-            state.qsoCompletedCount++;
+                // Assegnazione Punti Contest
+                const ptsGain = Math.round(100 + (st.wpm * 2) + (st.sMeterBase * 5));
+                state.totalPoints += ptsGain;
+                state.qsoCompletedCount++;
 
-            // Inserimento nel Logbook di Stazione
-            const logEntry = {
-                num: state.qsoCompletedCount,
-                time: new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}),
-                callsign: st.callsign,
-                freqKhz: (st.freqHz / 1000).toFixed(1),
-                rstSent: '599',
-                serialSent: mySerialFormatted,
-                rstRcvd: st.rst,
-                serialRcvd: st.serialNum,
-                pts: ptsGain
-            };
+                // Inserimento nel Logbook di Stazione
+                const logEntry = {
+                    num: state.qsoCompletedCount,
+                    time: new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}),
+                    callsign: st.callsign,
+                    freqKhz: (st.freqHz / 1000).toFixed(1),
+                    rstSent: '599',
+                    serialSent: mySerialFormatted,
+                    rstRcvd: st.rst,
+                    serialRcvd: st.serialNum,
+                    pts: ptsGain
+                };
 
-            state.logbook.unshift(logEntry);
-            state.mySerialNum++;
+                state.logbook.unshift(logEntry);
+                state.mySerialNum++;
 
-            window.renderCacciaQsoLogbook();
-            window.updateCacciaQsoScoreUI();
+                window.renderCacciaQsoLogbook();
+                window.updateCacciaQsoScoreUI();
 
-            if (typeof showToast === 'function') showToast(`🏆 QSO Concluso con ${st.callsign}! +${ptsGain} pt`);
+                if (typeof showToast === 'function') showToast(`🏆 QSO Concluso con ${st.callsign}! +${ptsGain} pt`);
 
-            // RIGENERAZIONE AUTOMATICA BANDA OGNI 4 QSO
-            if (state.qsoCompletedCount % 4 === 0) {
+                // RIGENERAZIONE AUTOMATICA BANDA OGNI 4 QSO
+                if (state.qsoCompletedCount % 4 === 0) {
+                    setTimeout(() => {
+                        window.generateCacciaQsoStations();
+                        if (typeof showToast === 'function') showToast("🔄 Banda 40m Rigenerata con Nuove Stazioni!");
+                    }, 2000);
+                }
+
                 setTimeout(() => {
-                    window.generateCacciaQsoStations();
-                    if (typeof showToast === 'function') showToast("🔄 Banda 40m Rigenerata con Nuove Stazioni!");
-                }, 2000);
+                    state.currentQsoStep = 'IDLE';
+                    state.activeStation = null;
+                }, 3000);
             }
-
-            setTimeout(() => {
-                state.currentQsoStep = 'IDLE';
-                state.activeStation = null;
-            }, 3000);
-        }
+        });
     };
 
     /**

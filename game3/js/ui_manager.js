@@ -21,11 +21,11 @@ window.populateGameModesUI = function() {
 
         // --- LOGICA FILTRI ---
         if (isSingle) {
-            // QSO, modalità Arcade (Pioggia, Torre, Memory CW), Tx/Rx e Gruppi non sono ammesse in Solo
-            if (mode.id === 'qso' || mode.id === 'code_groups' || mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'memory_cw' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'addestra_ia') return;
+            // QSO, modalità Arcade (Pioggia, Torre, Memory CW), Tx/Rx, Caccia QSO e Gruppi non sono ammesse in Solo
+            if (mode.id === 'qso' || mode.id === 'code_groups' || mode.id === 'pingpong' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'memory_cw' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'caccia_qso' || mode.id === 'addestra_ia') return;
         } else if (isMulti) {
             // Modalità ammesse in Multi
-            if (mode.id === 'code_groups' || mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'memory_cw' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'addestra_ia') return;
+            if (mode.id === 'code_groups' || mode.id === 'perfection' || mode.id === 'conquest' || mode.id === 'arcade' || mode.id === 'la_torre' || mode.id === 'memory_cw' || mode.id === 'groups_tx' || mode.id === 'real_tx' || mode.id === 'caccia_qso' || mode.id === 'addestra_ia') return;
         } else if (isCoop) {
             if (mode.id !== 'conquest') return;
         } else if (isTx) {
