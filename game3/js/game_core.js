@@ -89,6 +89,20 @@ window.showScreen = function(screenId) {
 
 
 
+    window.currentScreenId = screenId;
+
+    // Se torniamo alla Home Screen e c'era una celebrazione milestone 100 partite rinviata, la attiviamo ora!
+    if (screenId === 'setupScreen' && window.pendingCommunityMilestone) {
+        const p = window.pendingCommunityMilestone;
+        window.pendingCommunityMilestone = null;
+        localStorage.setItem(p.ackKey, "true");
+        setTimeout(() => {
+            if (typeof window.triggerCommunityMilestoneCelebration === 'function') {
+                window.triggerCommunityMilestoneCelebration(p.milestone);
+            }
+        }, 800);
+    }
+
     if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
     }

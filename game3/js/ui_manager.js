@@ -249,6 +249,63 @@ window.checkGameTypeUI = function() {
             else containers.btn.textContent = (isSingle || isTx) ? (currentLang==='it'?"Gioca Subito":"Play Now") : (currentLang==='it'?"Inizia Partita Libera":"Start Free Match");
         }
     }
+
+    // Ri-applica e mantiene sempre coerenti le impostazioni salvate dell'utente
+    if (typeof window.restoreGamePreferences === 'function') {
+        window.restoreGamePreferences();
+    }
+};
+
+window.saveGamePreferences = function() {
+    try {
+        const typeEl = document.getElementById('gameTypeInput');
+        const modeEl = document.getElementById('gameModeInput');
+        const wpmEl = document.getElementById('startWpmInput');
+        const wordsEl = document.getElementById('wordCountInput');
+        const wordLenEl = document.getElementById('wordLengthInput');
+        const toneEl = document.getElementById('toneInput');
+        const charSpaceEl = document.getElementById('charSpaceInput');
+        const wordSpaceEl = document.getElementById('wordSpaceSelect');
+        const fixedEl = document.getElementById('fixedSpeedCheckbox');
+        const allowSpectatorsEl = document.getElementById('allowSpectatorsCheckbox');
+        const voiceRateEl = document.getElementById('voiceRateSelect');
+
+        if (typeEl) localStorage.setItem('cwgame_pref_type', typeEl.value);
+        if (modeEl) localStorage.setItem('cwgame_pref_mode', modeEl.value);
+        if (wpmEl) localStorage.setItem('STORAGE_PREF_WPM', wpmEl.value);
+        if (wordsEl) localStorage.setItem('STORAGE_PREF_WORDS', wordsEl.value);
+        if (wordLenEl) localStorage.setItem('STORAGE_PREF_WORD_LEN', wordLenEl.value);
+        if (toneEl) localStorage.setItem('STORAGE_PREF_TONE', toneEl.value);
+        if (charSpaceEl) localStorage.setItem('STORAGE_PREF_CHAR_SPACE', charSpaceEl.value);
+        if (wordSpaceEl) localStorage.setItem('STORAGE_PREF_WORD_SPACE', wordSpaceEl.value);
+        if (fixedEl) localStorage.setItem('STORAGE_PREF_FIXED', fixedEl.checked);
+        if (allowSpectatorsEl) localStorage.setItem('STORAGE_PREF_SPECTATE', allowSpectatorsEl.checked);
+        if (voiceRateEl) localStorage.setItem('cwgame_pref_voice_rate', voiceRateEl.value);
+    } catch(e){}
+};
+
+window.restoreGamePreferences = function() {
+    try {
+        const wpmEl = document.getElementById('startWpmInput');
+        const wordsEl = document.getElementById('wordCountInput');
+        const wordLenEl = document.getElementById('wordLengthInput');
+        const toneEl = document.getElementById('toneInput');
+        const charSpaceEl = document.getElementById('charSpaceInput');
+        const wordSpaceEl = document.getElementById('wordSpaceSelect');
+        const fixedEl = document.getElementById('fixedSpeedCheckbox');
+        const allowSpectatorsEl = document.getElementById('allowSpectatorsCheckbox');
+        const voiceRateEl = document.getElementById('voiceRateSelect');
+
+        if (wpmEl && localStorage.getItem('STORAGE_PREF_WPM')) wpmEl.value = localStorage.getItem('STORAGE_PREF_WPM');
+        if (wordsEl && localStorage.getItem('STORAGE_PREF_WORDS')) wordsEl.value = localStorage.getItem('STORAGE_PREF_WORDS');
+        if (wordLenEl && localStorage.getItem('STORAGE_PREF_WORD_LEN')) wordLenEl.value = localStorage.getItem('STORAGE_PREF_WORD_LEN');
+        if (toneEl && localStorage.getItem('STORAGE_PREF_TONE')) toneEl.value = localStorage.getItem('STORAGE_PREF_TONE');
+        if (charSpaceEl && localStorage.getItem('STORAGE_PREF_CHAR_SPACE')) charSpaceEl.value = localStorage.getItem('STORAGE_PREF_CHAR_SPACE');
+        if (wordSpaceEl && localStorage.getItem('STORAGE_PREF_WORD_SPACE')) wordSpaceEl.value = localStorage.getItem('STORAGE_PREF_WORD_SPACE');
+        if (fixedEl && localStorage.getItem('STORAGE_PREF_FIXED') !== null) fixedEl.checked = (localStorage.getItem('STORAGE_PREF_FIXED') === 'true');
+        if (allowSpectatorsEl && localStorage.getItem('STORAGE_PREF_SPECTATE') !== null) allowSpectatorsEl.checked = (localStorage.getItem('STORAGE_PREF_SPECTATE') === 'true');
+        if (voiceRateEl && localStorage.getItem('cwgame_pref_voice_rate')) voiceRateEl.value = localStorage.getItem('cwgame_pref_voice_rate');
+    } catch(e){}
 };
 
 window.showRoomEventModal = function(title, message) {

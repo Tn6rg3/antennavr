@@ -4436,6 +4436,16 @@ window.checkCommunityMatchesMilestone = function(totalCommunityMatches, todayStr
     const ackKey = `cwgame_community_milestone_${todayStr}_${milestone}`;
 
     if (!localStorage.getItem(ackKey)) {
+        // VERIFICA SE L'UTENTE STA GIOCANDO O E' IN SCHERMATA DI GIOCO/CONTEST!
+        const playingScreens = ['gameArea', 'countdownScreen', 'quizArea', 'qsoArea', 'cacciaQsoScreen', 'realTxScreen', 'arcadeScreen', 'courseSessionScreen', 'courseLessonArea'];
+        const isUserInGame = (window.gameRunning === true) || playingScreens.includes(window.currentScreenId || '');
+
+        if (isUserInGame) {
+            window.pendingCommunityMilestone = { milestone, todayStr, ackKey };
+            console.log(`⏰ Community Milestone ${milestone} rinviata a fine partita per non disturbare il gioco.`);
+            return;
+        }
+
         localStorage.setItem(ackKey, "true");
         window.triggerCommunityMilestoneCelebration(milestone);
     }
