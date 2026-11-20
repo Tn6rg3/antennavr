@@ -39,6 +39,37 @@ window.initPingPongManager = function() {
 };
 
 window.setupPingPongListener = function() {
+    window.hasNotifiedPingPongAbandon = false;
+
+    // Listener sullo stato dei giocatori in stanza per rilevare abbandoni ed uscite in tempo reale
+    if (listeners.pingPongPlayers) try { db.ref(`rooms/${roomCode}/players`).off('value', listeners.pingPongPlayers); } catch(e){}
+    listeners.pingPongPlayers = db.ref(`rooms/${roomCode}/players`).on('value', pSnap => {
+        if (!gameRunning || currentMode !== 'pingpong') return;
+        const players = pSnap.val() || {};
+        const pArray = Object.values(players);
+        const myNameLower = (window.myName || "").toLowerCase();
+
+        const oppAbandoned = pArray.find(p => (p.abandoned === true || p.online === false) && (p.name || "").toLowerCase() !== myNameLower);
+
+        if (oppAbandoned && !window.hasNotifiedPingPongAbandon && !players[myId]?.finished) {
+            window.hasNotifiedPingPongAbandon = true;
+            if (ppTimerInterval) clearInterval(ppTimerInterval);
+
+            window.isForfeitWin = true;
+            window.totalScore = Math.max(Number(window.totalScore) || 0, 100);
+            if (!window.peakWpm || window.peakWpm === 0) window.peakWpm = Number(window.currentWpm) || 20;
+
+            gameRunning = false;
+            const oppName = oppAbandoned.name || (currentLang === 'it' ? 'L\'avversario' : 'Opponent');
+            const msg = currentLang === 'it'
+                ? `🏆 ${oppName} ha abbandonato la partita Ping Pong! Hai vinto a tavolino (+100 pt)!`
+                : `🏆 ${oppName} abandoned the Ping Pong match! You win by default (+100 pt)!`;
+
+            if (window.tg && window.tg.showAlert) window.tg.showAlert(msg); else alert(msg);
+            window.finishGame();
+        }
+    });
+
     if (listeners.pingPong) db.ref(`rooms/${roomCode}/pingpong`).off('value', listeners.pingPong);
     listeners.pingPong = db.ref(`rooms/${roomCode}/pingpong`).on('value', snap => {
         if (!gameRunning) return;

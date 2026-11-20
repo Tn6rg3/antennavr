@@ -911,27 +911,23 @@ window.startCountdownSequence = function() {
                     showToast(currentLang === 'it' ? `🏁 ${finishedOpponent.name || 'L\'avversario'} ha completato la prova! Concludi le tue parole.` : `🏁 ${finishedOpponent.name || 'Opponent'} finished their test! Complete your words.`);
                 }
 
-                if (gameStartPlayerCount >= 2 && hasExplicitAbandoned) {
-                    // Chiudiamo a tavolino solo se c'è stato un abbandono esplicito (pulsante Abbandona)
-                    db.ref(`rooms/${roomCode}/status`).once('value', sSnap => {
-                        const currentStatus = sSnap.val();
+                const oppAbandoned = playersArray.find(p => (p.abandoned === true) && (p.name || "").toLowerCase() !== myNameLower);
 
-                        if ((currentStatus === 'playing' || hasExplicitAbandoned) && !players[myId]?.finished) {
-                            if (window.currentMode === 'conquest' || window.isCoopMode) {
-                                showToast(currentLang === 'it' ? "Il tuo compagno ha abbandonato. Continua la missione da solo! ⚔️" : "Your teammate left. Continue the mission alone! ⚔️");
-                                return;
-                            }
+                if ((hasExplicitAbandoned || oppAbandoned) && !players[myId]?.finished) {
+                    if (window.currentMode === 'conquest' || window.isCoopMode) {
+                        showToast(currentLang === 'it' ? "Il tuo compagno ha abbandonato. Continua la missione da solo! ⚔️" : "Your teammate left. Continue the mission alone! ⚔️");
+                        return;
+                    }
 
-                            window.isForfeitWin = true;
-                            window.totalScore = Math.max(Number(window.totalScore) || 0, 100);
-                            if (!window.peakWpm || window.peakWpm === 0) window.peakWpm = Number(window.currentWpm) || 20;
+                    window.isForfeitWin = true;
+                    window.totalScore = Math.max(Number(window.totalScore) || 0, 100);
+                    if (!window.peakWpm || window.peakWpm === 0) window.peakWpm = Number(window.currentWpm) || 20;
 
-                            gameRunning = false;
-                            const msg = currentLang === 'it' ? "🏆 L'avversario ha abbandonato la partita! Hai vinto a tavolino (+100 pt)!" : "🏆 Opponent abandoned! You win by default (+100 pt)!";
-                            if (window.tg && window.tg.showAlert) window.tg.showAlert(msg); else alert(msg);
-                            window.finishGame();
-                        }
-                    });
+                    gameRunning = false;
+                    const oppName = oppAbandoned?.name || (currentLang === 'it' ? 'L\'avversario' : 'Opponent');
+                    const msg = currentLang === 'it' ? `🏆 ${oppName} ha abbandonato la partita! Hai vinto a tavolino (+100 pt)!` : `🏆 ${oppName} abandoned! You win by default (+100 pt)!`;
+                    if (window.tg && window.tg.showAlert) window.tg.showAlert(msg); else alert(msg);
+                    window.finishGame();
                 }
 
                 // Caso 2: Qualcuno è ancora nel nodo ma è andato Offline (Crash o chiusura app)
