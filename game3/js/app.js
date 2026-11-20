@@ -3860,12 +3860,9 @@ window.renderTriDailyHubCards = function() {
             } else if (isCompleted) {
                 badgeSpan.style.color = "#4caf50";
                 badgeSpan.textContent = `✅ ${score} pt (${finalWpm} WPM)`;
-            } else if (isPlayed && isCurrentSlotActive) {
-                badgeSpan.style.color = "#ff9800";
-                badgeSpan.textContent = `⚠️ Interrotta (Riprendi da ${resumeNextIndex}/${s.words})`;
             } else if (isPlayed) {
                 badgeSpan.style.color = "#ff9800";
-                badgeSpan.textContent = `⚠️ Interrotta (Tempo Scaduto)`;
+                badgeSpan.textContent = `⚠️ Interrotta (Riprendi da ${resumeNextIndex}/${s.words})`;
             } else if (isCurrentSlotActive) {
                 badgeSpan.style.color = "#ff9800";
                 badgeSpan.style.animation = "pulse 1.5s infinite";
@@ -3885,7 +3882,8 @@ window.renderTriDailyHubCards = function() {
             infoDiv.textContent = `${s.words} Parole | Incremento WPM: ${s.step}`;
             card.appendChild(infoDiv);
 
-            const shouldShowButtons = isCurrentSlotActive && !isCompleted && !isWithdrawn;
+            // Mostra i pulsanti per avviare o riprendere una sessione non completata/non ritirata
+            const shouldShowButtons = !isCompleted && !isWithdrawn && (isPlayed || isCurrentSlotActive);
 
             if (shouldShowButtons) {
                 const btnDiv = document.createElement('div');
@@ -3895,10 +3893,10 @@ window.renderTriDailyHubCards = function() {
                 startBtnEl.className = "btn-success";
                 startBtnEl.style.cssText = "flex:2; padding:8px; font-size:0.85em; margin:0;";
 
-                if (isPlayed && resumeData) {
+                if (isPlayed) {
                     startBtnEl.textContent = `🔄 RIPRENDI DA PAROLA ${resumeNextIndex} / ${s.words} 🚀`;
                     startBtnEl.onclick = () => window.resumeTriDailySession(s.id, resumeData);
-                } else if (!isPlayed) {
+                } else {
                     startBtnEl.textContent = `INIZIA SESSIONE (${s.words} PAROLE) 🚀`;
                     startBtnEl.onclick = () => window.showTriDailyPreview(s.id);
                 }
@@ -3909,11 +3907,9 @@ window.renderTriDailyHubCards = function() {
                 withdrawBtnEl.textContent = "🏃 Ritirati";
                 withdrawBtnEl.onclick = () => window.withdrawTriDailySession(s.id);
 
-                if (startBtnEl.textContent) {
-                    btnDiv.appendChild(startBtnEl);
-                    btnDiv.appendChild(withdrawBtnEl);
-                    card.appendChild(btnDiv);
-                }
+                btnDiv.appendChild(startBtnEl);
+                btnDiv.appendChild(withdrawBtnEl);
+                card.appendChild(btnDiv);
             }
 
             cardsContainer.appendChild(card);
@@ -4021,14 +4017,17 @@ window.withdrawTriDailySession = function(slotId) {
 };
 
 window.resumeTriDailySession = function(slotId, resumeData) {
-    if (!resumeData) return;
     window.resetGameState();
 
     const todayStr = window.getLocalDateString();
-    const slotInfo = typeof window.getTriDailySlot === 'function' ? window.getTriDailySlot() : { wordCount: 10, defaultWpm: 15 };
 
-    const nextWordIndex = (Number(resumeData.wordIndex) || 0) + 1; // Salta la parola interrotta e passa alla successiva
-    const totalWordsCount = slotInfo.wordCount || 10;
+    // Se resumeData e nullo/mancante (es. interruzione al primissimo tentativo), creiamo la struttura base di ripresa da parola 1
+    if (!resumeData) {
+        resumeData = { wordIndex: -1, currentWpm: 15, peakWpm: 15, totalScore: 0, matchDetailsArray: [] };
+    }
+
+    const nextWordIndex = Math.max(0, (Number(resumeData.wordIndex) || -1) + 1);
+    const totalWordsCount = (slotId === 'morning' ? 10 : slotId === 'afternoon' ? 15 : 20);
 
     if (nextWordIndex >= totalWordsCount) {
         if (typeof window.finishGame === 'function') window.finishGame();
@@ -4058,6 +4057,9 @@ window.resumeTriDailySession = function(slotId, resumeData) {
 
     if (typeof window.showScreen === 'function') {
         window.showScreen('gameArea');
+        if (typeof window.startCountdownSequence === 'function') {
+            window.startCountdownSequence();
+        }
     }
 
     // Ricostruiamo la tabella delle parole già svolte
