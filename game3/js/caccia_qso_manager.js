@@ -228,7 +228,7 @@
             setTimeout(() => {
                 if (!state.radioOn || state.subMode !== 'run') return;
 
-                // Se ci sono già chiamanti rimasti dal pile-up precedente, aggiungi al massimo 1-2 nuovi chiamanti
+                // Se ci sono già chiamanti rimasti dal pile-up precedente, aggiungi al massimo 1 nuovo chiamante
                 const existingCount = state.stations.length;
                 const numNewCallers = existingCount > 0
                     ? Math.floor(Math.random() * 2) // 0 o 1 nuovo chiamante
@@ -264,6 +264,7 @@
                         isCallingCq: false,
                         isPlayingMorse: false,
                         isPartialRepeat: false,
+                        retryingTimer: null,
                         playToken: 0,
                         completed: false
                     };
@@ -336,6 +337,7 @@
                 isCallingCq: true,
                 isPlayingMorse: false,
                 isPartialRepeat: false,
+                retryingTimer: null,
                 playToken: 0,
                 completed: false
             });
@@ -443,6 +445,10 @@
         state.stations.forEach(st => {
             st.playToken = (st.playToken || 0) + 1;
             st.isPlayingMorse = false;
+            if (st.retryingTimer) {
+                clearTimeout(st.retryingTimer);
+                st.retryingTimer = null;
+            }
         });
     };
 
@@ -513,6 +519,21 @@
                     // In S&P Mode le stazioni chiamano CQ in loop finché non vengono agganciate
                     if (state.subMode === 'search_pounce' && st.isCallingCq && proximityFactor > 0.05 && !st.isPlayingMorse) {
                         window.playCacciaQsoStationMorse(st, freqDiffHz, proximityFactor * qsbFactor);
+                    }
+                    // In RUN Mode le stazioni del pile-up continuano a richiamare finché non rispondi
+                    else if (state.subMode === 'run' && state.currentQsoStep === 'LISTENING' && !st.isPlayingMorse) {
+                        // Se avevi già agganciato una stazione con un parziale ("XYZ ?"), lascia chiamare solo lei
+                        if (state.activeStation && st !== state.activeStation) return;
+
+                        if (!st.retryingTimer) {
+                            st.retryingTimer = setTimeout(() => {
+                                st.retryingTimer = null;
+                                if (state.radioOn && state.subMode === 'run' && state.currentQsoStep === 'LISTENING' && !st.completed && !state.isUserTransmitting) {
+                                    const currentDiff = Math.abs(st.freqHz - state.vfoFreqHz);
+                                    window.playCacciaQsoStationMorse(st, currentDiff, proximityFactor * qsbFactor);
+                                }
+                            }, 150 + Math.random() * 500);
+                        }
                     }
                 }
             });
@@ -743,7 +764,6 @@
             state.isUserTransmitting = false;
             if (inputEl) {
                 inputEl.disabled = false;
-                // Mantieni il focus sul campo appropriato dopo la trasmissione
                 if (state.currentQsoStep !== 'CALL_MATCHED') {
                     inputEl.focus();
                 }
@@ -798,15 +818,10 @@
         // Determina cosa trasmette l'operatore in base al modo e al tipo di match
         let txMessage = "";
         if (bestSt && bestMatch.exact) {
-            // Nominativo esatto:
-            // In RUN mode mando subito "[CALL] 5NN [SERIAL]"
-            // In S&P mode mando il mio nominativo "[MY_CALL]"
             txMessage = (state.subMode === 'run') ? `${val} 5NN ${mySerialFormatted}` : `${myCall}`;
         } else if (bestSt && bestMatch.partial) {
-            // Nominativo parziale (es. "XYZ"): mando "[PARZIALE] ?" per chiedere conferma
             txMessage = `${val} ?`;
         } else {
-            // Nessun match: in RUN mando comunque quello che ho digitato con "?", in S&P chiamo comunque con il mio nominativo
             txMessage = (state.subMode === 'run') ? `${val} ?` : `${myCall}`;
         }
 
@@ -851,9 +866,11 @@
             }
             // CASO C: NESSUNA CORRISPONDENZA VALIDA
             else {
+                state.activeStation = null;
                 if (state.subMode === 'search_pounce') {
-                    state.activeStation = null;
                     state.currentQsoStep = 'IDLE';
+                } else {
+                    state.currentQsoStep = 'LISTENING';
                 }
                 if (callInput) callInput.focus();
             }
