@@ -330,7 +330,7 @@
     <h3 style="color: #00bcd4; margin: 0 0 8px 0; font-size: 1.15em;">Commento a Caldo sulla Sfida</h3>
     <p style="font-size: 0.85em; color: var(--hint-color); margin-bottom: 8px;">Scrivi un breve commento (max 60 caratteri su una singola riga).</p>
 
-    <input type="text" id="postMatchCommentInput" aria-label="Commento a caldo sulla sfida" placeholder="es. Ottimo ritmo! Sfida entusiasmante..." maxlength="60" style="width: 100%; padding: 10px; font-size: 0.9em; background: #ffffff; color: #000000; border-radius: 6px; border: 1px solid #00bcd4; box-sizing: border-box; margin-bottom: 4px; font-weight: bold;">
+    <input type="text" id="postMatchCommentInput" aria-label="Commento a caldo sulla sfida" placeholder="es. Ottimo ritmo! Sfida entusiasmante..." maxlength="60" style="width: 100%; padding: 10px; font-size: 0.9em; background: #ffffff; color: #000000; border-radius: 6px; border: 1px solid #00bcd4; box-sizing: border-box; margin-bottom: 4px; font-weight: bold;" onkeydown="if(event.key==='Enter'){ event.preventDefault(); window.submitPostMatchComment(); }">
     <small style="font-size:0.75em; color:var(--hint-color); display:block; margin-bottom:14px;">Massimo 60 caratteri (una singola riga)</small>
 
     <div style="display: flex; gap: 8px;">
