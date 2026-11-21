@@ -2216,7 +2216,7 @@ window.submitPostMatchComment = function() {
         return alert("⚠️ Il commento è troppo lungo per stare su una singola riga!\n\nRiducilo a massimo 60 caratteri.");
     }
 
-    const mode = window.currentMode;
+    const mode = window.lastCommentTargetMode || window.currentMode;
     const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
     let targetRef = null;
 
@@ -2229,7 +2229,7 @@ window.submitPostMatchComment = function() {
         targetRef = db.ref(`leaderboard/weekly_callsign_challenge/${eventKey}/${window.myId}/comment`);
     }
 
-    if (targetRef) {
+    if (targetRef && db && window.myId) {
         targetRef.set(commentText).then(() => {
             if (typeof showToast === 'function') showToast("💬 Commento salvato!");
             if (modal) modal.style.display = 'none';
@@ -2238,6 +2238,7 @@ window.submitPostMatchComment = function() {
             if (modal) modal.style.display = 'none';
         });
     } else {
+        console.warn("PostMatchComment: Target ref not set or myId missing", mode);
         if (modal) modal.style.display = 'none';
     }
 };

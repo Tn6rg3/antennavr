@@ -1564,7 +1564,7 @@ window.finishGame = async function() {
                             const bestWpm = Math.max(window.peakWpm, oldWpm);
                             const todayDateStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
 
-                            db.ref(dbPath).set({
+                            db.ref(dbPath).update({
                                 name: window.myName,
                                 username: window.myPrivacy ? "" : tgUsername,
                                 score: bestScore,
@@ -1734,14 +1734,16 @@ window.finishGame = async function() {
     // --- COMMENTO A CALDO POST-SFIDA (Sfida Giornaliera, Sfida Tripla, 50 Nominativi) ---
     const isTargetCommentMode = ['daily_challenge', 'tri_daily', 'weekly_callsign'].includes(window.currentMode);
     if (isTargetCommentMode && totalScore > 0 && db && window.myId) {
+        window.lastCommentTargetMode = window.currentMode; // Mantiene la modalità di riferimento del commento
         setTimeout(() => {
             const modal = document.getElementById('postMatchCommentModal');
             const input = document.getElementById('postMatchCommentInput');
             if (modal) {
                 if (input) input.value = "";
                 modal.style.display = 'flex';
+                setTimeout(() => { if (input) input.focus(); }, 300);
             }
-        }, 1200);
+        }, 1000);
     }
 
     // Rimosso reindirizzamento automatico dopo 3s per consentire la revisione e l'analisi della partita
