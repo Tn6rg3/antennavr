@@ -1272,10 +1272,6 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
             `;
             player._commentBoxElement = commentBox;
         }
-                </div>
-            `;
-            player._commentBoxElement = commentBox;
-        }
 
         container.appendChild(row);
 
