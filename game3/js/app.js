@@ -1440,6 +1440,46 @@ window.initMandatoryAliasHandlers = function() {
 
         window.initDailyRealQsosManager();
 
+        // --- BANNERS HOME SCOMPORSA AUTOMATICA DOPO 5 SECONDI ---
+        window.initHomeIntroBannersAutoTimer = function() {
+            if (window.homeBannersTimer) clearTimeout(window.homeBannersTimer);
+            window.homeBannersTimer = setTimeout(() => {
+                window.hideHomeIntroBanners();
+            }, 5000);
+        };
+
+        window.hideHomeIntroBanners = function() {
+            const container = document.getElementById('homeIntroBannersContainer');
+            const toggleBar = document.getElementById('homeBannersToggleBar');
+            if (!container) return;
+
+            container.style.opacity = '0';
+            container.style.maxHeight = '0px';
+
+            setTimeout(() => {
+                container.style.display = 'none';
+                if (toggleBar) toggleBar.style.display = 'block';
+            }, 500);
+        };
+
+        window.toggleHomeIntroBanners = function() {
+            const container = document.getElementById('homeIntroBannersContainer');
+            const toggleBar = document.getElementById('homeBannersToggleBar');
+            if (!container) return;
+
+            if (container.style.display === 'none' || container.style.opacity === '0') {
+                container.style.display = 'block';
+                void container.offsetWidth;
+                container.style.opacity = '1';
+                container.style.maxHeight = '250px';
+                if (toggleBar) toggleBar.style.display = 'none';
+            } else {
+                window.hideHomeIntroBanners();
+            }
+        };
+
+        window.initHomeIntroBannersAutoTimer();
+
         // --- ATTIVAZIONE SISTEMA SFIDE (Fix Avvio Simultaneo) ---
         if (typeof window.listenToInviteAccepted === 'function') {
             window.listenToInviteAccepted();
