@@ -1392,6 +1392,16 @@ window.initMandatoryAliasHandlers = function() {
                         window.updateDailyRealQsosDisplay(fbVal);
                     }
                 }).catch(() => {});
+
+                // Pulizia automatica self-healing di eventuali nodi fantasma privi di punteggio nella classifica di oggi
+                db.ref(`leaderboard/daily_challenge/${todayStr}/${window.myId}`).once('value', snap => {
+                    if (snap.exists() && snap.val()) {
+                        const val = snap.val();
+                        if (!val.score && !val.name) {
+                            db.ref(`leaderboard/daily_challenge/${todayStr}/${window.myId}`).remove().catch(() => {});
+                        }
+                    }
+                }).catch(() => {});
             }
         };
 
@@ -1414,9 +1424,17 @@ window.initMandatoryAliasHandlers = function() {
             if (db && window.myId) {
                 db.ref(`users/${window.myId}/daily_real_qsos/${todayStr}`).set(newVal).catch(() => {});
 
-                // Aggiorna in tempo reale i record di oggi nelle classifiche attive se presenti
-                db.ref(`leaderboard/daily_challenge/${todayStr}/${window.myId}`).update({ realQsos: newVal }).catch(() => {});
-                db.ref(`leaderboard/tri_daily/${todayStr}/${window.myId}`).update({ realQsos: newVal }).catch(() => {});
+                // Aggiorna nelle classifiche di oggi SOLO SE L'UTENTE HA GIA' UN RECORD VALIDO ESISTENTE!
+                const updateIfExists = (path) => {
+                    db.ref(path).once('value', snap => {
+                        if (snap.exists() && snap.val() && (snap.val().score > 0 || snap.val().totalScore > 0)) {
+                            db.ref(path).update({ realQsos: newVal }).catch(() => {});
+                        }
+                    }).catch(() => {});
+                };
+
+                updateIfExists(`leaderboard/daily_challenge/${todayStr}/${window.myId}`);
+                updateIfExists(`leaderboard/tri_daily/${todayStr}/${window.myId}`);
             }
         };
 

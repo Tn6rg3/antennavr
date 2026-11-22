@@ -812,7 +812,7 @@ window.fetchAndRenderGlobalLeaderboard = async function(tabType, filterWordCount
             let players = [];
             snapshot.forEach(child => {
                 let p = child.val();
-                if (p) {
+                if (p && (Number(p.score) > 0 || p.name)) {
                     p.id = child.key;
                     p.dbPath = `leaderboard/daily_challenge/${todayStr}/${child.key}`;
                     players.push(p);
