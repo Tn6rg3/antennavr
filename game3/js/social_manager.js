@@ -425,6 +425,15 @@ window.renderOrUpdateUserListItem = function(userId, u) {
     lvDiv.textContent = `Lv. ${userLevel}`;
     statusRow.appendChild(lvDiv);
 
+    const userRealQsos = Number(u.realQsos || u.dailyRealQsos || 0);
+    if (userRealQsos > 0) {
+        const qsoDiv = document.createElement('div');
+        qsoDiv.style.cssText = "font-size: 0.72em; color: #00bcd4; font-weight: bold;";
+        qsoDiv.title = "QSO Reali effettuati in radio oggi";
+        qsoDiv.textContent = `[📻 ${userRealQsos} QSO]`;
+        statusRow.appendChild(qsoDiv);
+    }
+
     // Badge Stato Speciale
     if (isIChallengingHim) {
         const badge = document.createElement('small');

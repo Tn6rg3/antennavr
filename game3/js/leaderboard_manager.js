@@ -625,11 +625,14 @@ window.fetchAndRenderMonthlyLeaderboard = function(mode) {
                         silvers: 0,
                         bronzes: 0,
                         placementPts: 0,
-                        daysPlayed: 0
+                        daysPlayed: 0,
+                        totalRealQsos: 0
                     };
                 }
 
                 playerStats[uid].daysPlayed++;
+                playerStats[uid].totalRealQsos += (Number(p.realQsos) || 0);
+
                 const rank = idx + 1;
                 const pts = placementPointsTable[idx] || 1;
                 playerStats[uid].placementPts += pts;
@@ -680,12 +683,13 @@ window.fetchAndRenderMonthlyLeaderboard = function(mode) {
             const rank = idx + 1;
             const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
             const isMe = (p.id === window.myId);
-            const name = p.name || 'Telegrafista';
+            const name = (typeof window.escapeHtml === 'function') ? window.escapeHtml(p.name || 'Telegrafista') : (p.name || 'Telegrafista');
+            const qsoBadge = (p.totalRealQsos && Number(p.totalRealQsos) > 0) ? `<span style="font-size:0.75em; color:#00bcd4; font-weight:bold; margin-left:4px;" title="Totale QSO Reali effettuati nel mese">[📻 ${p.totalRealQsos} QSO]</span>` : "";
 
             html += `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.05); ${isMe ? 'background:rgba(255,215,0,0.18); font-weight:bold;' : ''}">
                     <td style="padding:8px 6px;">${medal}</td>
-                    <td style="padding:8px 6px;">${name}</td>
+                    <td style="padding:8px 6px;">${name} ${qsoBadge}</td>
                     <td style="padding:8px 6px; text-align:center; color:#ffd700;"><b>${p.golds || 0}</b></td>
                     <td style="padding:8px 6px; text-align:center; color:#c0c0c0;"><b>${p.silvers || 0}</b></td>
                     <td style="padding:8px 6px; text-align:center; color:#cd7f32;"><b>${p.bronzes || 0}</b></td>
