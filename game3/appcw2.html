@@ -769,25 +769,35 @@
                 </div>
             </div>
         </div>
-        <!-- BOTTONI CONDIVISIONE E RECORD MAX WPM -->
-        <div style="width: 100%; text-align: center; margin-top: 8px; margin-bottom: 4px; flex-shrink: 0; display:flex; justify-content:center; gap:8px; flex-wrap:wrap;">
-            <button id="shareAppBtn" onclick="shareAppToFriends()" class="btn-secondary" style="width: auto; padding: 6px 12px; font-size: 0.85em; border-radius: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); margin: 0;">
-                📢 Condividi APP
-            </button>
-            <button id="maxWpmRecordsBtn" onclick="window.openMaxWpmRecordsModal()" class="btn-secondary" style="width: auto; padding: 6px 12px; font-size: 0.85em; border-radius: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); margin: 0; background: linear-gradient(135deg, #ff9800, #f57c00); color: white; border: 1px solid #ffb74d; font-weight: bold; cursor: pointer;">
-                ⚡ Record Max WPM 🏆
-            </button>
+        <!-- CONTAINER BANNERS INTRODUZIONE HOME (SCOMPARE DOPO 5 SECONDI) -->
+        <div id="homeIntroBannersContainer" style="width: 100%; transition: opacity 0.5s ease, max-height 0.5s ease; overflow: hidden; opacity: 1; max-height: 250px; flex-shrink: 0;">
+            <!-- BOTTONI CONDIVISIONE E RECORD MAX WPM -->
+            <div style="width: 100%; text-align: center; margin-top: 6px; margin-bottom: 4px; display:flex; justify-content:center; gap:8px; flex-wrap:wrap;">
+                <button id="shareAppBtn" onclick="shareAppToFriends()" class="btn-secondary" style="width: auto; padding: 6px 12px; font-size: 0.85em; border-radius: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); margin: 0;">
+                    📢 Condividi APP
+                </button>
+                <button id="maxWpmRecordsBtn" onclick="window.openMaxWpmRecordsModal()" class="btn-secondary" style="width: auto; padding: 6px 12px; font-size: 0.85em; border-radius: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); margin: 0; background: linear-gradient(135deg, #ff9800, #f57c00); color: white; border: 1px solid #ffb74d; font-weight: bold; cursor: pointer;">
+                    ⚡ Record Max WPM 🏆
+                </button>
+            </div>
+
+            <!-- BANNER QSO REALI DEL GIORNO IN RADIO -->
+            <div id="dailyRealQsosBanner" style="width: 100%; max-width: 420px; margin: 6px auto 4px auto; padding: 8px 12px; background: rgba(0,188,212,0.08); border: 1px solid #00bcd4; border-radius: 12px; text-align: center; box-sizing: border-box;">
+                <span style="font-size: 0.76em; color: #00bcd4; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 4px;">📻 QSO Reali in Radio Oggi</span>
+                <div style="display: flex; justify-content: center; align-items: center; gap: 12px;">
+                    <button onclick="window.changeDailyRealQsos(-1)" class="btn-secondary" style="width: 36px; height: 36px; padding: 0; font-weight: bold; font-size: 1.3em; border-radius: 8px; margin: 0; display: flex; align-items: center; justify-content: center; cursor: pointer;">-</button>
+                    <b id="dailyRealQsosCountDisplay" style="font-size: 1.45em; color: var(--champ-color); font-family: 'Courier New', monospace; min-width: 38px;">0</b>
+                    <button onclick="window.changeDailyRealQsos(1)" class="btn-secondary" style="width: 36px; height: 36px; padding: 0; font-weight: bold; font-size: 1.3em; border-radius: 8px; margin: 0; display: flex; align-items: center; justify-content: center; cursor: pointer;">+</button>
+                </div>
+                <span style="font-size: 0.65em; color: var(--hint-color); display: block; margin-top: 3px;">Collegamenti reali effettuati oggi in radio (azzeramento automatico giornaliero)</span>
+            </div>
         </div>
 
-        <!-- BANNER QSO REALI DEL GIORNO IN RADIO -->
-        <div id="dailyRealQsosBanner" style="width: 100%; max-width: 420px; margin: 6px auto 4px auto; padding: 8px 12px; background: rgba(0,188,212,0.08); border: 1px solid #00bcd4; border-radius: 12px; text-align: center; box-sizing: border-box; flex-shrink: 0;">
-            <span style="font-size: 0.76em; color: #00bcd4; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 4px;">📻 QSO Reali in Radio Oggi</span>
-            <div style="display: flex; justify-content: center; align-items: center; gap: 12px;">
-                <button onclick="window.changeDailyRealQsos(-1)" class="btn-secondary" style="width: 36px; height: 36px; padding: 0; font-weight: bold; font-size: 1.3em; border-radius: 8px; margin: 0; display: flex; align-items: center; justify-content: center; cursor: pointer;">-</button>
-                <b id="dailyRealQsosCountDisplay" style="font-size: 1.45em; color: var(--champ-color); font-family: 'Courier New', monospace; min-width: 38px;">0</b>
-                <button onclick="window.changeDailyRealQsos(1)" class="btn-secondary" style="width: 36px; height: 36px; padding: 0; font-weight: bold; font-size: 1.3em; border-radius: 8px; margin: 0; display: flex; align-items: center; justify-content: center; cursor: pointer;">+</button>
-            </div>
-            <span style="font-size: 0.65em; color: var(--hint-color); display: block; margin-top: 3px;">Collegamento reali effettuati oggi in radio (azzeramento automatico giornaliero)</span>
+        <!-- PICCOLO PULSANTE DI RIAPERTURA / MOSTRAMI BANNERS (SE NASCOSTI) -->
+        <div id="homeBannersToggleBar" style="width: 100%; text-align: center; margin-top: 2px; display: none;">
+            <button onclick="window.toggleHomeIntroBanners()" style="background: none; border: none; color: var(--hint-color); font-size: 0.72em; cursor: pointer; text-decoration: underline;">
+                📻 Mostra / Modifica QSO Reali e Info 🔽
+            </button>
         </div>
     </div>
 </div>
