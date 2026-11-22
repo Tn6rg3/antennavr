@@ -1450,7 +1450,7 @@ window.initMandatoryAliasHandlers = function() {
 
         window.hideHomeIntroBanners = function() {
             const container = document.getElementById('homeIntroBannersContainer');
-            const toggleBar = document.getElementById('homeBannersToggleBar');
+            const toggleBtn = document.getElementById('btnToggleHomeBanners');
             if (!container) return;
 
             container.style.opacity = '0';
@@ -1458,21 +1458,28 @@ window.initMandatoryAliasHandlers = function() {
 
             setTimeout(() => {
                 container.style.display = 'none';
-                if (toggleBar) toggleBar.style.display = 'block';
+                if (toggleBtn) toggleBtn.textContent = '📻 Mostra / Modifica QSO Reali e Info 🔽';
             }, 500);
+        };
+
+        window.showHomeIntroBanners = function() {
+            const container = document.getElementById('homeIntroBannersContainer');
+            const toggleBtn = document.getElementById('btnToggleHomeBanners');
+            if (!container) return;
+
+            container.style.display = 'block';
+            void container.offsetWidth;
+            container.style.opacity = '1';
+            container.style.maxHeight = '250px';
+            if (toggleBtn) toggleBtn.textContent = '🔼 Nascondi QSO Reali e Info';
         };
 
         window.toggleHomeIntroBanners = function() {
             const container = document.getElementById('homeIntroBannersContainer');
-            const toggleBar = document.getElementById('homeBannersToggleBar');
             if (!container) return;
 
             if (container.style.display === 'none' || container.style.opacity === '0') {
-                container.style.display = 'block';
-                void container.offsetWidth;
-                container.style.opacity = '1';
-                container.style.maxHeight = '250px';
-                if (toggleBar) toggleBar.style.display = 'none';
+                window.showHomeIntroBanners();
             } else {
                 window.hideHomeIntroBanners();
             }

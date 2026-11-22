@@ -141,7 +141,7 @@ window.renderActivityRankings = function(period, key) {
     if (!els.activityRankList) return;
     els.activityRankList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Caricamento...</li>';
 
-    db.ref(`activity/${period}/${key}`).once('value').then(snap => {
+    db.ref(`activity/${period}/${key}`).once('value').then(async snap => {
         els.activityRankList.innerHTML = '';
         let users = [];
         if (snap.exists()) {
@@ -151,8 +151,45 @@ window.renderActivityRankings = function(period, key) {
             });
         }
 
-        users.sort((a, b) => (b.games || 0) - (a.games || 0));
-        // Mostriamo tutti gli utenti senza alcun limite numerico a 50
+        // Recupero in parallelo dei QSO reali per ciascun utente della lista
+        const qsoPromises = users.map(async u => {
+            if (u.realQsos) return Number(u.realQsos) || 0;
+            if (period === 'daily') {
+                try {
+                    const qSnap = await db.ref(`users/${u.id}/daily_real_qsos/${key}`).once('value');
+                    return (qSnap.exists() && qSnap.val()) ? (Number(qSnap.val()) || 0) : 0;
+                } catch(e) { return 0; }
+            } else {
+                // Per settimana/mese: sommiamo tutti i QSO reali registrati nei singoli giorni del periodo
+                try {
+                    const qSnap = await db.ref(`users/${u.id}/daily_real_qsos`).once('value');
+                    if (qSnap.exists() && qSnap.val()) {
+                        let totalQsosPeriod = 0;
+                        Object.entries(qSnap.val()).forEach(([dStr, val]) => {
+                            let isInPeriod = false;
+                            if (period === 'weekly') {
+                                const dObj = new Date(dStr);
+                                const dWeek = (typeof window.getWeekNumber === 'function') ? window.getWeekNumber(dObj) : '';
+                                if (dWeek === key) isInPeriod = true;
+                            } else if (period === 'monthly') {
+                                if (dStr.startsWith(key)) isInPeriod = true;
+                            }
+                            if (isInPeriod) totalQsosPeriod += (Number(val) || 0);
+                        });
+                        return totalQsosPeriod;
+                    }
+                } catch(e) {}
+                return 0;
+            }
+        });
+
+        const realQsosResults = await Promise.all(qsoPromises);
+
+        users.forEach((u, idx) => {
+            u.realQsos = realQsosResults[idx] || 0;
+        });
+
+        users.sort((a, b) => (b.games || 0) - (a.games || 0) || (b.realQsos || 0) - (a.realQsos || 0));
 
         if (users.length === 0) {
             els.activityRankList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna attività registrata.</li>';
@@ -164,10 +201,20 @@ window.renderActivityRankings = function(period, key) {
             let medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
             const li = document.createElement('li');
             const nameSpan = document.createElement('span');
+            nameSpan.style.cssText = "display:flex; align-items:center; gap:4px; flex-wrap:wrap;";
             nameSpan.appendChild(document.createTextNode(medal + " "));
+
             const nameB = document.createElement('b');
             nameB.textContent = u.name || "Anonimo";
             nameSpan.appendChild(nameB);
+
+            if (u.realQsos && Number(u.realQsos) > 0) {
+                const qsoBadge = document.createElement('span');
+                qsoBadge.style.cssText = "font-size:0.75em; color:#00bcd4; font-weight:bold; margin-left:4px;";
+                qsoBadge.title = "QSO Reali effettuati in radio nel periodo";
+                qsoBadge.textContent = `[📻 ${u.realQsos} QSO]`;
+                nameSpan.appendChild(qsoBadge);
+            }
 
             const statsSpan = document.createElement('span');
             const gamesB = document.createElement('b');
