@@ -1406,10 +1406,9 @@ window.initMandatoryAliasHandlers = function() {
         };
 
         window.updateDailyRealQsosDisplay = function(count) {
-            const displayEl = document.getElementById('dailyRealQsosCountDisplay');
-            if (displayEl) {
-                displayEl.textContent = count;
-            }
+            document.querySelectorAll('.dailyRealQsosVal').forEach(el => {
+                el.textContent = count;
+            });
         };
 
         window.changeDailyRealQsos = function(delta) {
@@ -1440,49 +1439,38 @@ window.initMandatoryAliasHandlers = function() {
 
         window.initDailyRealQsosManager();
 
-        // --- BANNERS HOME SCOMPORSA AUTOMATICA DOPO 5 SECONDI ---
+        // --- BANNERS HOME RIDUZIONE AUTOMATICA DOPO 5 SECONDI ---
+        window.reduceHomeIntroBanners = function() {
+            const exp = document.getElementById('homeBannersExpanded');
+            const comp = document.getElementById('homeBannersCompact');
+            if (!exp) return;
+
+            exp.style.opacity = '0';
+            exp.style.maxHeight = '0px';
+
+            setTimeout(() => {
+                exp.style.display = 'none';
+                if (comp) comp.style.display = 'block';
+            }, 400);
+        };
+
+        window.expandHomeIntroBanners = function() {
+            const exp = document.getElementById('homeBannersExpanded');
+            const comp = document.getElementById('homeBannersCompact');
+            if (!exp) return;
+
+            if (comp) comp.style.display = 'none';
+            exp.style.display = 'block';
+            void exp.offsetWidth;
+            exp.style.opacity = '1';
+            exp.style.maxHeight = '250px';
+        };
+
         window.initHomeIntroBannersAutoTimer = function() {
             if (window.homeBannersTimer) clearTimeout(window.homeBannersTimer);
             window.homeBannersTimer = setTimeout(() => {
-                window.hideHomeIntroBanners();
+                window.reduceHomeIntroBanners();
             }, 5000);
-        };
-
-        window.hideHomeIntroBanners = function() {
-            const container = document.getElementById('homeIntroBannersContainer');
-            const toggleBtn = document.getElementById('btnToggleHomeBanners');
-            if (!container) return;
-
-            container.style.opacity = '0';
-            container.style.maxHeight = '0px';
-
-            setTimeout(() => {
-                container.style.display = 'none';
-                if (toggleBtn) toggleBtn.textContent = '📻 Mostra / Modifica QSO Reali e Info 🔽';
-            }, 500);
-        };
-
-        window.showHomeIntroBanners = function() {
-            const container = document.getElementById('homeIntroBannersContainer');
-            const toggleBtn = document.getElementById('btnToggleHomeBanners');
-            if (!container) return;
-
-            container.style.display = 'block';
-            void container.offsetWidth;
-            container.style.opacity = '1';
-            container.style.maxHeight = '250px';
-            if (toggleBtn) toggleBtn.textContent = '🔼 Nascondi QSO Reali e Info';
-        };
-
-        window.toggleHomeIntroBanners = function() {
-            const container = document.getElementById('homeIntroBannersContainer');
-            if (!container) return;
-
-            if (container.style.display === 'none' || container.style.opacity === '0') {
-                window.showHomeIntroBanners();
-            } else {
-                window.hideHomeIntroBanners();
-            }
         };
 
         window.initHomeIntroBannersAutoTimer();
