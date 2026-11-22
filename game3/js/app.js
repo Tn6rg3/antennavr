@@ -1371,6 +1371,57 @@ window.initMandatoryAliasHandlers = function() {
         window.listenToOnlineUsers?.();
         window.listenToInvites?.();
 
+        // --- GESTORE GESTIONE QSO REALI GIORNALIERI IN RADIO ---
+        window.initDailyRealQsosManager = function() {
+            const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+            const savedDate = localStorage.getItem('cwgame_real_qsos_date');
+
+            if (savedDate !== todayStr) {
+                localStorage.setItem('cwgame_real_qsos_date', todayStr);
+                localStorage.setItem(`cwgame_real_qsos_${todayStr}`, "0");
+            }
+
+            const currentVal = parseInt(localStorage.getItem(`cwgame_real_qsos_${todayStr}`)) || 0;
+            window.updateDailyRealQsosDisplay(currentVal);
+
+            if (db && window.myId) {
+                db.ref(`users/${window.myId}/daily_real_qsos/${todayStr}`).once('value', snap => {
+                    if (snap.exists() && typeof snap.val() === 'number') {
+                        const fbVal = snap.val();
+                        localStorage.setItem(`cwgame_real_qsos_${todayStr}`, fbVal);
+                        window.updateDailyRealQsosDisplay(fbVal);
+                    }
+                }).catch(() => {});
+            }
+        };
+
+        window.updateDailyRealQsosDisplay = function(count) {
+            const displayEl = document.getElementById('dailyRealQsosCountDisplay');
+            if (displayEl) {
+                displayEl.textContent = count;
+            }
+        };
+
+        window.changeDailyRealQsos = function(delta) {
+            const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+            let currentVal = parseInt(localStorage.getItem(`cwgame_real_qsos_${todayStr}`)) || 0;
+            let newVal = Math.max(0, currentVal + delta);
+
+            localStorage.setItem('cwgame_real_qsos_date', todayStr);
+            localStorage.setItem(`cwgame_real_qsos_${todayStr}`, newVal);
+            window.updateDailyRealQsosDisplay(newVal);
+
+            if (db && window.myId) {
+                db.ref(`users/${window.myId}/daily_real_qsos/${todayStr}`).set(newVal).catch(() => {});
+
+                // Aggiorna in tempo reale i record di oggi nelle classifiche attive se presenti
+                db.ref(`leaderboard/daily_challenge/${todayStr}/${window.myId}`).update({ realQsos: newVal }).catch(() => {});
+                db.ref(`leaderboard/tri_daily/${todayStr}/${window.myId}`).update({ realQsos: newVal }).catch(() => {});
+            }
+        };
+
+        window.initDailyRealQsosManager();
+
         // --- ATTIVAZIONE SISTEMA SFIDE (Fix Avvio Simultaneo) ---
         if (typeof window.listenToInviteAccepted === 'function') {
             window.listenToInviteAccepted();

@@ -1563,6 +1563,7 @@ window.finishGame = async function() {
                             const bestScore = Math.max(window.totalScore, oldScore);
                             const bestWpm = Math.max(window.peakWpm, oldWpm);
                             const todayDateStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+                            const todayRealQsos = parseInt(localStorage.getItem(`cwgame_real_qsos_${todayDateStr}`)) || 0;
 
                             db.ref(dbPath).update({
                                 name: window.myName,
@@ -1570,6 +1571,7 @@ window.finishGame = async function() {
                                 score: bestScore,
                                 wpm: bestWpm,
                                 level: myLevel,
+                                realQsos: todayRealQsos,
                                 wordCount: window.requestedWordCount,
                                 date: todayDateStr,
                                 privacyLeaderboard: !!window.myPrivacyLeaderboard

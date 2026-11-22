@@ -531,10 +531,12 @@ window.fetchAndRenderTriDailyLeaderboard = function() {
             const commentPath = `leaderboard/tri_daily/${todayStr}/${p.id}/comment`;
             const trashBtn = isMeOrAdmin ? `<button onclick="window.deletePlayerComment('${commentPath}', '${boxId}')" title="Elimina commento" style="background:none; border:none; color:#f44336; cursor:pointer; font-size:0.9em; margin-left:6px;">🗑️</button>` : "";
 
+            const realQsosBadge = (p.realQsos && Number(p.realQsos) > 0) ? `<span style="font-size:0.75em; color:#00bcd4; font-weight:bold; margin-left:4px;" title="QSO Reali effettuati in radio oggi">[📻 ${p.realQsos} QSO]</span>` : "";
+
             html += `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.05); ${isMe ? 'background:rgba(255,152,0,0.15); font-weight:bold;' : ''}">
                     <td style="padding:8px 6px;">${medal}</td>
-                    <td style="padding:8px 6px;">${name} ${commentBtn}</td>
+                    <td style="padding:8px 6px;">${name} ${realQsosBadge} ${commentBtn}</td>
                     <td style="padding:8px 6px; text-align:center; color:#2e7d32;"><b>${slots}</b></td>
                     <td style="padding:8px 6px; text-align:right; color:#ff9800;"><b>${score} pt</b></td>
                     <td style="padding:8px 6px; text-align:right;">${wpm} WPM</td>
@@ -1145,6 +1147,17 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
             lvSpan.style.fontWeight = 'bold';
             lvSpan.textContent = `(${player.level})`;
             nameDiv.appendChild(lvSpan);
+        }
+
+        if (player.realQsos && Number(player.realQsos) > 0) {
+            const qsoSpan = document.createElement('span');
+            qsoSpan.style.fontSize = '0.72em';
+            qsoSpan.style.color = '#00bcd4';
+            qsoSpan.style.marginLeft = '5px';
+            qsoSpan.style.fontWeight = 'bold';
+            qsoSpan.title = 'QSO Reali effettuati in radio oggi';
+            qsoSpan.textContent = `[📻 ${player.realQsos} QSO]`;
+            nameDiv.appendChild(qsoSpan);
         }
 
         if (showWordCount && player.wordCount) {
