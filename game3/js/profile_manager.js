@@ -142,16 +142,27 @@ window.renderActivityRankings = function(period, key) {
     els.activityRankList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Caricamento...</li>';
 
     db.ref(`activity/${period}/${key}`).once('value').then(async snap => {
-        els.activityRankList.innerHTML = '';
-        let users = [];
+        let usersMap = new Map();
         if (snap.exists()) {
             snap.forEach(child => {
                 const u = child.val();
-                if (u && typeof u === 'object') users.push({ id: child.key, ...u });
+                if (u && typeof u === 'object') {
+                    const uid = child.key;
+                    if (usersMap.has(uid)) {
+                        const existing = usersMap.get(uid);
+                        existing.games = Math.max(existing.games || 0, u.games || 0);
+                        existing.wins = Math.max(existing.wins || 0, u.wins || 0);
+                        if (u.name) existing.name = u.name;
+                    } else {
+                        usersMap.set(uid, { id: uid, ...u });
+                    }
+                }
             });
         }
 
-        // Recupero in parallelo dei QSO reali per ciascun utente della lista
+        let users = Array.from(usersMap.values());
+
+        // Recupero in parallelo dei QSO reali per ciascun utente unico della lista
         const qsoPromises = users.map(async u => {
             if (u.realQsos) return Number(u.realQsos) || 0;
             if (period === 'daily') {
@@ -190,6 +201,9 @@ window.renderActivityRankings = function(period, key) {
         });
 
         users.sort((a, b) => (b.games || 0) - (a.games || 0) || (b.realQsos || 0) - (a.realQsos || 0));
+
+        // Pulizia finale prima dell'append per evitare duplicati da chiamate concorrenti
+        els.activityRankList.innerHTML = '';
 
         if (users.length === 0) {
             els.activityRankList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Nessuna attività registrata.</li>';
