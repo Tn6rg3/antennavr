@@ -1214,20 +1214,20 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
         const actionsScoreDiv = document.createElement('div');
         actionsScoreDiv.style.cssText = "display:flex; align-items:center; gap:8px; justify-content:flex-end;";
 
-        // BOTTONE CANCELLA (Consentito per record normali; BLOCCO REGOLAMENTO per Sfide Ufficiali tranne che per gli Admin)
+        // BOTTONE CANCELLA RECORD (Consentito per record normali; BLOCCO REGOLAMENTO per Sfida Giornaliera tranne che per Admin)
         const isMyRecord = player.id === window.myId || (isTeam && player.id === window.myTeamId);
         const isScheduledContest = player.dbPath && (player.dbPath.includes('/daily_challenge/') || player.dbPath.includes('/tri_daily/') || player.dbPath.includes('/weekly_callsign_challenge/'));
         const allowDelete = isMyRecord && player.dbPath && (!isScheduledContest || window.isAdmin);
 
         if (allowDelete) {
             const delBtn = document.createElement('button');
-            delBtn.style.cssText = "background:none; border:none; color:#f44336; cursor:pointer; font-size:1.1em; padding:4px; display:flex; align-items:center; opacity:0.6; transition: opacity 0.2s;";
+            delBtn.style.cssText = "background:none; border:none; color:#f44336; cursor:pointer; font-size:1.1em; padding:4px 8px; margin-right:8px; display:flex; align-items:center; opacity:0.6; transition: opacity 0.2s;";
             delBtn.innerHTML = "🗑️";
             delBtn.title = currentLang === 'it' ? "Cancella record" : "Delete record";
             delBtn.onmouseover = () => delBtn.style.opacity = "1";
             delBtn.onmouseout = () => delBtn.style.opacity = "0.6";
             delBtn.onclick = (e) => {
-                e.stopPropagation();
+                if (e) { e.stopPropagation(); e.preventDefault(); }
                 window.deleteLeaderboardEntry(player.dbPath);
             };
             actionsScoreDiv.appendChild(delBtn);
@@ -1248,17 +1248,17 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
 
             const commentBtn = document.createElement('button');
             commentBtn.className = 'action-btn-small btn-secondary';
-            commentBtn.style.cssText = 'width:auto; padding:1px 6px; margin-left:6px; font-size:0.75em; display:inline-block; vertical-align:middle;';
-            commentBtn.textContent = '💬';
+            commentBtn.style.cssText = 'width:auto; padding:2px 8px; margin-left:10px; font-size:0.8em; cursor:pointer; border-radius:6px; display:inline-flex; align-items:center; gap:3px; vertical-align:middle; border:1px solid rgba(255,255,255,0.2);';
+            commentBtn.innerHTML = '💬 <span style="font-size:0.8em;">Commento</span>';
             commentBtn.title = 'Leggi commento a caldo';
             commentBtn.onclick = (e) => {
-                e.stopPropagation();
+                if (e) { e.stopPropagation(); e.preventDefault(); }
                 window.togglePlayerCommentBox(boxId);
             };
             nameDiv.appendChild(commentBtn);
 
             const isMeOrAdmin = isMe || window.isAdmin;
-            const trashHtml = isMeOrAdmin ? `<button onclick="window.deletePlayerComment('${player.dbPath}/comment', '${boxId}')" title="Elimina commento" style="background:none; border:none; color:#f44336; cursor:pointer; font-size:0.95em; margin-left:10px; padding:2px 6px;">🗑️</button>` : "";
+            const trashHtml = isMeOrAdmin ? `<button onclick="event.stopPropagation(); window.deletePlayerComment('${player.dbPath}/comment', '${boxId}')" title="Elimina commento" style="background:none; border:none; color:#f44336; cursor:pointer; font-size:1.05em; margin-left:12px; padding:4px 8px;">🗑️</button>` : "";
 
             const commentBox = document.createElement('div');
             commentBox.id = boxId;
@@ -1268,6 +1268,10 @@ window.renderPlayersListHTML = function(players, container, showWordCount, isTea
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; width:100%; max-width:100%; box-sizing:border-box; gap:10px;">
                     <div style="font-style:italic; font-weight:normal; font-size:0.88em; line-height:1.45; color:var(--text-color); flex:1; word-break:break-word; white-space:normal;">💭 <b>Commento:</b> "${commentText}"</div>
                     <div style="flex-shrink:0;">${trashHtml}</div>
+                </div>
+            `;
+            player._commentBoxElement = commentBox;
+        }
                 </div>
             `;
             player._commentBoxElement = commentBox;
