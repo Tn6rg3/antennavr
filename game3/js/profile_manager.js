@@ -242,13 +242,7 @@ window.renderActivityRankings = function(period, key) {
             nameSpan.appendChild(document.createTextNode(medal + " "));
 
             const nameB = document.createElement('b');
-            nameB.textContent = u.name;
-            nameSpan.appendChild(nameB);
-            nameSpan.style.cssText = "display:flex; align-items:center; gap:4px; flex-wrap:wrap;";
-            nameSpan.appendChild(document.createTextNode(medal + " "));
-
-            const nameB = document.createElement('b');
-            nameB.textContent = u.name || "Anonimo";
+            nameB.textContent = u.name || "Telegrafista";
             nameSpan.appendChild(nameB);
 
             if (u.realQsos && Number(u.realQsos) > 0) {
