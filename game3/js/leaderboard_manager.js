@@ -475,13 +475,21 @@ window.fetchAndRenderTriDailyLeaderboard = function() {
             return;
         }
 
+        const nowHour = new Date().getHours();
+        const isSlotTimeReached = (slotId) => {
+            if (slotId === 'morning') return nowHour >= 6;
+            if (slotId === 'afternoon') return nowHour >= 12;
+            if (slotId === 'evening') return nowHour >= 18;
+            return false;
+        };
+
         const players = [];
         snapshot.forEach(child => {
             const pVal = child.val();
             if (pVal && typeof pVal === 'object') {
-                const mPts = Number(pVal.morningScore) || 0;
-                const aPts = Number(pVal.afternoonScore) || 0;
-                const ePts = Number(pVal.eveningScore) || 0;
+                const mPts = (isSlotTimeReached('morning') && Number(pVal.morningScore) > 0) ? Number(pVal.morningScore) : 0;
+                const aPts = (isSlotTimeReached('afternoon') && Number(pVal.afternoonScore) > 0) ? Number(pVal.afternoonScore) : 0;
+                const ePts = (isSlotTimeReached('evening') && Number(pVal.eveningScore) > 0) ? Number(pVal.eveningScore) : 0;
 
                 const realSlots = (mPts > 0 ? 1 : 0) + (aPts > 0 ? 1 : 0) + (ePts > 0 ? 1 : 0);
                 const realTotalScore = mPts + aPts + ePts;
@@ -489,8 +497,8 @@ window.fetchAndRenderTriDailyLeaderboard = function() {
                 players.push({
                     id: child.key,
                     ...pVal,
-                    completedSlots: Math.max(pVal.completedSlots || 0, realSlots),
-                    totalScore: Math.max(pVal.totalScore || 0, realTotalScore)
+                    completedSlots: realSlots,
+                    totalScore: realTotalScore
                 });
             }
         });

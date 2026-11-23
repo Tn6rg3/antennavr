@@ -1541,20 +1541,35 @@ window.initMandatoryAliasHandlers = function() {
         };
         window.initTotalMatchesCounterListener();
 
-        // --- NORMALIZZAZIONE E VERIFICA REALE PARTITE OGGI (OTTIMIZZATA BANDWIDTH) ---
+        // --- NORMALIZZAZIONE E VERIFICA REALE PARTITE OGGI (CORRETTA DATA LOCALE) ---
+        window.getMatchDateString = function(hVal) {
+            if (!hVal) return '';
+            const ts = Number(hVal.ts || (typeof hVal.date === 'number' ? hVal.date : 0));
+            if (ts > 0 && typeof window.getLocalDateString === 'function') {
+                return window.getLocalDateString(ts);
+            }
+            if (hVal.date && typeof hVal.date === 'string') {
+                const parsed = Date.parse(hVal.date);
+                if (!isNaN(parsed) && parsed > 0 && typeof window.getLocalDateString === 'function') {
+                    return window.getLocalDateString(parsed);
+                }
+                return hVal.date.split('T')[0];
+            }
+            return '';
+        };
+
         window.normalizeTodayMatchesCount = function() {
             if (!db || !window.myId) return;
             const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
 
-            db.ref(`users/${window.myId}/history`).limitToLast(15).once('value', hSnap => {
+            db.ref(`users/${window.myId}/history`).limitToLast(20).once('value', hSnap => {
                 if (hSnap.exists()) {
                     let realTodayCount = 0;
                     hSnap.forEach(hChild => {
                         const hVal = hChild.val();
-                        const hDate = hVal ? String(hVal.date || '') : '';
-                        const hTs = hVal ? Number(hVal.ts || hVal.date || 0) : 0;
-                        const isTodayDate = hDate.includes(todayStr) || (hTs > 0 && new Date(hTs).toISOString().startsWith(todayStr));
-                        if (isTodayDate) realTodayCount++;
+                        if (hVal && window.getMatchDateString(hVal) === todayStr) {
+                            realTodayCount++;
+                        }
                     });
                     if (realTodayCount > 0) {
                         db.ref(`activity/daily/${todayStr}/${window.myId}/games`).set(realTodayCount).catch(() => {});
@@ -1633,15 +1648,14 @@ window.recalculateTodayActivityFromHistory = async function() {
     const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
 
     try {
-        const hSnap = await db.ref(`users/${window.myId}/history`).limitToLast(15).once('value');
+        const hSnap = await db.ref(`users/${window.myId}/history`).limitToLast(20).once('value');
         let realCount = 0;
         if (hSnap.exists()) {
             hSnap.forEach(hChild => {
                 const hVal = hChild.val();
-                const hTs = hVal ? Number(hVal.ts || hVal.date || 0) : 0;
-                const hDate = hVal ? String(hVal.date || '') : '';
-                const isToday = hDate.includes(todayStr) || (hTs > 0 && new Date(hTs).toISOString().startsWith(todayStr));
-                if (isToday) realCount++;
+                if (hVal && window.getMatchDateString && window.getMatchDateString(hVal) === todayStr) {
+                    realCount++;
+                }
             });
         }
         if (realCount > 0) {
