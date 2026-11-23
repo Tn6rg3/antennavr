@@ -12,19 +12,22 @@ window.updateActivity = function(won = false) {
     const wKey = window.getWeekNumber(now);
     const mKey = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0');
 
+    const activeName = window.myName || localStorage.getItem('cwgame_alias') || "Telegrafista";
     const increment = firebase.database.ServerValue.increment(1);
 
     ['daily/'+dKey, 'weekly/'+wKey, 'monthly/'+mKey].forEach(path => {
         const updates = {
             games: increment,
-            name: myName,
+            name: activeName,
             lastPlayed: firebase.database.ServerValue.TIMESTAMP
         };
         if (won) updates.wins = increment;
 
-        db.ref(`activity/${path}/${myId}`).update(updates).then(() => {
-            if (path.startsWith('daily')) window.checkActivityAndAwardMedals();
-        }).catch(err => console.error("Error updating activity:", err));
+        if (db && window.myId) {
+            db.ref(`activity/${path}/${window.myId}`).update(updates).then(() => {
+                if (path.startsWith('daily')) window.checkActivityAndAwardMedals();
+            }).catch(err => console.error("Error updating activity:", err));
+        }
     });
 };
 
@@ -142,40 +145,44 @@ window.renderActivityRankings = function(period, key) {
     els.activityRankList.innerHTML = '<li style="justify-content:center; color:var(--hint-color);">Caricamento...</li>';
 
     db.ref(`activity/${period}/${key}`).once('value').then(async snap => {
-        let usersMap = new Map();
+        let rawUsers = [];
         if (snap.exists()) {
             snap.forEach(child => {
                 const u = child.val();
                 if (u && typeof u === 'object') {
-                    const uid = child.key;
-                    if (usersMap.has(uid)) {
-                        const existing = usersMap.get(uid);
-                        existing.games = Math.max(existing.games || 0, u.games || 0);
-                        existing.wins = Math.max(existing.wins || 0, u.wins || 0);
-                        if (u.name) existing.name = u.name;
-                    } else {
-                        usersMap.set(uid, { id: uid, ...u });
-                    }
+                    rawUsers.push({ id: child.key, ...u });
                 }
             });
         }
 
-        let users = Array.from(usersMap.values());
+        // Recupero in parallelo per risolvere nomi mancanti ("Anonimo") e QSO reali
+        const userPromises = rawUsers.map(async u => {
+            let realName = u.name;
+            if (!realName || realName === 'Anonimo' || realName === 'Telegrafista') {
+                try {
+                    const uSnap = await db.ref(`users/${u.id}`).once('value');
+                    if (uSnap.exists() && uSnap.val()) {
+                        const val = uSnap.val();
+                        realName = val.alias || val.name || val.activity_call || realName;
+                        if (realName && db) {
+                            db.ref(`activity/${period}/${key}/${u.id}/name`).set(realName).catch(() => {});
+                        }
+                    }
+                } catch(e) {}
+            }
 
-        // Recupero in parallelo dei QSO reali per ciascun utente unico della lista
-        const qsoPromises = users.map(async u => {
-            if (u.realQsos) return Number(u.realQsos) || 0;
-            if (period === 'daily') {
+            let qsos = 0;
+            if (u.realQsos) {
+                qsos = Number(u.realQsos) || 0;
+            } else if (period === 'daily') {
                 try {
                     const qSnap = await db.ref(`users/${u.id}/daily_real_qsos/${key}`).once('value');
-                    return (qSnap.exists() && qSnap.val()) ? (Number(qSnap.val()) || 0) : 0;
-                } catch(e) { return 0; }
+                    qsos = (qSnap.exists() && qSnap.val()) ? (Number(qSnap.val()) || 0) : 0;
+                } catch(e) {}
             } else {
-                // Per settimana/mese: sommiamo tutti i QSO reali registrati nei singoli giorni del periodo
                 try {
                     const qSnap = await db.ref(`users/${u.id}/daily_real_qsos`).once('value');
                     if (qSnap.exists() && qSnap.val()) {
-                        let totalQsosPeriod = 0;
                         Object.entries(qSnap.val()).forEach(([dStr, val]) => {
                             let isInPeriod = false;
                             if (period === 'weekly') {
@@ -185,24 +192,40 @@ window.renderActivityRankings = function(period, key) {
                             } else if (period === 'monthly') {
                                 if (dStr.startsWith(key)) isInPeriod = true;
                             }
-                            if (isInPeriod) totalQsosPeriod += (Number(val) || 0);
+                            if (isInPeriod) qsos += (Number(val) || 0);
                         });
-                        return totalQsosPeriod;
                     }
                 } catch(e) {}
-                return 0;
+            }
+
+            return {
+                id: u.id,
+                name: realName || "Telegrafista",
+                games: Number(u.games) || 0,
+                wins: Number(u.wins) || 0,
+                realQsos: qsos
+            };
+        });
+
+        const resolvedUsers = await Promise.all(userPromises);
+
+        // Deduplicazione per ID o Nome utente per evitare duplicati nella lista
+        let usersMap = new Map();
+        resolvedUsers.forEach(u => {
+            const mapKey = u.id || u.name;
+            if (usersMap.has(mapKey)) {
+                const existing = usersMap.get(mapKey);
+                existing.games = Math.max(existing.games, u.games);
+                existing.wins = Math.max(existing.wins, u.wins);
+                existing.realQsos = Math.max(existing.realQsos, u.realQsos);
+            } else {
+                usersMap.set(mapKey, u);
             }
         });
 
-        const realQsosResults = await Promise.all(qsoPromises);
+        let users = Array.from(usersMap.values());
+        users.sort((a, b) => (b.games - a.games) || (b.realQsos - a.realQsos));
 
-        users.forEach((u, idx) => {
-            u.realQsos = realQsosResults[idx] || 0;
-        });
-
-        users.sort((a, b) => (b.games || 0) - (a.games || 0) || (b.realQsos || 0) - (a.realQsos || 0));
-
-        // Pulizia finale prima dell'append per evitare duplicati da chiamate concorrenti
         els.activityRankList.innerHTML = '';
 
         if (users.length === 0) {
@@ -215,6 +238,12 @@ window.renderActivityRankings = function(period, key) {
             let medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
             const li = document.createElement('li');
             const nameSpan = document.createElement('span');
+            nameSpan.style.cssText = "display:flex; align-items:center; gap:4px; flex-wrap:wrap;";
+            nameSpan.appendChild(document.createTextNode(medal + " "));
+
+            const nameB = document.createElement('b');
+            nameB.textContent = u.name;
+            nameSpan.appendChild(nameB);
             nameSpan.style.cssText = "display:flex; align-items:center; gap:4px; flex-wrap:wrap;";
             nameSpan.appendChild(document.createTextNode(medal + " "));
 
