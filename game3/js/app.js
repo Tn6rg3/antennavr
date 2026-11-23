@@ -958,20 +958,25 @@ async function initGame() {
     if (document.getElementById('autoAdvanceDelaySelect')) document.getElementById('autoAdvanceDelaySelect').value = localStorage.getItem('cwgame_pref_auto_advance_delay') || "5";
     if (document.getElementById('charsAutoDelaySelect')) document.getElementById('charsAutoDelaySelect').value = localStorage.getItem('cwgame_pref_chars_auto_delay') || "0.3";
 
-    // SALVATAGGIO AUTOMATICO DELLE PREFERENZE AL CAMBIO
-    const savePref = (key, val) => localStorage.setItem(key, val);
-    els.startWpmInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_WPM, e.target.value));
-    els.wordCountInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_WORDS, e.target.value));
-    document.getElementById('wordLengthInput')?.addEventListener('change', (e) => savePref(STORAGE_PREF_WORD_LEN, e.target.value));
-    els.toneInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_TONE, e.target.value));
-    els.charSpaceInput?.addEventListener('change', (e) => savePref(STORAGE_PREF_CHAR_SPACE, e.target.value));
-    els.wordSpaceSelect?.addEventListener('change', (e) => savePref(STORAGE_PREF_WORD_SPACE, e.target.value));
-    els.fixedSpeedCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_FIXED, e.target.checked));
-    els.allowSpectatorsCheckbox?.addEventListener('change', (e) => savePref(STORAGE_PREF_SPECTATE, e.target.checked));
-    document.getElementById('voiceInputCheckbox')?.addEventListener('change', (e) => savePref('cwgame_pref_voice_input', e.target.checked));
-    document.getElementById('autoAdvanceCheckbox')?.addEventListener('change', (e) => savePref('cwgame_pref_auto_advance', e.target.checked));
-    document.getElementById('autoAdvanceDelaySelect')?.addEventListener('change', (e) => savePref('cwgame_pref_auto_advance_delay', e.target.value));
-    document.getElementById('charsAutoDelaySelect')?.addEventListener('change', (e) => savePref('cwgame_pref_chars_auto_delay', e.target.value));
+    // SALVATAGGIO AUTOMATICO DELLE PREFERENZE PER OGNI SINGOLA MODALITÀ
+    const savePref = () => {
+        if (typeof window.saveGamePreferences === 'function') {
+            window.saveGamePreferences();
+        }
+    };
+    els.startWpmInput?.addEventListener('change', savePref);
+    els.wordCountInput?.addEventListener('change', savePref);
+    document.getElementById('wordLengthInput')?.addEventListener('change', savePref);
+    els.toneInput?.addEventListener('change', savePref);
+    els.charSpaceInput?.addEventListener('change', savePref);
+    els.wordSpaceSelect?.addEventListener('change', savePref);
+    els.fixedSpeedCheckbox?.addEventListener('change', savePref);
+    els.allowSpectatorsCheckbox?.addEventListener('change', savePref);
+    document.getElementById('voiceRateSelect')?.addEventListener('change', savePref);
+    document.getElementById('voiceInputCheckbox')?.addEventListener('change', (e) => localStorage.setItem('cwgame_pref_voice_input', e.target.checked));
+    document.getElementById('autoAdvanceCheckbox')?.addEventListener('change', (e) => localStorage.setItem('cwgame_pref_auto_advance', e.target.checked));
+    document.getElementById('autoAdvanceDelaySelect')?.addEventListener('change', (e) => localStorage.setItem('cwgame_pref_auto_advance_delay', e.target.value));
+    document.getElementById('charsAutoDelaySelect')?.addEventListener('change', (e) => localStorage.setItem('cwgame_pref_chars_auto_delay', e.target.value));
     document.getElementById('charsGroupLengthInput')?.addEventListener('change', () => window.checkGameTypeUI?.());
 
     isChatCwEnabled = localStorage.getItem(STORAGE_CHAT_CW_ENABLED) === 'true';

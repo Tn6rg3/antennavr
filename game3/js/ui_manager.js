@@ -256,6 +256,14 @@ window.checkGameTypeUI = function() {
     }
 };
 
+window.getModePrefKeyPrefix = function() {
+    const typeEl = document.getElementById('gameTypeInput');
+    const modeEl = document.getElementById('gameModeInput');
+    const typeVal = typeEl ? typeEl.value : 'single';
+    const modeVal = modeEl ? modeEl.value : 'standard';
+    return `cwgame_mode_pref_${typeVal}_${modeVal}_`;
+};
+
 window.saveGamePreferences = function() {
     try {
         const typeEl = document.getElementById('gameTypeInput');
@@ -272,20 +280,51 @@ window.saveGamePreferences = function() {
 
         if (typeEl) localStorage.setItem('cwgame_pref_type', typeEl.value);
         if (modeEl) localStorage.setItem('cwgame_pref_mode', modeEl.value);
-        if (wpmEl) localStorage.setItem('STORAGE_PREF_WPM', wpmEl.value);
-        if (wordsEl) localStorage.setItem('STORAGE_PREF_WORDS', wordsEl.value);
-        if (wordLenEl) localStorage.setItem('STORAGE_PREF_WORD_LEN', wordLenEl.value);
-        if (toneEl) localStorage.setItem('STORAGE_PREF_TONE', toneEl.value);
-        if (charSpaceEl) localStorage.setItem('STORAGE_PREF_CHAR_SPACE', charSpaceEl.value);
-        if (wordSpaceEl) localStorage.setItem('STORAGE_PREF_WORD_SPACE', wordSpaceEl.value);
-        if (fixedEl) localStorage.setItem('STORAGE_PREF_FIXED', fixedEl.checked);
-        if (allowSpectatorsEl) localStorage.setItem('STORAGE_PREF_SPECTATE', allowSpectatorsEl.checked);
-        if (voiceRateEl) localStorage.setItem('cwgame_pref_voice_rate', voiceRateEl.value);
+
+        const prefix = window.getModePrefKeyPrefix();
+
+        if (wpmEl) {
+            localStorage.setItem(prefix + 'wpm', wpmEl.value);
+            localStorage.setItem('STORAGE_PREF_WPM', wpmEl.value);
+        }
+        if (wordsEl) {
+            localStorage.setItem(prefix + 'words', wordsEl.value);
+            localStorage.setItem('STORAGE_PREF_WORDS', wordsEl.value);
+        }
+        if (wordLenEl) {
+            localStorage.setItem(prefix + 'wordlen', wordLenEl.value);
+            localStorage.setItem('STORAGE_PREF_WORD_LEN', wordLenEl.value);
+        }
+        if (toneEl) {
+            localStorage.setItem(prefix + 'tone', toneEl.value);
+            localStorage.setItem('STORAGE_PREF_TONE', toneEl.value);
+        }
+        if (charSpaceEl) {
+            localStorage.setItem(prefix + 'charspace', charSpaceEl.value);
+            localStorage.setItem('STORAGE_PREF_CHAR_SPACE', charSpaceEl.value);
+        }
+        if (wordSpaceEl) {
+            localStorage.setItem(prefix + 'wordspace', wordSpaceEl.value);
+            localStorage.setItem('STORAGE_PREF_WORD_SPACE', wordSpaceEl.value);
+        }
+        if (fixedEl) {
+            localStorage.setItem(prefix + 'fixed', fixedEl.checked);
+            localStorage.setItem('STORAGE_PREF_FIXED', fixedEl.checked);
+        }
+        if (allowSpectatorsEl) {
+            localStorage.setItem(prefix + 'spectate', allowSpectatorsEl.checked);
+            localStorage.setItem('STORAGE_PREF_SPECTATE', allowSpectatorsEl.checked);
+        }
+        if (voiceRateEl) {
+            localStorage.setItem(prefix + 'voicerate', voiceRateEl.value);
+            localStorage.setItem('cwgame_pref_voice_rate', voiceRateEl.value);
+        }
     } catch(e){}
 };
 
 window.restoreGamePreferences = function() {
     try {
+        const prefix = window.getModePrefKeyPrefix();
         const wpmEl = document.getElementById('startWpmInput');
         const wordsEl = document.getElementById('wordCountInput');
         const wordLenEl = document.getElementById('wordLengthInput');
@@ -296,15 +335,38 @@ window.restoreGamePreferences = function() {
         const allowSpectatorsEl = document.getElementById('allowSpectatorsCheckbox');
         const voiceRateEl = document.getElementById('voiceRateSelect');
 
-        if (wpmEl && localStorage.getItem('STORAGE_PREF_WPM')) wpmEl.value = localStorage.getItem('STORAGE_PREF_WPM');
-        if (wordsEl && localStorage.getItem('STORAGE_PREF_WORDS')) wordsEl.value = localStorage.getItem('STORAGE_PREF_WORDS');
-        if (wordLenEl && localStorage.getItem('STORAGE_PREF_WORD_LEN')) wordLenEl.value = localStorage.getItem('STORAGE_PREF_WORD_LEN');
-        if (toneEl && localStorage.getItem('STORAGE_PREF_TONE')) toneEl.value = localStorage.getItem('STORAGE_PREF_TONE');
-        if (charSpaceEl && localStorage.getItem('STORAGE_PREF_CHAR_SPACE')) charSpaceEl.value = localStorage.getItem('STORAGE_PREF_CHAR_SPACE');
-        if (wordSpaceEl && localStorage.getItem('STORAGE_PREF_WORD_SPACE')) wordSpaceEl.value = localStorage.getItem('STORAGE_PREF_WORD_SPACE');
-        if (fixedEl && localStorage.getItem('STORAGE_PREF_FIXED') !== null) fixedEl.checked = (localStorage.getItem('STORAGE_PREF_FIXED') === 'true');
-        if (allowSpectatorsEl && localStorage.getItem('STORAGE_PREF_SPECTATE') !== null) allowSpectatorsEl.checked = (localStorage.getItem('STORAGE_PREF_SPECTATE') === 'true');
-        if (voiceRateEl && localStorage.getItem('cwgame_pref_voice_rate')) voiceRateEl.value = localStorage.getItem('cwgame_pref_voice_rate');
+        const getPref = (propKey, fallbackKey) => {
+            const specific = localStorage.getItem(prefix + propKey);
+            if (specific !== null && specific !== undefined) return specific;
+            return localStorage.getItem(fallbackKey);
+        };
+
+        const wpmVal = getPref('wpm', 'STORAGE_PREF_WPM');
+        if (wpmEl && wpmVal !== null) wpmEl.value = wpmVal;
+
+        const wordsVal = getPref('words', 'STORAGE_PREF_WORDS');
+        if (wordsEl && wordsVal !== null) wordsEl.value = wordsVal;
+
+        const wordLenVal = getPref('wordlen', 'STORAGE_PREF_WORD_LEN');
+        if (wordLenEl && wordLenVal !== null) wordLenEl.value = wordLenVal;
+
+        const toneVal = getPref('tone', 'STORAGE_PREF_TONE');
+        if (toneEl && toneVal !== null) toneEl.value = toneVal;
+
+        const charSpaceVal = getPref('charspace', 'STORAGE_PREF_CHAR_SPACE');
+        if (charSpaceEl && charSpaceVal !== null) charSpaceEl.value = charSpaceVal;
+
+        const wordSpaceVal = getPref('wordspace', 'STORAGE_PREF_WORD_SPACE');
+        if (wordSpaceEl && wordSpaceVal !== null) wordSpaceEl.value = wordSpaceVal;
+
+        const fixedVal = getPref('fixed', 'STORAGE_PREF_FIXED');
+        if (fixedEl && fixedVal !== null) fixedEl.checked = (fixedVal === 'true');
+
+        const specVal = getPref('spectate', 'STORAGE_PREF_SPECTATE');
+        if (allowSpectatorsEl && specVal !== null) allowSpectatorsEl.checked = (specVal === 'true');
+
+        const voiceRateVal = getPref('voicerate', 'cwgame_pref_voice_rate');
+        if (voiceRateEl && voiceRateVal !== null) voiceRateEl.value = voiceRateVal;
     } catch(e){}
 };
 
