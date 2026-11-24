@@ -117,50 +117,60 @@ window.listenToCwgLiveQsosTable = function() {
         if (!currentBody) return;
         currentBody.innerHTML = '';
 
+        const myCall = window.cleanCallsignString(
+            document.getElementById('cwgLogMyCall')?.value ||
+            localStorage.getItem('cwgame_activity_call') ||
+            window.myName || ""
+        );
+
         const now = Date.now();
+        const today = new Date();
+        const monthStr = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, '0');
+        const dayStr = monthStr + "-" + String(today.getDate()).padStart(2, '0');
         const maxAgeMs = ((window.getCwgQsoDurationMinutes() + window.getCwgKeysDurationMinutes()) * 60 * 1000) + 30000;
         const activePairs = {};
 
         try {
-            const [hSnap, sSnap] = await Promise.all([
-                db.ref('activity_cwg/handshake').once('value').catch(() => null),
-                db.ref('activity_cwg/active_sessions').once('value').catch(() => null)
+            const [sSnap, savedTodaySnap] = await Promise.all([
+                db.ref('activity_cwg/active_sessions').once('value').catch(() => null),
+                db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}`).once('value').catch(() => null)
             ]);
 
-            if (hSnap && hSnap.exists()) {
-                hSnap.forEach(child => {
-                    const data = child.val();
-                    if (data && data.myCall && data.partnerCall && data.appStatus !== 'app_closed' && (now - (data.ts || 0) < maxAgeMs)) {
-                        const sortedKey = [data.myCall, data.partnerCall].sort().join('_') + '_' + (data.band || '40m');
-                        activePairs[sortedKey] = {
-                            callA: data.myCall,
-                            callB: data.partnerCall,
-                            band: (data.band || '40m').toUpperCase(),
-                            ts: data.ts
-                        };
-                    }
-                });
-            }
+            const savedKeysToday = (savedTodaySnap && savedTodaySnap.exists()) ? (savedTodaySnap.val() || {}) : {};
 
             if (sSnap && sSnap.exists()) {
                 sSnap.forEach(child => {
                     const data = child.val();
-                    if (data && data.callA && data.callB && (now - (data.qsoStartTs || data.ts || 0) < maxAgeMs)) {
-                        const sortedKey = [data.callA, data.callB].sort().join('_') + '_' + (data.band || '40m');
-                        activePairs[sortedKey] = {
-                            callA: data.callA,
-                            callB: data.callB,
-                            band: (data.band || '40m').toUpperCase(),
-                            ts: data.qsoStartTs || data.ts
-                        };
-                    }
+                    if (!data || !data.callA || !data.callB) return;
+
+                    const callA = window.cleanCallsignString(data.callA);
+                    const callB = window.cleanCallsignString(data.callB);
+                    const bandLower = (data.band || '40m').trim().toLowerCase();
+                    const ts = data.qsoStartTs || data.ts || 0;
+
+                    // 1. Esclude sessioni scadute
+                    if (now - ts >= maxAgeMs) return;
+
+                    // 2. Esclude il proprio QSO (mostra solo gli ALTRI QSO in corso)
+                    if (myCall && (callA === myCall || callB === myCall)) return;
+
+                    // 3. Esclude eventuali QSO già salvati oggi (evita "fantasmi" rimasti in active_sessions)
+                    const sortedKey = [callA, callB].sort().join('_') + '_' + bandLower;
+                    if (savedKeysToday[sortedKey] || savedKeysToday[`${sortedKey}_${dayStr}`]) return;
+
+                    activePairs[sortedKey] = {
+                        callA: callA,
+                        callB: callB,
+                        band: bandLower.toUpperCase(),
+                        ts: ts
+                    };
                 });
             }
         } catch(e) {}
 
         const list = Object.values(activePairs);
         if (list.length === 0) {
-            currentBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--hint-color); padding:10px;">Nessun QSO attualmente in corso.</td></tr>';
+            currentBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--hint-color); padding:10px;">Nessun altro QSO attualmente in corso.</td></tr>';
             return;
         }
 
@@ -195,7 +205,6 @@ window.listenToCwgLiveQsosTable = function() {
     if (!window.isCwgLiveTableListenerActive) {
         window.isCwgLiveTableListenerActive = true;
         db.ref('activity_cwg/active_sessions').on('value', () => renderLiveTable());
-        db.ref('activity_cwg/handshake').on('value', () => renderLiveTable());
     }
     renderLiveTable();
 };
@@ -278,7 +287,6 @@ window.openCwgActivityScreenImpl = async function() {
         myCallInput.value = myActivityCall;
     }
 
-    const qsoTotalSecsDefault = window.getCwgQsoDurationMinutes() * 60;
     const keysTotalSecsDefault = window.getCwgKeysDurationMinutes() * 60;
 
     // 1. REPERIMENTO E RIPRISTINO SESSIONE QSO ATTIVA (DA LOCALSTORAGE O DA FIREBASE)
@@ -528,6 +536,8 @@ window.cancelCwgQso = function() {
         const partnerCall = window.cleanCallsignString(document.getElementById('cwgLogPartnerCall')?.value || "");
         const band = (document.getElementById('cwgLogBandSelect')?.value || "40m").trim().toLowerCase();
 
+        window.cwgMyPresenceKey = null;
+
         if (db && myCall && partnerCall) {
             const callsArray = [myCall, partnerCall].sort();
             const sharedQsoKeyBase = callsArray.join('_') + '_' + band;
@@ -538,7 +548,8 @@ window.cancelCwgQso = function() {
                     ts: Date.now()
                 }),
                 db.ref(`activity_cwg/active_sessions/${sharedQsoKeyBase}`).remove(),
-                db.ref(`activity_cwg/handshake/${myCall}_${partnerCall}_${band}`).remove()
+                db.ref(`activity_cwg/handshake/${myCall}_${partnerCall}_${band}`).remove(),
+                db.ref(`activity_cwg/handshake/${partnerCall}_${myCall}_${band}`).remove()
             ]).catch(() => {});
         }
 
@@ -1224,6 +1235,7 @@ function attachCwgSessionControlListeners(myCall, partnerCall, band) {
 
             if (data.by !== myCall && savedTs >= (currentQsoStartTs - 60000)) {
                 window.cwgQsoCompletedSuccessfully = true;
+                window.cwgMyPresenceKey = null;
                 const awardedPts = Number(data.partnerPoints || data.points || 1);
                 if (typeof showToast === 'function') {
                     showToast(`✅ QSO SALVATO DA ${data.by}! Punti: +${awardedPts} pt`);
@@ -1247,6 +1259,7 @@ function attachCwgSessionControlListeners(myCall, partnerCall, band) {
 
             if (data.by !== myCall && cancelTs >= (currentQsoStartTs - 5000)) {
                 window.cwgQsoCompletedSuccessfully = true; // evita doppio alert dall'handshake
+                window.cwgMyPresenceKey = null;
                 alert(`⚠️ Il corrispondente ${data.by} ha annullato il QSO.`);
                 window.resetCwgForm();
             }
@@ -1700,8 +1713,9 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
     }
 
     window.cwgQsoCompletedSuccessfully = true;
+    window.cwgMyPresenceKey = null;
 
-    // Salviamo anche il formato chiave con data e rimuoviamo active_sessions
+    // Salviamo il formato chiave con data e rimuoviamo subito active_sessions + entrambi gli handshake
     await Promise.all([
         db.ref(`activity_cwg/qsos/${monthStr}/${dayStr}/${sharedQsoKeyWithDate}`).set({
             callA: callsArray[0],
@@ -1711,7 +1725,9 @@ window.recordCwgQsoDirectlyToFirebase = async function(myCall, partnerCall, band
             ts: Date.now(),
             validated: true
         }),
-        db.ref(`activity_cwg/active_sessions/${sharedQsoKeyBase}`).remove()
+        db.ref(`activity_cwg/active_sessions/${sharedQsoKeyBase}`).remove(),
+        db.ref(`activity_cwg/handshake/${myCall}_${partnerCall}_${band}`).remove(),
+        db.ref(`activity_cwg/handshake/${partnerCall}_${myCall}_${band}`).remove()
     ]).catch(() => {});
 
     // 1. ASSEGNAZIONE PUNTI ALL'OPERATORE A (Chiave primaria: Nominativo myCall)
@@ -1956,7 +1972,7 @@ window.resumeCwgQsoOnWake = function() {
 
 document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
-        if (window.cwgMyPresenceKey && db) {
+        if (window.cwgMyPresenceKey && !window.cwgQsoCompletedSuccessfully && db) {
             db.ref(`activity_cwg/handshake/${window.cwgMyPresenceKey}`).update({
                 appStatus: 'active',
                 ts: Date.now()
@@ -1964,7 +1980,7 @@ document.addEventListener('visibilitychange', () => {
         }
         window.resumeCwgQsoOnWake();
     } else {
-        if (window.cwgMyPresenceKey && db) {
+        if (window.cwgMyPresenceKey && !window.cwgQsoCompletedSuccessfully && db) {
             db.ref(`activity_cwg/handshake/${window.cwgMyPresenceKey}`).update({
                 appStatus: 'app_paused',
                 ts: Date.now()
@@ -1973,7 +1989,7 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 window.addEventListener('pageshow', () => {
-    if (window.cwgMyPresenceKey && db) {
+    if (window.cwgMyPresenceKey && !window.cwgQsoCompletedSuccessfully && db) {
         db.ref(`activity_cwg/handshake/${window.cwgMyPresenceKey}`).update({
             appStatus: 'active',
             ts: Date.now()
@@ -1982,7 +1998,7 @@ window.addEventListener('pageshow', () => {
     window.resumeCwgQsoOnWake();
 });
 window.addEventListener('focus', () => {
-    if (window.cwgMyPresenceKey && db) {
+    if (window.cwgMyPresenceKey && !window.cwgQsoCompletedSuccessfully && db) {
         db.ref(`activity_cwg/handshake/${window.cwgMyPresenceKey}`).update({
             appStatus: 'active',
             ts: Date.now()
