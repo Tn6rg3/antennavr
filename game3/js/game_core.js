@@ -1515,11 +1515,16 @@ window.finishGame = async function() {
             }
 
             // VERIFICA PARAMETRI PERSONALIZZATI (Escludiamo dalla Classifica Ufficiale le partite in Singolo con parametri modificati)
+            // La spaziatura caratteri (Farnsworth) e personalizzata SOLO SE charSpaceWpm e maggiore di 0 E inferiore alla velocita iniziale
+            const startWpmVal = Number(window.baseWpm || window.currentWpm || 20);
+            const isCustomCharSpace = !!(window.charSpaceWpm && Number(window.charSpaceWpm) > 0 && Number(window.charSpaceWpm) < startWpmVal);
+            const isCustomWordSpace = !!(window.wordSpaceMult && Math.abs(Number(window.wordSpaceMult) - 1.0) > 0.01);
+
             const hasCustomParameters = !isActuallyMulti && (
                 !!window.isEasyMode ||
                 !!window.isFixedSpeed ||
-                (window.charSpaceWpm && Number(window.charSpaceWpm) > 0) ||
-                (window.wordSpaceMult && Number(window.wordSpaceMult) !== 1.0)
+                isCustomCharSpace ||
+                isCustomWordSpace
             );
 
             // --- AGGIORNAMENTO RECORD MAX WPM MENSILE PER QUALSIASI PARTITA VALIDA ---

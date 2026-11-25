@@ -5237,8 +5237,12 @@ if (els.createRoomBtn) {
         window.isAutoAdvance = window.isSinglePlayer && window.currentMode === 'standard' && els.speakModeCheckbox?.checked === true && document.getElementById('autoAdvanceCheckbox')?.checked === true;
         window.autoAdvanceDelaySec = parseInt(document.getElementById('autoAdvanceDelaySelect')?.value) || 5;
 
+        const startWpmNum = parseInt(els.startWpmInput?.value) || 20;
         let cSpace = (window.isSinglePlayer && els.charSpaceInput?.value) ? parseInt(els.charSpaceInput.value) : 0;
+        if (cSpace >= startWpmNum) cSpace = 0; // Se la spaziatura caratteri e >= alla velocita di partenza, e spaziatura normale
+
         let wSpace = window.isSinglePlayer && els.wordSpaceSelect?.value ? parseFloat(els.wordSpaceSelect.value) : 1.0;
+        if (isNaN(wSpace) || Math.abs(wSpace - 1.0) < 0.01) wSpace = 1.0;
 
         window.roomCode = window.isSinglePlayer ? "SOLO_" + window.myId : Math.floor(1000 + Math.random() * 9000).toString();
 
