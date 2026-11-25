@@ -824,8 +824,11 @@ window.fetchAndRenderCustomContestLeaderboard = async function() {
     if (!db) return;
 
     try {
-        const setSnap = await db.ref('appConfig/custom_contest_settings').once('value');
-        const settings = setSnap.exists() ? (setSnap.val() || {}) : {};
+        let setSnap = await db.ref('activity/custom_contest_settings').once('value').catch(() => null);
+        if (!setSnap || !setSnap.exists()) {
+            setSnap = await db.ref('appConfig/custom_contest_settings').once('value').catch(() => null);
+        }
+        const settings = (setSnap && setSnap.exists()) ? (setSnap.val() || {}) : {};
 
         const contestTitle = settings.title || "🏆 Sfida Speciale";
         const contestId = settings.contestId || 'default';

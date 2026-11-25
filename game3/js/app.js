@@ -2691,24 +2691,34 @@ window.saveAdminCustomContestSettings = function() {
         updatedAt: Date.now()
     };
 
-    db.ref('appConfig/custom_contest_settings').set(settingsData).then(() => {
+    // Salvataggio con garanzia sul percorso 'activity/custom_contest_settings' (autorizzato nelle regole Firebase)
+    Promise.all([
+        db.ref('activity/custom_contest_settings').set(settingsData),
+        db.ref('appConfig/custom_contest_settings').set(settingsData).catch(() => {})
+    ]).then(() => {
         if (typeof showToast === 'function') showToast("✅ Sfida Speciale salvata e pubblicata!");
         alert("✅ Sfida Speciale Personalizzata salvata e pubblicata con successo!");
     }).catch(err => {
-        alert("Errore salvataggio: " + err.message);
+        console.warn("CustomContest Save Fallback:", err);
+        db.ref('activity/custom_contest_settings').set(settingsData).then(() => {
+            if (typeof showToast === 'function') showToast("✅ Sfida Speciale salvata!");
+            alert("✅ Sfida Speciale Personalizzata salvata con successo!");
+        }).catch(e2 => {
+            alert("Errore salvataggio: " + e2.message);
+        });
     });
 };
 
 window.initCustomContestRealtimeListener = function() {
     if (!db) return;
 
-    db.ref('appConfig/custom_contest_settings').on('value', snap => {
+    const handleSettings = (snap) => {
         const settings = snap.exists() ? (snap.val() || {}) : {};
         const banner = document.getElementById('customContestHomeBanner');
         const bannerTitle = document.getElementById('customContestBannerTitle');
         const bannerInfo = document.getElementById('customContestBannerInfo');
 
-        if (window.isAdmin && settings) {
+        if (window.isAdmin && settings && settings.updatedAt) {
             if (document.getElementById('adminCustomContestEnableCheckbox')) document.getElementById('adminCustomContestEnableCheckbox').checked = !!settings.enabled;
             if (document.getElementById('adminCustomContestTitle')) document.getElementById('adminCustomContestTitle').value = settings.title || "";
             if (document.getElementById('adminCustomContestDate')) document.getElementById('adminCustomContestDate').value = settings.date || "";
@@ -2738,7 +2748,10 @@ window.initCustomContestRealtimeListener = function() {
         } else {
             banner.style.display = 'none';
         }
-    });
+    };
+
+    db.ref('activity/custom_contest_settings').on('value', handleSettings);
+    db.ref('appConfig/custom_contest_settings').on('value', handleSettings);
 };
 
 window.getCustomContestDeterministicWords = function(settings) {
