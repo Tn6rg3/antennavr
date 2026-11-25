@@ -2150,9 +2150,19 @@
                     <input type="number" id="adminCustomContestWords" value="20" min="5" max="100" style="width:100%; padding:6px; font-size:0.85em; font-weight:bold; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
                 </div>
 
-                <button onclick="window.saveAdminCustomContestSettings()" class="btn-success" style="width:100%; padding:8px; font-weight:bold; background:#00ffcc; border:none; color:#000; cursor:pointer;">
-                    💾 SALVA E PUBBLICA SFIDA SPECIALE
-                </button>
+                <div style="display:flex; gap:6px; margin-bottom:10px;">
+                    <button onclick="window.saveAdminCustomContestSettings()" class="btn-success" style="flex:2; padding:8px; font-weight:bold; background:#00ffcc; border:none; color:#000; cursor:pointer;">
+                        💾 SALVA E PUBBLICA
+                    </button>
+                    <button onclick="window.deleteAdminCustomContest()" class="btn-danger" style="flex:1; padding:8px; font-weight:bold; background:#f44336; border:none; color:#fff; cursor:pointer;">
+                        🗑️ ELIMINA ATTIVA
+                    </button>
+                </div>
+
+                <h5 style="margin:8px 0 4px 0; color:#00ffcc; font-size:0.82em;">📜 Elenco Sfide Speciali Create:</h5>
+                <div id="adminCustomContestList" style="max-height:130px; overflow-y:auto; font-size:0.75em; background:rgba(0,0,0,0.3); border:1px solid rgba(0,255,204,0.3); border-radius:6px; padding:6px;">
+                    <span style="color:var(--hint-color);">Caricamento elenco sfide...</span>
+                </div>
             </div>
         </div>
     </div>
