@@ -2745,11 +2745,11 @@ window.renderAdminCustomContestList = function() {
 
     db.ref('activity/custom_contests_history').once('value', snap => {
         if (!snap.exists()) {
-            listContainer.innerHTML = '<span style="color:var(--hint-color);">Nessuna Sfida Speciale creata finora.</span>';
+            listContainer.innerHTML = '<span style="color:#000000; font-weight:bold;">Nessuna Sfida Speciale creata finora.</span>';
             return;
         }
 
-        let html = '<div style="display:flex; flex-direction:column; gap:4px;">';
+        let html = '<div style="display:flex; flex-direction:column; gap:6px;">';
         snap.forEach(child => {
             const item = child.val() || {};
             const key = child.key;
@@ -2757,19 +2757,19 @@ window.renderAdminCustomContestList = function() {
             const info = `${item.date || ''} (${item.startTime || '15:00'}-${item.endTime || '18:00'}) | ${item.words || 20} ${item.mode || 'std'} @ ${item.wpm || 20}WPM`;
 
             html += `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 6px; background:rgba(255,255,255,0.05); border-radius:4px;">
-                    <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:80%;">
-                        <b style="color:#00ffcc;">${title}</b><br>
-                        <small style="color:var(--hint-color); font-size:0.85em;">${info}</small>
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; background:#ffffff; color:#000000; border:1px solid #00bcd4; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.15);">
+                    <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:82%;">
+                        <b style="color:#00838f; font-size:1.05em;">${title}</b><br>
+                        <small style="color:#222222; font-size:0.85em; font-weight:bold;">${info}</small>
                     </div>
-                    <button onclick="window.deleteAdminCustomContest('${key}')" title="Elimina Sfida" style="background:none; border:none; color:#f44336; cursor:pointer; font-size:0.95em; padding:2px 4px;">🗑️</button>
+                    <button onclick="window.deleteAdminCustomContest('${key}')" title="Elimina Sfida" style="background:none; border:none; color:#d32f2f; cursor:pointer; font-size:1.1em; padding:2px 6px; font-weight:bold;">🗑️</button>
                 </div>
             `;
         });
         html += '</div>';
         listContainer.innerHTML = html;
     }).catch(() => {
-        listContainer.innerHTML = '<span style="color:var(--hint-color);">Nessuna sfida registrata.</span>';
+        listContainer.innerHTML = '<span style="color:#000000; font-weight:bold;">Nessuna sfida registrata.</span>';
     });
 };
 
