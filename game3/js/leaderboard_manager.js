@@ -965,9 +965,6 @@ window.fetchAndRenderCustomContestLeaderboard = async function(requestedIdx = 0)
         container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Errore caricamento classifica.</p>`;
     }
 };
-        container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Errore caricamento classifica.</p>`;
-    }
-};
 
 window.fetchAndRenderGlobalLeaderboard = async function(tabType, filterWordCount) {
     if (!els.leaderboardContainer) return;
