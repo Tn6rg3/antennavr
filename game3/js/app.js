@@ -2876,7 +2876,7 @@ window.initCustomContestRealtimeListener = function() {
     }, 10000);
 };
 
-window.getCustomContestDeterministicWords = function(settings) {
+window.getCustomContestDeterministicWords = function(settings, countParam) {
     const seedStr = (settings.contestId || 'contest') + '_' + (settings.date || 'today');
     let seed = 0;
     for (let i = 0; i < seedStr.length; i++) {
@@ -2949,8 +2949,10 @@ window.startCustomContestSession = async function() {
     window.currentTone = parseInt(localStorage.getItem('STORAGE_PREF_TONE')) || 600;
 
     gameWords = window.getCustomContestDeterministicWords(settings);
+    window.gameWords = gameWords;
 
     roomCode = "SOLO_CONTEST_" + window.myId;
+    window.roomCode = roomCode;
 
     if (els.permanentGameInput) {
         els.permanentGameInput.value = "";
@@ -2961,6 +2963,8 @@ window.startCustomContestSession = async function() {
         window.showScreen('gameArea');
         if (typeof window.startCountdownSequence === 'function') {
             window.startCountdownSequence();
+        } else if (typeof window.startGameSequence === 'function') {
+            window.startGameSequence();
         }
     }
 };
