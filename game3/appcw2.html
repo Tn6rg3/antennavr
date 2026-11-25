@@ -2150,12 +2150,15 @@
                     <input type="number" id="adminCustomContestWords" value="20" min="5" max="100" style="width:100%; padding:6px; font-size:0.85em; font-weight:bold; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
                 </div>
 
-                <div style="display:flex; gap:6px; margin-bottom:10px;">
-                    <button onclick="window.saveAdminCustomContestSettings()" class="btn-success" style="flex:2; padding:8px; font-weight:bold; background:#00ffcc; border:none; color:#000; cursor:pointer;">
+                <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap;">
+                    <button onclick="window.clearAdminCustomContestForm()" class="btn-secondary" style="flex:1; padding:8px; font-weight:bold; background:#00bcd4; color:#fff; border:none; cursor:pointer; border-radius:4px;">
+                        ➕ Nuova
+                    </button>
+                    <button onclick="window.saveAdminCustomContestSettings()" class="btn-success" style="flex:2; padding:8px; font-weight:bold; background:#00ffcc; border:none; color:#000; cursor:pointer; border-radius:4px;">
                         💾 SALVA E PUBBLICA
                     </button>
-                    <button onclick="window.deleteAdminCustomContest()" class="btn-danger" style="flex:1; padding:8px; font-weight:bold; background:#f44336; border:none; color:#fff; cursor:pointer;">
-                        🗑️ ELIMINA ATTIVA
+                    <button onclick="window.deleteAdminCustomContest()" class="btn-danger" style="flex:1; padding:8px; font-weight:bold; background:#f44336; border:none; color:#fff; cursor:pointer; border-radius:4px;">
+                        🗑️ Elimina
                     </button>
                 </div>
 
