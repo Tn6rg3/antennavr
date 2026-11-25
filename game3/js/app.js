@@ -2745,7 +2745,7 @@ window.renderAdminCustomContestList = function() {
 
     db.ref('activity/custom_contests_history').once('value', snap => {
         if (!snap.exists()) {
-            listContainer.innerHTML = '<span style="color:#000000; font-weight:bold;">Nessuna Sfida Speciale creata finora.</span>';
+            listContainer.innerHTML = '<span style="color:#000000 !important; font-weight:bold;">Nessuna Sfida Speciale creata finora.</span>';
             return;
         }
 
@@ -2757,27 +2757,30 @@ window.renderAdminCustomContestList = function() {
             const info = `${item.date || ''} (${item.startTime || '15:00'}-${item.endTime || '18:00'}) | ${item.words || 20} ${item.mode || 'std'} @ ${item.wpm || 20}WPM`;
 
             html += `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; background:#ffffff; color:#000000; border:1px solid #00bcd4; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.15);">
-                    <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:82%;">
-                        <b style="color:#00838f; font-size:1.05em;">${title}</b><br>
-                        <small style="color:#222222; font-size:0.85em; font-weight:bold;">${info}</small>
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; background:#ffffff !important; color:#000000 !important; border:2px solid #00838f; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.15);">
+                    <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:80%; color:#000000 !important;">
+                        <b style="color:#000000 !important; font-size:1.05em; font-weight:bold;">${title}</b><br>
+                        <span style="color:#000000 !important; font-size:0.85em; font-weight:bold; display:block;">${info}</span>
                     </div>
-                    <button onclick="window.deleteAdminCustomContest('${key}')" title="Elimina Sfida" style="background:none; border:none; color:#d32f2f; cursor:pointer; font-size:1.1em; padding:2px 6px; font-weight:bold;">🗑️</button>
+                    <button onclick="window.deleteAdminCustomContest('${key}')" title="Elimina Sfida" style="background:#ffebee; border:1px solid #d32f2f; color:#d32f2f !important; cursor:pointer; font-size:1.1em; padding:4px 8px; font-weight:bold; border-radius:4px; flex-shrink:0;">🗑️</button>
                 </div>
             `;
         });
         html += '</div>';
         listContainer.innerHTML = html;
     }).catch(() => {
-        listContainer.innerHTML = '<span style="color:#000000; font-weight:bold;">Nessuna sfida registrata.</span>';
+        listContainer.innerHTML = '<span style="color:#000000 !important; font-weight:bold;">Nessuna sfida registrata.</span>';
     });
 };
 
 window.initCustomContestRealtimeListener = function() {
     if (!db) return;
 
+    let lastSnap = null;
+
     const handleSettings = (snap) => {
-        const settings = snap.exists() ? (snap.val() || {}) : {};
+        if (snap && snap.exists()) lastSnap = snap;
+        const settings = lastSnap && lastSnap.exists() ? (lastSnap.val() || {}) : {};
         const banner = document.getElementById('customContestHomeBanner');
         const bannerTitle = document.getElementById('customContestBannerTitle');
         const bannerInfo = document.getElementById('customContestBannerInfo');
@@ -2799,10 +2802,19 @@ window.initCustomContestRealtimeListener = function() {
         if (!banner) return;
 
         const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
-        const nowStr = new Date().toTimeString().slice(0, 5); // "HH:MM"
 
-        const isToday = (settings.date === todayStr);
-        const isTimeWindowActive = (nowStr >= (settings.startTime || "00:00") && nowStr <= (settings.endTime || "23:59"));
+        const dNow = new Date();
+        const nowH = String(dNow.getHours()).padStart(2, '0');
+        const nowM = String(dNow.getMinutes()).padStart(2, '0');
+        const nowStr = `${nowH}:${nowM}`; // "HH:MM" in orario locale italiano
+
+        const contestDate = settings.date ? String(settings.date).trim() : todayStr;
+        const isToday = (contestDate === todayStr);
+
+        const startTimeClean = settings.startTime ? String(settings.startTime).trim().slice(0, 5) : "00:00";
+        const endTimeClean = settings.endTime ? String(settings.endTime).trim().slice(0, 5) : "23:59";
+
+        const isTimeWindowActive = (nowStr >= startTimeClean && nowStr <= endTimeClean);
         const contestId = settings.contestId || 'default';
         const alreadyPlayed = (localStorage.getItem(`cwgame_custom_contest_played_${todayStr}_${contestId}`) === 'true');
 
@@ -2811,7 +2823,7 @@ window.initCustomContestRealtimeListener = function() {
         if (settings.enabled && isToday && isTimeWindowActive && !alreadyPlayed) {
             banner.style.display = 'block';
             if (bannerTitle) bannerTitle.textContent = settings.title || "🏆 SFIDA SPECIALE ATTIVA!";
-            if (bannerInfo) bannerInfo.textContent = `⏰ Dalle ${settings.startTime} alle ${settings.endTime} | 1 Sola Prova | ${settings.words} ${settings.mode === 'chars' ? 'Caratteri' : 'Parole'}`;
+            if (bannerInfo) bannerInfo.textContent = `⏰ Dalle ${startTimeClean} alle ${endTimeClean} | 1 Sola Prova | ${settings.words || 20} ${settings.mode === 'chars' ? 'Caratteri' : 'Parole'}`;
         } else {
             banner.style.display = 'none';
         }
@@ -2819,6 +2831,12 @@ window.initCustomContestRealtimeListener = function() {
 
     db.ref('activity/custom_contest_settings').on('value', handleSettings);
     db.ref('appConfig/custom_contest_settings').on('value', handleSettings);
+
+    // RICONTROLLO PERIODICO OGNI 10 SECONDI: Garantisce la comparsa del banner all'orario esatto di inizio!
+    if (window.customContestClockCheckTimer) clearInterval(window.customContestClockCheckTimer);
+    window.customContestClockCheckTimer = setInterval(() => {
+        if (lastSnap) handleSettings(lastSnap);
+    }, 10000);
 };
 
 window.getCustomContestDeterministicWords = function(settings) {
