@@ -2664,19 +2664,63 @@ window.saveAdminCallsignChallengeSettings = function() {
     });
 };
 
+window.clearAdminCustomContestForm = function() {
+    window.isEditingCustomContestForm = true;
+    const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+
+    if (document.getElementById('adminCustomContestEnableCheckbox')) document.getElementById('adminCustomContestEnableCheckbox').checked = true;
+    if (document.getElementById('adminCustomContestTitle')) document.getElementById('adminCustomContestTitle').value = "🏆 SFIDA SPECIALE FLASH";
+    if (document.getElementById('adminCustomContestDate')) document.getElementById('adminCustomContestDate').value = todayStr;
+    if (document.getElementById('adminCustomContestStart')) document.getElementById('adminCustomContestStart').value = "15:00";
+    if (document.getElementById('adminCustomContestEnd')) document.getElementById('adminCustomContestEnd').value = "18:00";
+    if (document.getElementById('adminCustomContestMode')) document.getElementById('adminCustomContestMode').value = "standard";
+    if (document.getElementById('adminCustomContestWpm')) document.getElementById('adminCustomContestWpm').value = 20;
+    if (document.getElementById('adminCustomContestWords')) document.getElementById('adminCustomContestWords').value = 20;
+
+    if (typeof showToast === 'function') showToast("➕ Campi pronti per la creazione di una Nuova Sfida!");
+};
+
+window.loadCustomContestIntoAdminForm = function(contestId) {
+    if (!db || !window.isAdmin) return;
+    window.isEditingCustomContestForm = true;
+
+    db.ref(`activity/custom_contests_history/${contestId}`).once('value', snap => {
+        if (snap.exists()) {
+            const item = snap.val() || {};
+            if (document.getElementById('adminCustomContestEnableCheckbox')) document.getElementById('adminCustomContestEnableCheckbox').checked = (item.enabled !== false);
+            if (document.getElementById('adminCustomContestTitle')) document.getElementById('adminCustomContestTitle').value = item.title || "";
+            if (document.getElementById('adminCustomContestDate')) document.getElementById('adminCustomContestDate').value = item.date || "";
+            if (document.getElementById('adminCustomContestStart')) document.getElementById('adminCustomContestStart').value = item.startTime || "15:00";
+            if (document.getElementById('adminCustomContestEnd')) document.getElementById('adminCustomContestEnd').value = item.endTime || "18:00";
+            if (document.getElementById('adminCustomContestMode')) document.getElementById('adminCustomContestMode').value = item.mode || "standard";
+            if (document.getElementById('adminCustomContestWpm')) document.getElementById('adminCustomContestWpm').value = item.wpm || 20;
+            if (document.getElementById('adminCustomContestWords')) document.getElementById('adminCustomContestWords').value = item.words || 20;
+
+            if (typeof showToast === 'function') showToast(`✏️ Caricata sfida: ${item.title || 'Sfida'}`);
+        }
+    });
+};
+
 window.saveAdminCustomContestSettings = function() {
     if (!db || !window.isAdmin) return alert("⚠️ Permesso negato. Solo l'Amministratore può salvare le impostazioni.");
 
-    const enabled = !!document.getElementById('adminCustomContestEnableCheckbox')?.checked;
+    window.isEditingCustomContestForm = false; // Sblocca la sincronizzazione automatica dopo il salvataggio
+
+    const enableEl = document.getElementById('adminCustomContestEnableCheckbox');
+    if (enableEl) enableEl.checked = true;
+
+    const enabled = true;
     const title = document.getElementById('adminCustomContestTitle')?.value.trim() || "🏆 SFIDA SPECIALE FLASH";
     const dateVal = document.getElementById('adminCustomContestDate')?.value.trim() || ((typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0]);
-    const startTime = document.getElementById('adminCustomContestStart')?.value.trim() || "15:00";
-    const endTime = document.getElementById('adminCustomContestEnd')?.value.trim() || "18:00";
+    const startTime = document.getElementById('adminCustomContestStart')?.value.trim() || "00:00";
+    const endTime = document.getElementById('adminCustomContestEnd')?.value.trim() || "23:59";
     const mode = document.getElementById('adminCustomContestMode')?.value || "standard";
     const wpm = parseInt(document.getElementById('adminCustomContestWpm')?.value) || 20;
     const words = parseInt(document.getElementById('adminCustomContestWords')?.value) || 20;
 
     const contestId = `contest_${dateVal.replace(/-/g,'')}_${startTime.replace(':','')}`;
+
+    localStorage.removeItem(`cwgame_custom_contest_played_${dateVal}_${contestId}`);
 
     const settingsData = {
         enabled: enabled,
@@ -2691,7 +2735,6 @@ window.saveAdminCustomContestSettings = function() {
         updatedAt: Date.now()
     };
 
-    // Salvataggio contemporaneo dell'impostazione attiva e nello storico sfide
     Promise.all([
         db.ref('activity/custom_contest_settings').set(settingsData),
         db.ref(`activity/custom_contests_history/${contestId}`).set(settingsData),
@@ -2765,10 +2808,12 @@ window.renderAdminCustomContestList = function() {
             card.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:6px 8px; background:#ffffff !important; color:#000000 !important; border:2px solid #00838f; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.15);';
 
             const textDiv = document.createElement('div');
-            textDiv.style.cssText = 'overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:80%; color:#000000 !important;';
+            textDiv.style.cssText = 'overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:70%; color:#000000 !important; cursor:pointer;';
+            textDiv.title = 'Clicca per caricare e modificare nei campi in alto';
+            textDiv.onclick = () => window.loadCustomContestIntoAdminForm(key);
 
             const titleB = document.createElement('b');
-            titleB.style.cssText = 'color:#000000 !important; font-size:1.05em; font-weight:bold; display:block;';
+            titleB.style.cssText = 'color:#000000 !important; font-size:1.02em; font-weight:bold; display:block;';
             titleB.textContent = item.title || 'Sfida';
 
             const infoSpan = document.createElement('span');
@@ -2778,14 +2823,32 @@ window.renderAdminCustomContestList = function() {
             textDiv.appendChild(titleB);
             textDiv.appendChild(infoSpan);
 
+            const btnsDiv = document.createElement('div');
+            btnsDiv.style.cssText = 'display:flex; gap:4px; align-items:center; flex-shrink:0;';
+
+            const editBtn = document.createElement('button');
+            editBtn.title = 'Carica nei campi per Modificare';
+            editBtn.style.cssText = 'background:#e0f7fa; border:1px solid #00bcd4; color:#00838f !important; cursor:pointer; font-size:1em; padding:3px 6px; font-weight:bold; border-radius:4px;';
+            editBtn.textContent = '✏️';
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                window.loadCustomContestIntoAdminForm(key);
+            };
+
             const delBtn = document.createElement('button');
             delBtn.title = 'Elimina Sfida';
-            delBtn.style.cssText = 'background:#ffebee; border:1px solid #d32f2f; color:#d32f2f !important; cursor:pointer; font-size:1.1em; padding:4px 8px; font-weight:bold; border-radius:4px; flex-shrink:0;';
+            delBtn.style.cssText = 'background:#ffebee; border:1px solid #d32f2f; color:#d32f2f !important; cursor:pointer; font-size:1em; padding:3px 6px; font-weight:bold; border-radius:4px;';
             delBtn.textContent = '🗑️';
-            delBtn.onclick = () => window.deleteAdminCustomContest(key);
+            delBtn.onclick = (e) => {
+                e.stopPropagation();
+                window.deleteAdminCustomContest(key);
+            };
+
+            btnsDiv.appendChild(editBtn);
+            btnsDiv.appendChild(delBtn);
 
             card.appendChild(textDiv);
-            card.appendChild(delBtn);
+            card.appendChild(btnsDiv);
             wrapper.appendChild(card);
         });
 
@@ -2812,8 +2875,8 @@ window.initCustomContestRealtimeListener = function() {
         const bannerInfo = document.getElementById('customContestBannerInfo');
 
         if (window.isAdmin) {
-            if (settings && settings.updatedAt) {
-                if (document.getElementById('adminCustomContestEnableCheckbox')) document.getElementById('adminCustomContestEnableCheckbox').checked = !!settings.enabled;
+            if (!window.isEditingCustomContestForm && settings && settings.updatedAt) {
+                if (document.getElementById('adminCustomContestEnableCheckbox')) document.getElementById('adminCustomContestEnableCheckbox').checked = (settings.enabled !== false);
                 if (document.getElementById('adminCustomContestTitle')) document.getElementById('adminCustomContestTitle').value = settings.title || "";
                 if (document.getElementById('adminCustomContestDate')) document.getElementById('adminCustomContestDate').value = settings.date || "";
                 if (document.getElementById('adminCustomContestStart')) document.getElementById('adminCustomContestStart').value = settings.startTime || "15:00";
