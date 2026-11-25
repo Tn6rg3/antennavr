@@ -1441,9 +1441,12 @@ window.finishGame = async function() {
                             if (attempt[s] && typeof attempt[s].score === 'number' && attempt[s].completed) {
                                 totalScoreSum += Number(attempt[s].score) || 0;
                                 completedSlotsCount++;
-                                if ((Number(attempt[s].peakWpm) || 0) > bestPeakWpm) bestPeakWpm = Number(attempt[s].peakWpm) || 0;
+                                const slotPeak = Number(attempt[s].peakWpm || attempt[s].finalWpm || attempt[s].wpm || 0);
+                                if (slotPeak > bestPeakWpm) bestPeakWpm = slotPeak;
                             }
                         });
+
+                        bestPeakWpm = Math.max(bestPeakWpm, Number(window.peakWpm) || 0, Number(window.currentWpm) || 0);
 
                         const safeTgUsername = window.tgUsername || (typeof tgUsername !== 'undefined' ? tgUsername : '');
 
@@ -1456,7 +1459,7 @@ window.finishGame = async function() {
                             username: window.myPrivacy ? "" : safeTgUsername,
                             totalScore: totalScoreSum,
                             completedSlots: completedSlotsCount,
-                            peakWpm: bestPeakWpm || window.peakWpm,
+                            peakWpm: bestPeakWpm,
                             morningScore: attempt.morning?.score || 0,
                             afternoonScore: attempt.afternoon?.score || 0,
                             eveningScore: attempt.evening?.score || 0,

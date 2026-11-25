@@ -449,7 +449,8 @@ window.fetchAndRenderTriDailyLeaderboard = function() {
                 if (attempt[s] && typeof attempt[s].score === 'number' && attempt[s].score > 0) {
                     totalScoreSum += Number(attempt[s].score) || 0;
                     completedSlotsCount++;
-                    if ((Number(attempt[s].peakWpm) || 0) > bestPeakWpm) bestPeakWpm = Number(attempt[s].peakWpm) || 0;
+                    const slotPeak = Number(attempt[s].peakWpm || attempt[s].finalWpm || attempt[s].wpm || 0);
+                    if (slotPeak > bestPeakWpm) bestPeakWpm = slotPeak;
                 }
             });
 
@@ -530,7 +531,7 @@ window.fetchAndRenderTriDailyLeaderboard = function() {
             const name = (typeof window.escapeHtml === 'function') ? window.escapeHtml(p.name || 'Telegrafista') : (p.name || 'Telegrafista');
             const slots = `${p.completedSlots || 1}/3`;
             const score = p.totalScore || 0;
-            const wpm = p.peakWpm || 20;
+            const wpm = Number(p.peakWpm || p.finalWpm || p.wpm || 0) || 15;
 
             const boxId = `tri_comment_box_${idx}_${p.id}`;
             const commentText = p.comment ? ((typeof window.escapeHtml === 'function') ? window.escapeHtml(p.comment) : p.comment) : "";

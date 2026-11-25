@@ -4264,7 +4264,7 @@ window.startTriDailySession = function(slotId) {
         window.currentMode = 'tri_daily';
         window.currentTriDailySlotId = slotId;
         window.isSinglePlayer = true;
-        window.currentWpm = window.baseWpm = inheritedWpm;
+        window.currentWpm = window.baseWpm = window.peakWpm = inheritedWpm;
         window.requestedWordCount = slotInfo.wordCount || 10;
         window.currentTone = parseInt(localStorage.getItem(STORAGE_PREF_TONE)) || 600;
 
