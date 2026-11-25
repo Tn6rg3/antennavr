@@ -2744,32 +2744,58 @@ window.renderAdminCustomContestList = function() {
     if (!listContainer) return;
 
     db.ref('activity/custom_contests_history').once('value', snap => {
+        listContainer.innerHTML = '';
+
         if (!snap.exists()) {
-            listContainer.innerHTML = '<span style="color:#000000 !important; font-weight:bold;">Nessuna Sfida Speciale creata finora.</span>';
+            const emptySpan = document.createElement('span');
+            emptySpan.style.cssText = 'color:#000000 !important; font-weight:bold;';
+            emptySpan.textContent = 'Nessuna Sfida Speciale creata finora.';
+            listContainer.appendChild(emptySpan);
             return;
         }
 
-        let html = '<div style="display:flex; flex-direction:column; gap:6px;">';
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'display:flex; flex-direction:column; gap:6px;';
+
         snap.forEach(child => {
             const item = child.val() || {};
             const key = child.key;
-            const title = (typeof window.escapeHtml === 'function') ? window.escapeHtml(item.title || 'Sfida') : (item.title || 'Sfida');
-            const info = `${item.date || ''} (${item.startTime || '15:00'}-${item.endTime || '18:00'}) | ${item.words || 20} ${item.mode || 'std'} @ ${item.wpm || 20}WPM`;
 
-            html += `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; background:#ffffff !important; color:#000000 !important; border:2px solid #00838f; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.15);">
-                    <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:80%; color:#000000 !important;">
-                        <b style="color:#000000 !important; font-size:1.05em; font-weight:bold;">${title}</b><br>
-                        <span style="color:#000000 !important; font-size:0.85em; font-weight:bold; display:block;">${info}</span>
-                    </div>
-                    <button onclick="window.deleteAdminCustomContest('${key}')" title="Elimina Sfida" style="background:#ffebee; border:1px solid #d32f2f; color:#d32f2f !important; cursor:pointer; font-size:1.1em; padding:4px 8px; font-weight:bold; border-radius:4px; flex-shrink:0;">🗑️</button>
-                </div>
-            `;
+            const card = document.createElement('div');
+            card.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:6px 8px; background:#ffffff !important; color:#000000 !important; border:2px solid #00838f; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.15);';
+
+            const textDiv = document.createElement('div');
+            textDiv.style.cssText = 'overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:80%; color:#000000 !important;';
+
+            const titleB = document.createElement('b');
+            titleB.style.cssText = 'color:#000000 !important; font-size:1.05em; font-weight:bold; display:block;';
+            titleB.textContent = item.title || 'Sfida';
+
+            const infoSpan = document.createElement('span');
+            infoSpan.style.cssText = 'color:#000000 !important; font-size:0.85em; font-weight:bold; display:block;';
+            infoSpan.textContent = `${item.date || ''} (${item.startTime || '15:00'}-${item.endTime || '18:00'}) | ${item.words || 20} ${item.mode || 'std'} @ ${item.wpm || 20}WPM`;
+
+            textDiv.appendChild(titleB);
+            textDiv.appendChild(infoSpan);
+
+            const delBtn = document.createElement('button');
+            delBtn.title = 'Elimina Sfida';
+            delBtn.style.cssText = 'background:#ffebee; border:1px solid #d32f2f; color:#d32f2f !important; cursor:pointer; font-size:1.1em; padding:4px 8px; font-weight:bold; border-radius:4px; flex-shrink:0;';
+            delBtn.textContent = '🗑️';
+            delBtn.onclick = () => window.deleteAdminCustomContest(key);
+
+            card.appendChild(textDiv);
+            card.appendChild(delBtn);
+            wrapper.appendChild(card);
         });
-        html += '</div>';
-        listContainer.innerHTML = html;
+
+        listContainer.appendChild(wrapper);
     }).catch(() => {
-        listContainer.innerHTML = '<span style="color:#000000 !important; font-weight:bold;">Nessuna sfida registrata.</span>';
+        listContainer.innerHTML = '';
+        const errSpan = document.createElement('span');
+        errSpan.style.cssText = 'color:#000000 !important; font-weight:bold;';
+        errSpan.textContent = 'Nessuna sfida registrata.';
+        listContainer.appendChild(errSpan);
     });
 };
 

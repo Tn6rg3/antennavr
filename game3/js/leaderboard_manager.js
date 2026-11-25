@@ -815,7 +815,20 @@ window.fetchAndRenderCwgActivityMonthlyLeaderboard = async function() {
     });
 };
 
-window.fetchAndRenderCustomContestLeaderboard = async function() {
+window.customContestsHistoryList = [];
+window.customContestActiveIndex = 0;
+
+window.navigateCustomContestLeaderboard = function(delta) {
+    let nextIdx = (window.customContestActiveIndex || 0) + delta;
+    if (nextIdx < 0) nextIdx = 0;
+    if (window.customContestsHistoryList && nextIdx >= window.customContestsHistoryList.length) {
+        nextIdx = window.customContestsHistoryList.length - 1;
+    }
+    window.customContestActiveIndex = nextIdx;
+    window.fetchAndRenderCustomContestLeaderboard(nextIdx);
+};
+
+window.fetchAndRenderCustomContestLeaderboard = async function(requestedIdx = 0) {
     const container = els.leaderboardContainer;
     if (!container) return;
 
@@ -824,24 +837,79 @@ window.fetchAndRenderCustomContestLeaderboard = async function() {
     if (!db) return;
 
     try {
-        let setSnap = await db.ref('activity/custom_contest_settings').once('value').catch(() => null);
-        if (!setSnap || !setSnap.exists()) {
-            setSnap = await db.ref('appConfig/custom_contest_settings').once('value').catch(() => null);
-        }
-        const settings = (setSnap && setSnap.exists()) ? (setSnap.val() || {}) : {};
+        // Carichiamo lo storico di tutte le sfide speciali create per consentire la navigazione con frecce
+        const [activeSnap, historySnap] = await Promise.all([
+            db.ref('activity/custom_contest_settings').once('value').catch(() => null),
+            db.ref('activity/custom_contests_history').once('value').catch(() => null)
+        ]);
 
-        const contestTitle = settings.title || "🏆 Sfida Speciale";
-        const contestId = settings.contestId || 'default';
-        const contestDate = settings.date || ((typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0]);
+        const contestsMap = {};
+
+        if (historySnap && historySnap.exists()) {
+            historySnap.forEach(c => {
+                const val = c.val();
+                if (val && val.contestId) {
+                    contestsMap[val.contestId] = val;
+                }
+            });
+        }
+
+        if (activeSnap && activeSnap.exists()) {
+            const activeVal = activeSnap.val();
+            if (activeVal && activeVal.contestId) {
+                contestsMap[activeVal.contestId] = activeVal;
+            }
+        }
+
+        const contestList = Object.values(contestsMap);
+        // Ordiniamo dalla più recente alla più vecchia
+        contestList.sort((a, b) => (Number(b.updatedAt || 0) - Number(a.updatedAt || 0)) || (String(b.date || '').localeCompare(String(a.date || ''))));
+
+        window.customContestsHistoryList = contestList;
+
+        if (contestList.length === 0) {
+            container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Nessuna Sfida Speciale creata finora.</p>`;
+            return;
+        }
+
+        const validIdx = Math.max(0, Math.min(requestedIdx, contestList.length - 1));
+        window.customContestActiveIndex = validIdx;
+
+        const currentContest = contestList[validIdx];
+        const contestTitle = (typeof window.escapeHtml === 'function') ? window.escapeHtml(currentContest.title || "🏆 Sfida Speciale") : (currentContest.title || "🏆 Sfida Speciale");
+        const contestId = currentContest.contestId || 'default';
+        const contestDate = currentContest.date || ((typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0]);
+
+        const hasPrev = validIdx < contestList.length - 1;
+        const hasNext = validIdx > 0;
+
+        const prevBtn = hasPrev
+            ? `<button onclick="window.navigateCustomContestLeaderboard(1)" title="Sfida Precedente" style="background:none; border:1px solid #00ffcc; color:#00ffcc; font-size:0.9em; cursor:pointer; padding:3px 8px; border-radius:6px; font-weight:bold; white-space:nowrap;">◀️ Passata</button>`
+            : `<button disabled style="background:none; border:1px solid rgba(255,255,255,0.1); color:rgba(255,255,255,0.2); font-size:0.9em; padding:3px 8px; border-radius:6px; white-space:nowrap;">◀️ Passata</button>`;
+
+        const nextBtn = hasNext
+            ? `<button onclick="window.navigateCustomContestLeaderboard(-1)" title="Sfida Successiva" style="background:none; border:1px solid #00ffcc; color:#00ffcc; font-size:0.9em; cursor:pointer; padding:3px 8px; border-radius:6px; font-weight:bold; white-space:nowrap;">Recente ▶️</button>`
+            : `<button disabled style="background:none; border:1px solid rgba(255,255,255,0.1); color:rgba(255,255,255,0.2); font-size:0.9em; padding:3px 8px; border-radius:6px; white-space:nowrap;">Recente ▶️</button>`;
 
         db.ref(`leaderboard/custom_contests/${contestId}/${contestDate}`).orderByChild('score').limitToLast(100).once('value', snapshot => {
-            if (!snapshot.exists()) {
-                container.innerHTML = `
-                    <div style="background:rgba(0,255,204,0.1); padding:10px; border-radius:8px; border:1px solid #00ffcc; margin-bottom:12px; text-align:center;">
-                        <b style="color:#00ffcc;">${contestTitle} (${contestDate})</b>
+            let htmlHeader = `
+                <div style="background:rgba(0,255,204,0.12); padding:10px 12px; border-radius:10px; border:1px solid #00ffcc; margin-bottom:12px; text-align:center;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                        <div>${prevBtn}</div>
+                        <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">
+                            <b style="color:#00ffcc; font-size:0.98em;">${contestTitle}</b><br>
+                            <small style="color:var(--hint-color); font-size:0.82em;">📅 Data: ${contestDate} (${currentContest.startTime || '15:00'}-${currentContest.endTime || '18:00'})</small>
+                        </div>
+                        <div>${nextBtn}</div>
                     </div>
-                    <p style="text-align:center; color:var(--hint-color); padding:20px;">Nessun partecipante ha ancora registrato un punteggio in questa Sfida Speciale. Partecipa subito!</p>
-                `;
+                    <div style="font-size:0.75em; color:var(--hint-color); margin-top:6px;">
+                        Sfida ${validIdx + 1} di ${contestList.length} | ${currentContest.words || 20} ${currentContest.mode === 'chars' ? 'Caratteri' : 'Parole'} @ ${currentContest.wpm || 20} WPM
+                    </div>
+                </div>
+            `;
+
+            if (!snapshot.exists()) {
+                container.innerHTML = htmlHeader + `<p style="text-align:center; color:var(--hint-color); padding:20px;">Nessun partecipante ha registrato un punteggio in questa Sfida Speciale.</p>`;
                 return;
             }
 
@@ -857,11 +925,7 @@ window.fetchAndRenderCustomContestLeaderboard = async function() {
 
             players.sort((a, b) => (Number(b.score) - Number(a.score)) || (Number(b.wpm) - Number(a.wpm)));
 
-            let html = `
-                <div style="background:rgba(0,255,204,0.1); padding:10px; border-radius:8px; border:1px solid #00ffcc; margin-bottom:12px; text-align:center;">
-                    <b style="color:#00ffcc;">${contestTitle} (${contestDate})</b>
-                    <div style="font-size:0.8em; color:var(--hint-color); margin-top:4px;">Classifica Ufficiale - Prove uguali per tutti (1 sola prova a disposizione)</div>
-                </div>
+            let html = htmlHeader + `
                 <table class="leaderboard-table" style="width:100%; border-collapse:collapse; font-size:0.85em;">
                     <thead>
                         <tr style="border-bottom:2px solid var(--link-color); text-align:left;">
@@ -898,6 +962,9 @@ window.fetchAndRenderCustomContestLeaderboard = async function() {
             container.innerHTML = html;
         });
     } catch(e) {
+        container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Errore caricamento classifica.</p>`;
+    }
+};
         container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Errore caricamento classifica.</p>`;
     }
 };
