@@ -2691,21 +2691,85 @@ window.saveAdminCustomContestSettings = function() {
         updatedAt: Date.now()
     };
 
-    // Salvataggio con garanzia sul percorso 'activity/custom_contest_settings' (autorizzato nelle regole Firebase)
+    // Salvataggio contemporaneo dell'impostazione attiva e nello storico sfide
     Promise.all([
         db.ref('activity/custom_contest_settings').set(settingsData),
+        db.ref(`activity/custom_contests_history/${contestId}`).set(settingsData),
         db.ref('appConfig/custom_contest_settings').set(settingsData).catch(() => {})
     ]).then(() => {
         if (typeof showToast === 'function') showToast("✅ Sfida Speciale salvata e pubblicata!");
         alert("✅ Sfida Speciale Personalizzata salvata e pubblicata con successo!");
+        window.renderAdminCustomContestList?.();
     }).catch(err => {
         console.warn("CustomContest Save Fallback:", err);
         db.ref('activity/custom_contest_settings').set(settingsData).then(() => {
             if (typeof showToast === 'function') showToast("✅ Sfida Speciale salvata!");
             alert("✅ Sfida Speciale Personalizzata salvata con successo!");
+            window.renderAdminCustomContestList?.();
         }).catch(e2 => {
             alert("Errore salvataggio: " + e2.message);
         });
+    });
+};
+
+window.deleteAdminCustomContest = function(targetContestId) {
+    if (!db || !window.isAdmin) return alert("⚠️ Permesso negato.");
+
+    if (confirm("Sei sicuro di voler eliminare questa Sfida Speciale e rimuovere la relativa classifica?")) {
+        const contestId = targetContestId || window.activeCustomContestSettings?.contestId || 'default';
+
+        Promise.all([
+            db.ref('activity/custom_contest_settings').remove().catch(() => {}),
+            db.ref('appConfig/custom_contest_settings').remove().catch(() => {}),
+            db.ref(`activity/custom_contests_history/${contestId}`).remove().catch(() => {}),
+            db.ref(`leaderboard/custom_contests/${contestId}`).remove().catch(() => {})
+        ]).then(() => {
+            if (typeof showToast === 'function') showToast("🗑️ Sfida Speciale eliminata.");
+            alert("🗑️ Sfida Speciale eliminata con successo!");
+
+            const banner = document.getElementById('customContestHomeBanner');
+            if (banner) banner.style.display = 'none';
+
+            if (document.getElementById('adminCustomContestEnableCheckbox')) document.getElementById('adminCustomContestEnableCheckbox').checked = false;
+            window.renderAdminCustomContestList?.();
+        }).catch(err => {
+            alert("Errore eliminazione: " + err.message);
+        });
+    }
+};
+
+window.renderAdminCustomContestList = function() {
+    if (!db || !window.isAdmin) return;
+    const listContainer = document.getElementById('adminCustomContestList');
+    if (!listContainer) return;
+
+    db.ref('activity/custom_contests_history').once('value', snap => {
+        if (!snap.exists()) {
+            listContainer.innerHTML = '<span style="color:var(--hint-color);">Nessuna Sfida Speciale creata finora.</span>';
+            return;
+        }
+
+        let html = '<div style="display:flex; flex-direction:column; gap:4px;">';
+        snap.forEach(child => {
+            const item = child.val() || {};
+            const key = child.key;
+            const title = (typeof window.escapeHtml === 'function') ? window.escapeHtml(item.title || 'Sfida') : (item.title || 'Sfida');
+            const info = `${item.date || ''} (${item.startTime || '15:00'}-${item.endTime || '18:00'}) | ${item.words || 20} ${item.mode || 'std'} @ ${item.wpm || 20}WPM`;
+
+            html += `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 6px; background:rgba(255,255,255,0.05); border-radius:4px;">
+                    <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:80%;">
+                        <b style="color:#00ffcc;">${title}</b><br>
+                        <small style="color:var(--hint-color); font-size:0.85em;">${info}</small>
+                    </div>
+                    <button onclick="window.deleteAdminCustomContest('${key}')" title="Elimina Sfida" style="background:none; border:none; color:#f44336; cursor:pointer; font-size:0.95em; padding:2px 4px;">🗑️</button>
+                </div>
+            `;
+        });
+        html += '</div>';
+        listContainer.innerHTML = html;
+    }).catch(() => {
+        listContainer.innerHTML = '<span style="color:var(--hint-color);">Nessuna sfida registrata.</span>';
     });
 };
 
@@ -2718,15 +2782,18 @@ window.initCustomContestRealtimeListener = function() {
         const bannerTitle = document.getElementById('customContestBannerTitle');
         const bannerInfo = document.getElementById('customContestBannerInfo');
 
-        if (window.isAdmin && settings && settings.updatedAt) {
-            if (document.getElementById('adminCustomContestEnableCheckbox')) document.getElementById('adminCustomContestEnableCheckbox').checked = !!settings.enabled;
-            if (document.getElementById('adminCustomContestTitle')) document.getElementById('adminCustomContestTitle').value = settings.title || "";
-            if (document.getElementById('adminCustomContestDate')) document.getElementById('adminCustomContestDate').value = settings.date || "";
-            if (document.getElementById('adminCustomContestStart')) document.getElementById('adminCustomContestStart').value = settings.startTime || "15:00";
-            if (document.getElementById('adminCustomContestEnd')) document.getElementById('adminCustomContestEnd').value = settings.endTime || "18:00";
-            if (document.getElementById('adminCustomContestMode')) document.getElementById('adminCustomContestMode').value = settings.mode || "standard";
-            if (document.getElementById('adminCustomContestWpm')) document.getElementById('adminCustomContestWpm').value = settings.wpm || 20;
-            if (document.getElementById('adminCustomContestWords')) document.getElementById('adminCustomContestWords').value = settings.words || 20;
+        if (window.isAdmin) {
+            if (settings && settings.updatedAt) {
+                if (document.getElementById('adminCustomContestEnableCheckbox')) document.getElementById('adminCustomContestEnableCheckbox').checked = !!settings.enabled;
+                if (document.getElementById('adminCustomContestTitle')) document.getElementById('adminCustomContestTitle').value = settings.title || "";
+                if (document.getElementById('adminCustomContestDate')) document.getElementById('adminCustomContestDate').value = settings.date || "";
+                if (document.getElementById('adminCustomContestStart')) document.getElementById('adminCustomContestStart').value = settings.startTime || "15:00";
+                if (document.getElementById('adminCustomContestEnd')) document.getElementById('adminCustomContestEnd').value = settings.endTime || "18:00";
+                if (document.getElementById('adminCustomContestMode')) document.getElementById('adminCustomContestMode').value = settings.mode || "standard";
+                if (document.getElementById('adminCustomContestWpm')) document.getElementById('adminCustomContestWpm').value = settings.wpm || 20;
+                if (document.getElementById('adminCustomContestWords')) document.getElementById('adminCustomContestWords').value = settings.words || 20;
+            }
+            window.renderAdminCustomContestList?.();
         }
 
         if (!banner) return;
