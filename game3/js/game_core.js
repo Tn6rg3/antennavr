@@ -1233,6 +1233,16 @@ window.playNextWord = function() {
             console.log(`TriDaily: Limite parole della sessione raggiunto (${wordIndex}/${limit}). Concludo partita.`);
             return window.finishGame();
         }
+    } else if (window.currentMode === 'chars' || (window.currentMode === 'custom_contest' && window.currentCustomContestSettings?.mode === 'chars')) {
+        if (window.charsCurrentErrors >= 5) {
+            console.log("Chars: Limite massimo 5 errori raggiunto. Concludo partita.");
+            return window.finishGame();
+        }
+        // Generazione continua di caratteri per partita ad eliminazione su 5 errori
+        if (!gameWords || wordIndex >= gameWords.length - 3) {
+            const extraChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split('').sort(() => Math.random() - 0.5);
+            gameWords = (gameWords || []).concat(extraChars);
+        }
     } else {
         if (wordIndex >= requestedWordCount || (gameWords && wordIndex >= gameWords.length)) return window.finishGame();
     }
@@ -2495,6 +2505,30 @@ window.handleWordSubmission = function(userWord, exactKeypressTimestamp = null) 
             currentWpm = Math.max(10, currentWpm - 1); // -1 WPM per ogni errore
         }
         if (currentWpm > peakWpm) peakWpm = currentWpm;
+    } else if (window.currentMode === 'chars' || (window.currentMode === 'custom_contest' && window.currentCustomContestSettings?.mode === 'chars')) {
+        if (levDist === 0 && !usedReplay) {
+            if (!isFixedSpeed) {
+                currentWpm += 1; // +1 WPM per ogni carattere corretto
+                if (currentWpm > peakWpm) peakWpm = currentWpm;
+            }
+            window.currentStreak++;
+            if (!window.isAutoAdvance && typeof window.updateMissionProgress === 'function') {
+                window.updateMissionProgress('count', 1);
+                window.updateMissionProgress('wpm_min', activeWpmForThisWord);
+                window.updateMissionProgress('streak', window.currentStreak);
+            }
+        } else {
+            window.currentStreak = 0; // In caso di errore in 'chars', la velocita WPM NON scende (resta ferma)
+            window.charsCurrentErrors = (window.charsCurrentErrors || 0) + 1;
+            if (typeof showToast === 'function') {
+                showToast(currentLang === 'it' ? `⚠️ Errore ${window.charsCurrentErrors}/5` : `⚠️ Error ${window.charsCurrentErrors}/5`, 1200);
+            }
+            if (window.charsCurrentErrors >= 5) {
+                setTimeout(() => {
+                    if (gameRunning) window.finishGame();
+                }, 800);
+            }
+        }
     } else if (levDist === 0 && !usedReplay) {
         if (!window.isPerfectionRetry) {
             if (!isFixedSpeed && window.currentMode !== 'chars') {

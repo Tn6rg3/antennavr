@@ -436,6 +436,7 @@ window.resetGameState = function() {
     peakWpm = 0;
     matchDetailsArray = [];
     usedReplay = false;
+    window.charsCurrentErrors = 0;
 
     // 5. Pulisce sessione corso pendente
     if (window.courseData) {
