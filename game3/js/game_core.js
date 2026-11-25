@@ -1234,11 +1234,15 @@ window.playNextWord = function() {
             return window.finishGame();
         }
     } else if (window.currentMode === 'chars' || (window.currentMode === 'custom_contest' && window.currentCustomContestSettings?.mode === 'chars')) {
-        if (window.charsCurrentErrors >= 5) {
-            console.log("Chars: Limite massimo 5 errori raggiunto. Concludo partita.");
+        if (window.currentMode === 'custom_contest' && window.charsCurrentErrors >= 5) {
+            console.log("CustomContest Chars: Limite massimo 5 errori raggiunto. Concludo sfida.");
             return window.finishGame();
         }
-        // Generazione continua ad oltranza di caratteri per partita ad eliminazione su 5 errori (Deterministica per Sfida Speciale)
+        if (requestedWordCount > 0 && wordIndex >= requestedWordCount) {
+            console.log(`Chars: Numero caratteri impostato raggiunto (${wordIndex}/${requestedWordCount}). Concludo partita.`);
+            return window.finishGame();
+        }
+        // Generazione continua di caratteri se l'array sta per terminare
         if (!gameWords || wordIndex >= gameWords.length - 5) {
             const extraChars = (window.currentMode === 'custom_contest' && typeof window.getCustomContestDeterministicWords === 'function')
                 ? window.getCustomContestDeterministicWords(window.currentCustomContestSettings, 100)
@@ -2509,11 +2513,9 @@ window.handleWordSubmission = function(userWord, exactKeypressTimestamp = null) 
         }
         if (currentWpm > peakWpm) peakWpm = currentWpm;
     } else if (window.currentMode === 'chars' || (window.currentMode === 'custom_contest' && window.currentCustomContestSettings?.mode === 'chars')) {
+        peakWpm = Math.max(peakWpm || 0, currentWpm);
+
         if (levDist === 0 && !usedReplay) {
-            if (!isFixedSpeed) {
-                currentWpm += 1; // +1 WPM per ogni carattere corretto
-                if (currentWpm > peakWpm) peakWpm = currentWpm;
-            }
             window.currentStreak++;
             if (!window.isAutoAdvance && typeof window.updateMissionProgress === 'function') {
                 window.updateMissionProgress('count', 1);
@@ -2521,15 +2523,17 @@ window.handleWordSubmission = function(userWord, exactKeypressTimestamp = null) 
                 window.updateMissionProgress('streak', window.currentStreak);
             }
         } else {
-            window.currentStreak = 0; // In caso di errore in 'chars', la velocita WPM NON scende (resta ferma)
-            window.charsCurrentErrors = (window.charsCurrentErrors || 0) + 1;
-            if (typeof showToast === 'function') {
-                showToast(currentLang === 'it' ? `⚠️ Errore ${window.charsCurrentErrors}/5` : `⚠️ Error ${window.charsCurrentErrors}/5`, 1200);
-            }
-            if (window.charsCurrentErrors >= 5) {
-                setTimeout(() => {
-                    if (gameRunning) window.finishGame();
-                }, 800);
+            window.currentStreak = 0; // In caso di errore in 'chars', la velocita WPM NON scende
+            if (window.currentMode === 'custom_contest') {
+                window.charsCurrentErrors = (window.charsCurrentErrors || 0) + 1;
+                if (typeof showToast === 'function') {
+                    showToast(currentLang === 'it' ? `⚠️ Errore ${window.charsCurrentErrors}/5` : `⚠️ Error ${window.charsCurrentErrors}/5`, 1200);
+                }
+                if (window.charsCurrentErrors >= 5) {
+                    setTimeout(() => {
+                        if (gameRunning) window.finishGame();
+                    }, 800);
+                }
             }
         }
     } else if (levDist === 0 && !usedReplay) {
