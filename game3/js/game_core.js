@@ -2218,9 +2218,10 @@ if (els.permanentGameInput) {
             }
             return;
         }
-        if (window.currentMode === 'chars' && inputActive && gameRunning) {
+        const isCharsMode = (window.currentMode === 'chars' || (window.currentMode === 'custom_contest' && window.currentCustomContestSettings?.mode === 'chars'));
+        if (isCharsMode && inputActive && gameRunning) {
             const groupLength = parseInt(document.getElementById('charsGroupLengthInput')?.value) || 1;
-            if (groupLength === 1) {
+            if (groupLength === 1 || window.currentMode === 'custom_contest') {
                 const rawVal = els.permanentGameInput.value;
                 const cleanVal = rawVal.replace(/\s/g, '').toUpperCase();
                 if (cleanVal.length >= 1) {
@@ -2228,7 +2229,7 @@ if (els.permanentGameInput) {
                     const charToSubmit = cleanVal[cleanVal.length - 1];
                     els.permanentGameInput.value = ""; // Pulizia istantanea input in 0ms
 
-                    // ELABORAZIONE ED INSERIMENTO ISTANTANEO IN 0 MS!
+                    // Invia il carattere istantaneamente senza dover premere Invio!
                     window.handleWordSubmission(charToSubmit, keypressTs);
                 }
             }
@@ -2690,11 +2691,12 @@ window.handleWordSubmission = function(userWord, exactKeypressTimestamp = null) 
 
         // --- GESTIONE RITARDO TRASMISSIONE PROSSIMO CARATTERE / PAROLA ---
         let nextWordDelay = window.isSpeakMode ? 3000 : 1000;
-        if (window.currentMode === 'chars') {
+        const isCharsMode = (window.currentMode === 'chars' || (window.currentMode === 'custom_contest' && window.currentCustomContestSettings?.mode === 'chars'));
+        if (isCharsMode) {
             const groupLength = parseInt(document.getElementById('charsGroupLengthInput')?.value) || 1;
-            if (groupLength === 1) {
-                const charsAutoDelaySec = parseFloat(localStorage.getItem('cwgame_pref_chars_auto_delay') || document.getElementById('charsAutoDelaySelect')?.value || "0");
-                nextWordDelay = Math.round(charsAutoDelaySec * 1000);
+            if (groupLength === 1 || window.currentMode === 'custom_contest') {
+                const charsAutoDelaySec = parseFloat(localStorage.getItem('cwgame_pref_chars_auto_delay') || document.getElementById('charsAutoDelaySelect')?.value || "0.3");
+                nextWordDelay = Math.round((isNaN(charsAutoDelaySec) || charsAutoDelaySec <= 0 ? 0.3 : charsAutoDelaySec) * 1000);
             } else {
                 nextWordDelay = 250;
             }

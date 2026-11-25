@@ -2823,7 +2823,18 @@ window.initCustomContestRealtimeListener = function() {
         if (settings.enabled && isToday && isTimeWindowActive && !alreadyPlayed) {
             banner.style.display = 'block';
             if (bannerTitle) bannerTitle.textContent = settings.title || "🏆 SFIDA SPECIALE ATTIVA!";
-            if (bannerInfo) bannerInfo.textContent = `⏰ Dalle ${startTimeClean} alle ${endTimeClean} | 1 Sola Prova | ${settings.words || 20} ${settings.mode === 'chars' ? 'Caratteri' : 'Parole'}`;
+            const detailText = (settings.mode === 'chars') ? 'Ad oltranza (max 5 errori)' : `${settings.words || 20} Parole`;
+            if (bannerInfo) bannerInfo.textContent = `⏰ Dalle ${startTimeClean} alle ${endTimeClean} | 1 Sola Prova | ${detailText}`;
+
+            // Controllo incrociato su Firebase per verificare se l'utente ha già giocato da un altro dispositivo (PC / Mobile)
+            if (db && window.myId) {
+                db.ref(`users/${window.myId}/custom_contest_attempts/${todayStr}/${contestId}`).once('value', attSnap => {
+                    if (attSnap.exists() && attSnap.val() && (attSnap.val().played || attSnap.val().completed)) {
+                        localStorage.setItem(`cwgame_custom_contest_played_${todayStr}_${contestId}`, 'true');
+                        banner.style.display = 'none';
+                    }
+                }).catch(() => {});
+            }
         } else {
             banner.style.display = 'none';
         }
@@ -2874,16 +2885,30 @@ window.getCustomContestDeterministicWords = function(settings) {
     return result;
 };
 
-window.startCustomContestSession = function() {
+window.startCustomContestSession = async function() {
     const settings = window.activeCustomContestSettings;
     if (!settings || !settings.enabled) return alert("⚠️ Sfida non attiva.");
 
     const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
     const contestId = settings.contestId || 'default';
-    const alreadyPlayed = (localStorage.getItem(`cwgame_custom_contest_played_${todayStr}_${contestId}`) === 'true');
+
+    let alreadyPlayed = (localStorage.getItem(`cwgame_custom_contest_played_${todayStr}_${contestId}`) === 'true');
+
+    // Verifica incrociata in tempo reale su Firebase Account (Sincronizzazione Multi-Dispositivo PC <-> Mobile)
+    if (!alreadyPlayed && db && window.myId) {
+        try {
+            const attSnap = await db.ref(`users/${window.myId}/custom_contest_attempts/${todayStr}/${contestId}`).once('value');
+            if (attSnap.exists() && attSnap.val() && (attSnap.val().played || attSnap.val().completed)) {
+                alreadyPlayed = true;
+                localStorage.setItem(`cwgame_custom_contest_played_${todayStr}_${contestId}`, 'true');
+            }
+        } catch(e) {}
+    }
 
     if (alreadyPlayed) {
-        return alert("🏆 Hai già completato la Sfida Speciale di oggi!\n\nOgni operatore ha 1 sola prova a disposizione.");
+        const banner = document.getElementById('customContestHomeBanner');
+        if (banner) banner.style.display = 'none';
+        return alert("🏆 Hai già completato la Sfida Speciale di oggi (registrata sul tuo account)!\n\nOgni operatore ha 1 sola prova a disposizione.");
     }
 
     if (typeof window.resetGameState === 'function') window.resetGameState();
