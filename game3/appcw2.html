@@ -769,6 +769,15 @@
                 </div>
             </div>
         </div>
+        <!-- BANNER SFIDA SPECIALE PERSONALIZZATA SCHEDULATA -->
+        <div id="customContestHomeBanner" style="display:none; width:100%; max-width:420px; margin:6px auto 8px auto; padding:10px 14px; background:linear-gradient(135deg, rgba(0,255,204,0.18), rgba(0,188,212,0.18)); border:2px solid #00ffcc; border-radius:12px; text-align:center; box-sizing:border-box; box-shadow:0 4px 15px rgba(0,255,204,0.25); flex-shrink:0;">
+            <span id="customContestBannerTitle" style="font-size:0.85em; color:#00ffcc; font-weight:bold; text-transform:uppercase; display:block; margin-bottom:4px;">🏆 SFIDA SPECIALE ATTIVA!</span>
+            <small id="customContestBannerInfo" style="font-size:0.75em; color:var(--text-color); display:block; margin-bottom:8px;">⏰ Dalle 15:00 alle 18:00 | 1 Sola Prova | Prove uguali per tutti</small>
+            <button onclick="window.startCustomContestSession()" class="btn-success" style="width:100%; padding:10px; font-weight:bold; font-size:0.9em; background:#00ffcc; color:#000; border:none; cursor:pointer; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.3);">
+                🚀 PARTECIPA ALLA SFIDA SPECIALE 🚀
+            </button>
+        </div>
+
         <!-- CONTAINER BANNERS INTRODUZIONE HOME -->
         <div id="homeIntroBannersContainer" style="width: 100%; max-width: 420px; margin: 4px auto; text-align: center; box-sizing: border-box; flex-shrink: 0;">
             <!-- VISTA ESTESA (SCOMPARE/SI RIDUCE DOPO 5 SECONDI) -->
@@ -2085,6 +2094,64 @@
 
                 <button onclick="window.saveAdminCallsignChallengeSettings()" class="btn-success" style="width:100%; padding:8px; font-weight:bold; background:#ffd700; border:none; color:#000; cursor:pointer;">
                     💾 SALVA PROGRAMMAZIONE SFIDA NOMINATIVI
+                </button>
+            </div>
+
+            <!-- AREA ADMIN: CONFIGURAZIONE SFIDA SPECIALE PERSONALIZZATA SCHEDULATA -->
+            <div style="border-top: 1px solid rgba(0,255,204,0.4); padding-top: 10px; margin-top:10px; text-align:left;">
+                <h4 style="margin: 0 0 8px 0; color: #00ffcc; font-size: 0.95em;">🏆 Configurazione Sfida Speciale Personalizzata</h4>
+
+                <div style="margin-bottom:8px; background:rgba(0,255,204,0.1); padding:6px; border-radius:6px; border:1px solid #00ffcc;">
+                    <label style="font-size:0.8em; font-weight:bold; color:#00ffcc; display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="adminCustomContestEnableCheckbox"> 🌐 ABILITA SFIDA SPECIALE PER TUTTI GLI UTENTI
+                    </label>
+                </div>
+
+                <div style="margin-bottom:8px;">
+                    <label for="adminCustomContestTitle" style="font-size:0.75em; color:var(--text-color); display:block; margin-bottom:2px; font-weight:bold;">Titolo della Sfida:</label>
+                    <input type="text" id="adminCustomContestTitle" placeholder="es. 🏆 SFIDA SPECIALE FLASH" style="width:100%; padding:6px; font-size:0.85em; font-weight:bold; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
+                </div>
+
+                <div style="margin-bottom:8px;">
+                    <label for="adminCustomContestDate" style="font-size:0.75em; color:var(--text-color); display:block; margin-bottom:2px; font-weight:bold;">Giorno Inizio Sfida (YYYY-MM-DD):</label>
+                    <input type="date" id="adminCustomContestDate" style="width:100%; padding:6px; font-size:0.85em; font-weight:bold; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-bottom:8px;">
+                    <div>
+                        <label for="adminCustomContestStart" style="font-size:0.7em; color:var(--hint-color);">Ora Inizio:</label>
+                        <input type="time" id="adminCustomContestStart" value="15:00" style="width:100%; padding:4px; font-size:0.8em; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label for="adminCustomContestEnd" style="font-size:0.7em; color:var(--hint-color);">Ora Fine:</label>
+                        <input type="time" id="adminCustomContestEnd" value="18:00" style="width:100%; padding:4px; font-size:0.8em; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-bottom:8px;">
+                    <div>
+                        <label for="adminCustomContestMode" style="font-size:0.7em; color:var(--hint-color);">Modalità Gioco:</label>
+                        <select id="adminCustomContestMode" style="width:100%; padding:4px; font-size:0.8em; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
+                            <option value="standard" selected>Parole Comuni</option>
+                            <option value="callsign">Nominativi</option>
+                            <option value="code_groups">Gruppi Codice</option>
+                            <option value="chars">Caratteri Singoli</option>
+                            <option value="quiz">Quiz CW</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="adminCustomContestWpm" style="font-size:0.7em; color:var(--hint-color);">WPM Iniziali:</label>
+                        <input type="number" id="adminCustomContestWpm" value="20" min="10" max="60" style="width:100%; padding:4px; font-size:0.8em; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
+                    </div>
+                </div>
+
+                <div style="margin-bottom:8px;">
+                    <label for="adminCustomContestWords" style="font-size:0.75em; color:var(--text-color); display:block; margin-bottom:2px; font-weight:bold;">Numero Parole / Caratteri:</label>
+                    <input type="number" id="adminCustomContestWords" value="20" min="5" max="100" style="width:100%; padding:6px; font-size:0.85em; font-weight:bold; background:#fff; color:#000; border-radius:4px; box-sizing:border-box;">
+                </div>
+
+                <button onclick="window.saveAdminCustomContestSettings()" class="btn-success" style="width:100%; padding:8px; font-weight:bold; background:#00ffcc; border:none; color:#000; cursor:pointer;">
+                    💾 SALVA E PUBBLICA SFIDA SPECIALE
                 </button>
             </div>
         </div>
