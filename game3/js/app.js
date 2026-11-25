@@ -1479,6 +1479,9 @@ window.initMandatoryAliasHandlers = function() {
         };
 
         window.initHomeIntroBannersAutoTimer();
+        if (typeof window.initCustomContestRealtimeListener === 'function') {
+            window.initCustomContestRealtimeListener();
+        }
 
         // --- ATTIVAZIONE SISTEMA SFIDE (Fix Avvio Simultaneo) ---
         if (typeof window.listenToInviteAccepted === 'function') {
@@ -2658,6 +2661,157 @@ window.saveAdminCallsignChallengeSettings = function() {
     }).catch(e => {
         alert("Errore salvataggio: " + e.message);
     });
+};
+
+window.saveAdminCustomContestSettings = function() {
+    if (!db || !window.isAdmin) return alert("⚠️ Permesso negato. Solo l'Amministratore può salvare le impostazioni.");
+
+    const enabled = !!document.getElementById('adminCustomContestEnableCheckbox')?.checked;
+    const title = document.getElementById('adminCustomContestTitle')?.value.trim() || "🏆 SFIDA SPECIALE FLASH";
+    const dateVal = document.getElementById('adminCustomContestDate')?.value.trim() || ((typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0]);
+    const startTime = document.getElementById('adminCustomContestStart')?.value.trim() || "15:00";
+    const endTime = document.getElementById('adminCustomContestEnd')?.value.trim() || "18:00";
+    const mode = document.getElementById('adminCustomContestMode')?.value || "standard";
+    const wpm = parseInt(document.getElementById('adminCustomContestWpm')?.value) || 20;
+    const words = parseInt(document.getElementById('adminCustomContestWords')?.value) || 20;
+
+    const contestId = `contest_${dateVal.replace(/-/g,'')}_${startTime.replace(':','')}`;
+
+    const settingsData = {
+        enabled: enabled,
+        title: title,
+        date: dateVal,
+        startTime: startTime,
+        endTime: endTime,
+        mode: mode,
+        wpm: wpm,
+        words: words,
+        contestId: contestId,
+        updatedAt: Date.now()
+    };
+
+    db.ref('appConfig/custom_contest_settings').set(settingsData).then(() => {
+        if (typeof showToast === 'function') showToast("✅ Sfida Speciale salvata e pubblicata!");
+        alert("✅ Sfida Speciale Personalizzata salvata e pubblicata con successo!");
+    }).catch(err => {
+        alert("Errore salvataggio: " + err.message);
+    });
+};
+
+window.initCustomContestRealtimeListener = function() {
+    if (!db) return;
+
+    db.ref('appConfig/custom_contest_settings').on('value', snap => {
+        const settings = snap.exists() ? (snap.val() || {}) : {};
+        const banner = document.getElementById('customContestHomeBanner');
+        const bannerTitle = document.getElementById('customContestBannerTitle');
+        const bannerInfo = document.getElementById('customContestBannerInfo');
+
+        if (window.isAdmin && settings) {
+            if (document.getElementById('adminCustomContestEnableCheckbox')) document.getElementById('adminCustomContestEnableCheckbox').checked = !!settings.enabled;
+            if (document.getElementById('adminCustomContestTitle')) document.getElementById('adminCustomContestTitle').value = settings.title || "";
+            if (document.getElementById('adminCustomContestDate')) document.getElementById('adminCustomContestDate').value = settings.date || "";
+            if (document.getElementById('adminCustomContestStart')) document.getElementById('adminCustomContestStart').value = settings.startTime || "15:00";
+            if (document.getElementById('adminCustomContestEnd')) document.getElementById('adminCustomContestEnd').value = settings.endTime || "18:00";
+            if (document.getElementById('adminCustomContestMode')) document.getElementById('adminCustomContestMode').value = settings.mode || "standard";
+            if (document.getElementById('adminCustomContestWpm')) document.getElementById('adminCustomContestWpm').value = settings.wpm || 20;
+            if (document.getElementById('adminCustomContestWords')) document.getElementById('adminCustomContestWords').value = settings.words || 20;
+        }
+
+        if (!banner) return;
+
+        const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+        const nowStr = new Date().toTimeString().slice(0, 5); // "HH:MM"
+
+        const isToday = (settings.date === todayStr);
+        const isTimeWindowActive = (nowStr >= (settings.startTime || "00:00") && nowStr <= (settings.endTime || "23:59"));
+        const contestId = settings.contestId || 'default';
+        const alreadyPlayed = (localStorage.getItem(`cwgame_custom_contest_played_${todayStr}_${contestId}`) === 'true');
+
+        window.activeCustomContestSettings = settings;
+
+        if (settings.enabled && isToday && isTimeWindowActive && !alreadyPlayed) {
+            banner.style.display = 'block';
+            if (bannerTitle) bannerTitle.textContent = settings.title || "🏆 SFIDA SPECIALE ATTIVA!";
+            if (bannerInfo) bannerInfo.textContent = `⏰ Dalle ${settings.startTime} alle ${settings.endTime} | 1 Sola Prova | ${settings.words} ${settings.mode === 'chars' ? 'Caratteri' : 'Parole'}`;
+        } else {
+            banner.style.display = 'none';
+        }
+    });
+};
+
+window.getCustomContestDeterministicWords = function(settings) {
+    const seedStr = (settings.contestId || 'contest') + '_' + (settings.date || 'today');
+    let seed = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+        seed = (seed * 31 + seedStr.charCodeAt(i)) % 2147483647;
+    }
+
+    const pseudoRandom = () => {
+        seed = (seed * 16807) % 2147483647;
+        return (seed - 1) / 2147483646;
+    };
+
+    let sourceList = [];
+    if (settings.mode === 'callsign') {
+        sourceList = window.callsignDictionary || window.masterDictionary || ["IU2XYZ", "IK1ABC", "IZ3DEF"];
+    } else if (settings.mode === 'chars') {
+        sourceList = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split('');
+    } else if (settings.mode === 'code_groups') {
+        sourceList = window.codeGroupsDictionary || ["55555", "73737", "88888", "12345"];
+    } else {
+        sourceList = window.masterDictionary || ["TELEGRAFIA", "STAZIONE", "MORSE", "RADIO"];
+    }
+
+    const count = Number(settings.words) || 20;
+    const result = [];
+    const listCopy = [...sourceList];
+
+    for (let i = 0; i < count; i++) {
+        const randIdx = Math.floor(pseudoRandom() * listCopy.length);
+        result.push(listCopy[randIdx % listCopy.length]);
+    }
+
+    return result;
+};
+
+window.startCustomContestSession = function() {
+    const settings = window.activeCustomContestSettings;
+    if (!settings || !settings.enabled) return alert("⚠️ Sfida non attiva.");
+
+    const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+    const contestId = settings.contestId || 'default';
+    const alreadyPlayed = (localStorage.getItem(`cwgame_custom_contest_played_${todayStr}_${contestId}`) === 'true');
+
+    if (alreadyPlayed) {
+        return alert("🏆 Hai già completato la Sfida Speciale di oggi!\n\nOgni operatore ha 1 sola prova a disposizione.");
+    }
+
+    if (typeof window.resetGameState === 'function') window.resetGameState();
+
+    window.currentMode = 'custom_contest';
+    window.currentCustomContestSettings = settings;
+    window.isSinglePlayer = true;
+
+    window.currentWpm = window.baseWpm = window.peakWpm = Number(settings.wpm) || 20;
+    window.requestedWordCount = Number(settings.words) || 20;
+    window.currentTone = parseInt(localStorage.getItem('STORAGE_PREF_TONE')) || 600;
+
+    gameWords = window.getCustomContestDeterministicWords(settings);
+
+    roomCode = "SOLO_CONTEST_" + window.myId;
+
+    if (els.permanentGameInput) {
+        els.permanentGameInput.value = "";
+        els.permanentGameInput.disabled = false;
+    }
+
+    if (typeof window.showScreen === 'function') {
+        window.showScreen('gameArea');
+        if (typeof window.startCountdownSequence === 'function') {
+            window.startCountdownSequence();
+        }
+    }
 };
 
 window.loadAdminCallsignChallengeSettings = function() {

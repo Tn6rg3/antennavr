@@ -1499,6 +1499,40 @@ window.finishGame = async function() {
                     }
                 }).catch(() => {});
                 dbPath = null;
+            } else if (window.currentMode === 'custom_contest' && window.currentCustomContestSettings) {
+                const settings = window.currentCustomContestSettings;
+                const todayStr = (typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0];
+                const contestId = settings.contestId || 'contest';
+
+                localStorage.setItem(`cwgame_custom_contest_played_${todayStr}_${contestId}`, 'true');
+
+                db.ref(`users/${window.myId}/custom_contest_attempts/${todayStr}/${contestId}`).set({
+                    played: true,
+                    completed: true,
+                    score: window.totalScore,
+                    wpm: window.peakWpm,
+                    ts: Date.now()
+                }).catch(() => {});
+
+                const safeTgUsername = window.tgUsername || (typeof tgUsername !== 'undefined' ? tgUsername : '');
+                const todayRealQsos = parseInt(localStorage.getItem(`cwgame_real_qsos_${todayStr}`)) || 0;
+
+                db.ref(`leaderboard/custom_contests/${contestId}/${todayStr}/${window.myId}`).set({
+                    name: window.myName,
+                    username: window.myPrivacy ? "" : safeTgUsername,
+                    score: window.totalScore,
+                    wpm: window.peakWpm,
+                    realQsos: todayRealQsos,
+                    date: todayStr,
+                    ts: Date.now()
+                }).catch(() => {});
+
+                if (typeof window.updateActivity === 'function') {
+                    window.updateActivity(window.totalScore > 0);
+                }
+
+                window.showToast(currentLang === 'it' ? `🏆 Sfida Speciale Completata! (${window.totalScore} pt)` : `🏆 Special Challenge Completed! (${window.totalScore} pt)`);
+                dbPath = null;
             } else {
                 const modeMap = {
                     'callsign': 'callsign/global',

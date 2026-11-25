@@ -6,6 +6,7 @@ window.lbGroups = {
         { val: 'tri_daily_monthly', it: '🏆 Sfida Tripla (Mese - Medagliere)', en: '🏆 Triple Daily (Monthly Medals)' },
         { val: 'daily_challenge', it: '📅 Sfida Giornaliera (Oggi)', en: '📅 Classic Daily (Today)' },
         { val: 'daily_monthly', it: '📅 Sfida Giornaliera (Mese - Medagliere)', en: '📅 Classic Daily (Monthly Medals)' },
+        { val: 'custom_contest', it: '🏆 Sfida Speciale (Flash Contest)', en: '🏆 Special Flash Contest' },
         { val: 'cwg_activity_monthly', it: '📻 Activity - CWG (Mese)', en: '📻 Activity - CWG (Monthly)' },
         { val: 'my_history', it: '📜 I Miei Match Recenti', en: '📜 My Recent Matches' },
         { val: 'room', it: '🏁 Ultima Partita (Sessione)', en: '🏁 Last Match (Session)' }
@@ -136,6 +137,8 @@ window.showLeaderboardTab = function(modeValue) {
         window.fetchAndRenderMonthlyLeaderboard(modeValue);
     } else if (modeValue === 'cwg_activity_monthly') {
         window.fetchAndRenderCwgActivityMonthlyLeaderboard();
+    } else if (modeValue === 'custom_contest') {
+        window.fetchAndRenderCustomContestLeaderboard();
     } else if (modeValue === 'daily_challenge') {
         window.fetchAndRenderGlobalLeaderboard('daily_challenge', null);
     } else if (modeValue === 'trn_global') {
@@ -810,6 +813,90 @@ window.fetchAndRenderCwgActivityMonthlyLeaderboard = async function() {
         html += `</tbody></table>`;
         container.innerHTML = html;
     });
+};
+
+window.fetchAndRenderCustomContestLeaderboard = async function() {
+    const container = els.leaderboardContainer;
+    if (!container) return;
+
+    container.innerHTML = `<p style="text-align:center; padding:20px; color:var(--hint-color);">${currentLang==='it'?'Caricamento Classifica Sfida Speciale...':'Loading Special Contest Standings...'}</p>`;
+
+    if (!db) return;
+
+    try {
+        const setSnap = await db.ref('appConfig/custom_contest_settings').once('value');
+        const settings = setSnap.exists() ? (setSnap.val() || {}) : {};
+
+        const contestTitle = settings.title || "🏆 Sfida Speciale";
+        const contestId = settings.contestId || 'default';
+        const contestDate = settings.date || ((typeof window.getLocalDateString === 'function') ? window.getLocalDateString() : new Date().toISOString().split('T')[0]);
+
+        db.ref(`leaderboard/custom_contests/${contestId}/${contestDate}`).orderByChild('score').limitToLast(100).once('value', snapshot => {
+            if (!snapshot.exists()) {
+                container.innerHTML = `
+                    <div style="background:rgba(0,255,204,0.1); padding:10px; border-radius:8px; border:1px solid #00ffcc; margin-bottom:12px; text-align:center;">
+                        <b style="color:#00ffcc;">${contestTitle} (${contestDate})</b>
+                    </div>
+                    <p style="text-align:center; color:var(--hint-color); padding:20px;">Nessun partecipante ha ancora registrato un punteggio in questa Sfida Speciale. Partecipa subito!</p>
+                `;
+                return;
+            }
+
+            let players = [];
+            snapshot.forEach(child => {
+                let p = child.val();
+                if (p && (Number(p.score) > 0 || p.name)) {
+                    p.id = child.key;
+                    p.dbPath = `leaderboard/custom_contests/${contestId}/${contestDate}/${child.key}`;
+                    players.push(p);
+                }
+            });
+
+            players.sort((a, b) => (Number(b.score) - Number(a.score)) || (Number(b.wpm) - Number(a.wpm)));
+
+            let html = `
+                <div style="background:rgba(0,255,204,0.1); padding:10px; border-radius:8px; border:1px solid #00ffcc; margin-bottom:12px; text-align:center;">
+                    <b style="color:#00ffcc;">${contestTitle} (${contestDate})</b>
+                    <div style="font-size:0.8em; color:var(--hint-color); margin-top:4px;">Classifica Ufficiale - Prove uguali per tutti (1 sola prova a disposizione)</div>
+                </div>
+                <table class="leaderboard-table" style="width:100%; border-collapse:collapse; font-size:0.85em;">
+                    <thead>
+                        <tr style="border-bottom:2px solid var(--link-color); text-align:left;">
+                            <th style="padding:6px;">#</th>
+                            <th style="padding:6px;">Telegrafista</th>
+                            <th style="padding:6px; text-align:right;">Punteggio</th>
+                            <th style="padding:6px; text-align:right;">Velocità</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            players.forEach((p, idx) => {
+                const rank = idx + 1;
+                const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+                const isMe = (p.id === window.myId);
+                const name = (typeof window.escapeHtml === 'function') ? window.escapeHtml(p.name || 'Telegrafista') : (p.name || 'Telegrafista');
+                const score = p.score || 0;
+                const wpm = p.wpm || p.peakWpm || 20;
+
+                const realQsosBadge = (p.realQsos && Number(p.realQsos) > 0) ? `<span style="font-size:0.75em; color:#00bcd4; font-weight:bold; margin-left:4px;" title="QSO Reali effettuati in radio oggi">[📻 ${p.realQsos} QSO]</span>` : "";
+
+                html += `
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05); ${isMe ? 'background:rgba(0,255,204,0.18); font-weight:bold;' : ''}">
+                        <td style="padding:8px 6px;">${medal}</td>
+                        <td style="padding:8px 6px;">${name} ${realQsosBadge}</td>
+                        <td style="padding:8px 6px; text-align:right; color:#00ffcc;"><b>${score} pt</b></td>
+                        <td style="padding:8px 6px; text-align:right;">${wpm} WPM</td>
+                    </tr>
+                `;
+            });
+
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+        });
+    } catch(e) {
+        container.innerHTML = `<p style="text-align:center; color:var(--hint-color); padding:20px;">Errore caricamento classifica.</p>`;
+    }
 };
 
 window.fetchAndRenderGlobalLeaderboard = async function(tabType, filterWordCount) {
