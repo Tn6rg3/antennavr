@@ -1238,9 +1238,11 @@ window.playNextWord = function() {
             console.log("Chars: Limite massimo 5 errori raggiunto. Concludo partita.");
             return window.finishGame();
         }
-        // Generazione continua di caratteri per partita ad eliminazione su 5 errori
-        if (!gameWords || wordIndex >= gameWords.length - 3) {
-            const extraChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split('').sort(() => Math.random() - 0.5);
+        // Generazione continua ad oltranza di caratteri per partita ad eliminazione su 5 errori (Deterministica per Sfida Speciale)
+        if (!gameWords || wordIndex >= gameWords.length - 5) {
+            const extraChars = (window.currentMode === 'custom_contest' && typeof window.getCustomContestDeterministicWords === 'function')
+                ? window.getCustomContestDeterministicWords(window.currentCustomContestSettings, 100)
+                : "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split('').sort(() => Math.random() - 0.5);
             gameWords = (gameWords || []).concat(extraChars);
         }
     } else {

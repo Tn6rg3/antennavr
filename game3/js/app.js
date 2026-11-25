@@ -2873,7 +2873,8 @@ window.getCustomContestDeterministicWords = function(settings) {
         sourceList = window.masterDictionary || ["TELEGRAFIA", "STAZIONE", "MORSE", "RADIO"];
     }
 
-    const count = Number(settings.words) || 20;
+    // Se la modalità è caratteri singoli o se countParam è passato, generiamo una sequenza ad oltranza (es. 200+)
+    const count = countParam || (settings.mode === 'chars' ? 200 : (Number(settings.words) || 20));
     const result = [];
     const listCopy = [...sourceList];
 
