@@ -981,6 +981,7 @@ window.startCountdownSequence = function() {
 
     // OGNI PARTITA PARTE SEMPRE DA ZERO SENZA ALCUN RECUPERO!
     totalScore = 0; currentStreak = 0; wordIndex = 0; quizQuestionIndex = 0; usedReplay = false;
+    window.charsCurrentErrors = 0;
     peakWpm = currentWpm;
     matchDetailsArray = [];
     isRejoining = false;
@@ -1234,11 +1235,12 @@ window.playNextWord = function() {
             return window.finishGame();
         }
     } else if (window.currentMode === 'chars' || (window.currentMode === 'custom_contest' && window.currentCustomContestSettings?.mode === 'chars')) {
-        if (window.currentMode === 'custom_contest' && window.charsCurrentErrors >= 5) {
-            console.log("CustomContest Chars: Limite massimo 5 errori raggiunto. Concludo sfida.");
-            return window.finishGame();
-        }
-        if (requestedWordCount > 0 && wordIndex >= requestedWordCount) {
+        if (window.currentMode === 'custom_contest') {
+            if ((window.charsCurrentErrors || 0) >= 5) {
+                console.log("CustomContest Chars: Limite massimo 5 errori raggiunto. Concludo sfida.");
+                return window.finishGame();
+            }
+        } else if (requestedWordCount > 0 && wordIndex >= requestedWordCount) {
             console.log(`Chars: Numero caratteri impostato raggiunto (${wordIndex}/${requestedWordCount}). Concludo partita.`);
             return window.finishGame();
         }
@@ -2513,9 +2515,11 @@ window.handleWordSubmission = function(userWord, exactKeypressTimestamp = null) 
         }
         if (currentWpm > peakWpm) peakWpm = currentWpm;
     } else if (window.currentMode === 'chars' || (window.currentMode === 'custom_contest' && window.currentCustomContestSettings?.mode === 'chars')) {
-        peakWpm = Math.max(peakWpm || 0, currentWpm);
-
         if (levDist === 0 && !usedReplay) {
+            if (window.currentMode === 'custom_contest') {
+                currentWpm += 1; // +1 WPM per ogni carattere giusto nella sfida personalizzata
+            }
+            peakWpm = Math.max(peakWpm || 0, currentWpm);
             window.currentStreak++;
             if (!window.isAutoAdvance && typeof window.updateMissionProgress === 'function') {
                 window.updateMissionProgress('count', 1);
@@ -2523,6 +2527,7 @@ window.handleWordSubmission = function(userWord, exactKeypressTimestamp = null) 
                 window.updateMissionProgress('streak', window.currentStreak);
             }
         } else {
+            peakWpm = Math.max(peakWpm || 0, currentWpm);
             window.currentStreak = 0; // In caso di errore in 'chars', la velocita WPM NON scende
             if (window.currentMode === 'custom_contest') {
                 window.charsCurrentErrors = (window.charsCurrentErrors || 0) + 1;
@@ -2699,6 +2704,9 @@ window.handleWordSubmission = function(userWord, exactKeypressTimestamp = null) 
         let nextWordDelay = window.isSpeakMode ? 3000 : 1000;
         const isCharsMode = (window.currentMode === 'chars' || (window.currentMode === 'custom_contest' && window.currentCustomContestSettings?.mode === 'chars'));
         if (isCharsMode) {
+            if (window.currentMode === 'custom_contest' && (window.charsCurrentErrors || 0) >= 5) {
+                return; // Il timeout di finishGame è già stato programmato
+            }
             const groupLength = parseInt(document.getElementById('charsGroupLengthInput')?.value) || 1;
             if (groupLength === 1 || window.currentMode === 'custom_contest') {
                 const charsAutoDelaySec = parseFloat(localStorage.getItem('cwgame_pref_chars_auto_delay') || document.getElementById('charsAutoDelaySelect')?.value || "0.3");
@@ -2850,7 +2858,13 @@ document.addEventListener('visibilitychange', () => {
                 if (typeof window.sendAutoPingPongWord === 'function') window.sendAutoPingPongWord();
 
             } else {
-                currentWpm = Math.max(10, currentWpm - 2);
+                const isCustomChars = (window.currentMode === 'custom_contest' && window.currentCustomContestSettings?.mode === 'chars');
+                if (isCustomChars) {
+                    window.charsCurrentErrors = (window.charsCurrentErrors || 0) + 1;
+                } else {
+                    currentWpm = Math.max(10, currentWpm - 2);
+                }
+
                 if (els.wpmDisplay) {
                     els.wpmDisplay.textContent = `WPM: ${currentWpm}${isFixedSpeed ? ' (Fix)' : ''}`;
                 }
@@ -2876,6 +2890,15 @@ document.addEventListener('visibilitychange', () => {
                     return;
                 }
 
+                if (isCustomChars && window.charsCurrentErrors >= 5) {
+                    showToast("⚠️ Errore 5/5: Sfida terminata.");
+                    if (nextWordTimeout) clearTimeout(nextWordTimeout);
+                    setTimeout(() => {
+                        if (gameRunning) window.finishGame();
+                    }, 800);
+                    return;
+                }
+
                 if (els.tableBody) {
                     const tr = document.createElement('tr');
                     const tdTyped = document.createElement('td');
@@ -2885,9 +2908,9 @@ document.addEventListener('visibilitychange', () => {
 
                     const tdReal = document.createElement('td');
                     tdReal.innerHTML = "";
-      const b = document.createElement('b');
-      b.textContent = missedWord;
-      tdReal.appendChild(b);
+                    const b = document.createElement('b');
+                    b.textContent = missedWord;
+                    tdReal.appendChild(b);
 
                     const tdPoints = document.createElement('td');
                     tdPoints.style.color = "#d32f2f";
