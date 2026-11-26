@@ -770,8 +770,9 @@
             </div>
         </div>
         <!-- BANNER SFIDA SPECIALE PERSONALIZZATA SCHEDULATA -->
-        <div id="customContestHomeBanner" style="display:none; width:100%; max-width:420px; margin:6px auto 8px auto; padding:10px 14px; background:linear-gradient(135deg, rgba(0,255,204,0.18), rgba(0,188,212,0.18)); border:2px solid #00ffcc; border-radius:12px; text-align:center; box-sizing:border-box; box-shadow:0 4px 15px rgba(0,255,204,0.25); flex-shrink:0;">
-            <span id="customContestBannerTitle" style="font-size:0.85em; color:#00ffcc; font-weight:bold; text-transform:uppercase; display:block; margin-bottom:4px;">🏆 SFIDA SPECIALE ATTIVA!</span>
+        <div id="customContestHomeBanner" style="position:relative; display:none; width:100%; max-width:420px; margin:6px auto 8px auto; padding:10px 14px; background:linear-gradient(135deg, rgba(0,255,204,0.18), rgba(0,188,212,0.18)); border:2px solid #00ffcc; border-radius:12px; text-align:center; box-sizing:border-box; box-shadow:0 4px 15px rgba(0,255,204,0.25); flex-shrink:0;">
+            <button onclick="window.dismissCustomContestBanner()" title="Chiudi Banner" style="position:absolute; top:6px; right:8px; background:none; border:none; color:#00ffcc; font-size:1.1em; font-weight:bold; cursor:pointer; padding:2px 6px; line-height:1;">✖</button>
+            <span id="customContestBannerTitle" style="font-size:0.85em; color:#00ffcc; font-weight:bold; text-transform:uppercase; display:block; margin-bottom:4px; padding-right:16px;">🏆 SFIDA SPECIALE ATTIVA!</span>
             <small id="customContestBannerInfo" style="font-size:0.75em; color:var(--text-color); display:block; margin-bottom:8px;">⏰ Dalle 15:00 alle 18:00 | 1 Sola Prova | Prove uguali per tutti</small>
             <button onclick="window.startCustomContestSession()" class="btn-success" style="width:100%; padding:10px; font-weight:bold; font-size:0.9em; background:#00ffcc; color:#000; border:none; cursor:pointer; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.3);">
                 🚀 PARTECIPA ALLA SFIDA SPECIALE 🚀
