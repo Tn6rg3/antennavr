@@ -2862,6 +2862,19 @@ window.renderAdminCustomContestList = function() {
     });
 };
 
+window.dismissCustomContestBanner = function() {
+    const banner = document.getElementById('customContestHomeBanner');
+    if (banner) banner.style.display = 'none';
+
+    const settings = window.activeCustomContestSettings;
+    if (settings && settings.contestId) {
+        sessionStorage.setItem(`cwgame_custom_contest_dismissed_${settings.contestId}`, 'true');
+    } else {
+        sessionStorage.setItem('cwgame_custom_contest_dismissed_active', 'true');
+    }
+    if (typeof showToast === 'function') showToast("✖ Banner Sfida nascosto per questa sessione.");
+};
+
 window.initCustomContestRealtimeListener = function() {
     if (!db) return;
 
@@ -2906,10 +2919,11 @@ window.initCustomContestRealtimeListener = function() {
         const isTimeWindowActive = (nowStr >= startTimeClean && nowStr <= endTimeClean);
         const contestId = settings.contestId || 'default';
         const alreadyPlayed = (localStorage.getItem(`cwgame_custom_contest_played_${todayStr}_${contestId}`) === 'true');
+        const isDismissed = (sessionStorage.getItem(`cwgame_custom_contest_dismissed_${contestId}`) === 'true' || sessionStorage.getItem('cwgame_custom_contest_dismissed_active') === 'true');
 
         window.activeCustomContestSettings = settings;
 
-        if (settings.enabled && isToday && isTimeWindowActive && !alreadyPlayed) {
+        if (settings.enabled && isToday && isTimeWindowActive && !alreadyPlayed && !isDismissed) {
             banner.style.display = 'block';
             if (bannerTitle) bannerTitle.textContent = settings.title || "🏆 SFIDA SPECIALE ATTIVA!";
             const detailText = (settings.mode === 'chars') ? 'Ad oltranza (max 5 errori)' : `${settings.words || 20} Parole`;
