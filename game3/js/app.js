@@ -2818,7 +2818,7 @@ window.renderAdminCustomContestList = function() {
 
             const infoSpan = document.createElement('span');
             infoSpan.style.cssText = 'color:#000000 !important; font-size:0.85em; font-weight:bold; display:block;';
-            infoSpan.textContent = `${item.date || ''} (${item.startTime || '15:00'}-${item.endTime || '18:00'}) | ${item.words || 20} ${item.mode || 'std'} @ ${item.wpm || 20}WPM`;
+            infoSpan.textContent = `${item.date || ''} (${item.startTime || '15:00'}-${item.endTime || '18:00'})`;
 
             textDiv.appendChild(titleB);
             textDiv.appendChild(infoSpan);

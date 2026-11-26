@@ -897,13 +897,13 @@ window.fetchAndRenderCustomContestLeaderboard = async function(requestedIdx = 0)
                     <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
                         <div>${prevBtn}</div>
                         <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">
-                            <b style="color:#00ffcc; font-size:0.98em;">${contestTitle}</b><br>
-                            <small style="color:var(--hint-color); font-size:0.82em;">📅 Data: ${contestDate} (${currentContest.startTime || '15:00'}-${currentContest.endTime || '18:00'})</small>
+                            <b style="color:#00ffcc; font-size:1.02em;">${contestTitle}</b><br>
+                            <small style="color:var(--hint-color); font-size:0.85em; font-weight:bold;">📅 Data: ${contestDate} (${currentContest.startTime || '15:00'}-${currentContest.endTime || '18:00'})</small>
                         </div>
                         <div>${nextBtn}</div>
                     </div>
-                    <div style="font-size:0.75em; color:var(--hint-color); margin-top:6px;">
-                        Sfida ${validIdx + 1} di ${contestList.length} | ${currentContest.words || 20} ${currentContest.mode === 'chars' ? 'Caratteri' : 'Parole'} @ ${currentContest.wpm || 20} WPM
+                    <div style="font-size:0.75em; color:var(--hint-color); margin-top:4px;">
+                        Sfida ${validIdx + 1} di ${contestList.length} | Prove uguali per tutti
                     </div>
                 </div>
             `;
